@@ -5,7 +5,7 @@ import { getGuestListForCampaign, unlockGuestListConfirmation } from '../service
 import { getAllCampaigns } from '../services/settingsService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Campaign, Promoter } from '../types';
-import { ArrowLeftIcon, DownloadIcon, CheckCircleIcon, InstagramIcon, WhatsAppIcon } from '../components/Icons';
+import { ArrowLeftIcon, DownloadIcon, CheckCircleIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const GuestListPage: React.FC = () => {
@@ -32,7 +32,7 @@ const GuestListPage: React.FC = () => {
         try {
             const confirmationData = await getGuestListForCampaign(campaignId);
             
-            // Fetch promoter details to check `hasJoinedGroup` status and get handles
+            // Fetch promoter details to check `hasJoinedGroup` status
             const promoterIds = [...new Set(confirmationData.map((c) => c.promoterId))];
             if (promoterIds.length > 0) {
                 const promotersData = await getPromotersByIds(promoterIds);
@@ -324,15 +324,7 @@ const GuestListPage: React.FC = () => {
                                         <div className={`text-sm font-medium ${conf.promoterDetails?.hasJoinedGroup ? 'text-green-400 font-semibold' : 'text-white'}`}>
                                             {conf.promoterName}
                                         </div>
-                                        <div className="flex items-center gap-3 mt-1">
-                                            <a href={`https://wa.me/55${conf.promoterDetails?.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400">
-                                                <WhatsAppIcon className="w-3.5 h-3.5" />
-                                            </a>
-                                            <a href={`https://instagram.com/${conf.promoterDetails?.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-pink-500 hover:text-pink-400">
-                                                <InstagramIcon className="w-3.5 h-3.5" />
-                                            </a>
-                                        </div>
-                                        <div className="text-sm text-gray-400 mt-0.5">{conf.isPromoterAttending ? "Confirmada" : "Não vai"}</div>
+                                        <div className="text-sm text-gray-400">{conf.isPromoterAttending ? "Confirmada" : "Não vai"}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-300">
                                         {conf.guests ? (
