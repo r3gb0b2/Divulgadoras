@@ -19,7 +19,7 @@ import {
   SearchIcon, CheckCircleIcon, XIcon, 
   InstagramIcon, WhatsAppIcon, TrashIcon, 
   PencilIcon, RefreshIcon, FilterIcon,
-  MegaphoneIcon, MailIcon, ClockIcon, UserIcon
+  MegaphoneIcon, MailIcon, ClockIcon, UserIcon, TikTokIcon
 } from '../components/Icons';
 import { states } from '../constants/states';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -444,7 +444,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 else setSelectedIds(new Set(filteredPromoters.map(p => p.id)));
                                             }} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
                                         </th>
-                                        <th className="px-6 py-5">Perfil</th>
+                                        <th className="px-6 py-5">Perfil / Contato</th>
                                         <th className="px-6 py-5">Status / Admin</th>
                                         <th className="px-6 py-5 text-center">Grupo</th>
                                         <th className="px-6 py-4 text-right">Ações</th>
@@ -465,8 +465,24 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                         </div>
                                                         <div className="overflow-hidden">
                                                             <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name || 'Sem Nome'}</p>
-                                                            <div className="flex items-center gap-3 mt-1">
-                                                                <p className="text-gray-500 text-[9px] font-bold uppercase tracking-widest">{calculateAge(p.dateOfBirth)}a • {p.state}</p>
+                                                            <div className="flex items-center gap-3 mt-1.5">
+                                                                <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="text-pink-500 hover:text-pink-400 transition-colors flex items-center gap-1">
+                                                                    <InstagramIcon className="w-3.5 h-3.5" />
+                                                                    <span className="text-[10px] font-bold">@{p.instagram}</span>
+                                                                </a>
+                                                                <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400 transition-colors flex items-center gap-1">
+                                                                    <WhatsAppIcon className="w-3.5 h-3.5" />
+                                                                    <span className="text-[10px] font-bold">WhatsApp</span>
+                                                                </a>
+                                                                {p.tiktok && (
+                                                                    <a href={`https://tiktok.com/@${p.tiktok}`} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-white transition-colors flex items-center gap-1">
+                                                                        <TikTokIcon className="w-3.5 h-3.5" />
+                                                                        <span className="text-[10px] font-bold">TikTok</span>
+                                                                    </a>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-3 mt-1.5">
+                                                                <p className="text-gray-600 text-[9px] font-bold uppercase tracking-widest">{calculateAge(p.dateOfBirth)}a • {p.state}</p>
                                                                 <p className="text-primary text-[9px] font-black uppercase tracking-widest whitespace-nowrap">Inscrita {getRelativeTime(p.createdAt)}</p>
                                                             </div>
                                                         </div>
@@ -520,7 +536,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             </div>
                                             <div className="overflow-hidden flex-grow">
                                                 <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name || 'Sem Nome'}</p>
-                                                <div className="flex items-center gap-2 mt-1">
+                                                <div className="flex items-center gap-3 mt-1.5">
+                                                    <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="text-pink-500"><InstagramIcon className="w-4 h-4" /></a>
+                                                    <a href={`https://wa.me/55${p.whatsapp}`} target="_blank" rel="noreferrer" className="text-green-500"><WhatsAppIcon className="w-4 h-4" /></a>
+                                                    {p.tiktok && <a href={`https://tiktok.com/@${p.tiktok}`} target="_blank" rel="noreferrer" className="text-white"><TikTokIcon className="w-4 h-4" /></a>}
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-2">
                                                     {statusBadge(p.status)}
                                                     {p.hasJoinedGroup && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
                                                 </div>
