@@ -26,7 +26,7 @@ import AppleTestRegistration from './pages/AppleTestRegistration';
 import AppleInstallTutorial from './pages/AppleInstallTutorial';
 import RegisterF1 from './pages/RegisterF1';
 import GlobalGuestListCheck from './pages/GlobalGuestListCheck';
-import EmocoesCampaign from './pages/EmocoesCampaign';
+import ClubVipHome from './pages/ClubVipHome';
 import { clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
@@ -152,7 +152,9 @@ const App: React.FC = () => {
                 <Route path="/apple-test/tutorial" element={<AppleInstallTutorial />} />
                 <Route path="/registrar-f1" element={<RegisterF1 />} />
                 <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
-                <Route path="/promocao-emocoes" element={<EmocoesCampaign />} />
+                
+                {/* Clube VIP - Página Separada */}
+                <Route path="/clubvip" element={<ClubVipHome />} />
                 
                 {/* Divulgadoras */}
                 <Route path="/posts" element={<PostCheck />} />

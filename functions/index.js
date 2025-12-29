@@ -26,8 +26,7 @@ function generateAlphanumericCode(length) {
 }
 
 /**
- * Envia e-mail formatado via sistema de e-mail existente (mail collection para o Trigger Email extension)
- * ou via chamada direta se configurado. Aqui usamos o padrão de coleção 'mail' que é comum em Firebase.
+ * Envia e-mail via coleção 'mail'
  */
 async function sendVipEmail(email, subject, html) {
     try {
@@ -38,9 +37,11 @@ async function sendVipEmail(email, subject, html) {
                 html: html,
             }
         });
-        console.log(`E-mail registrado na fila para: ${email}`);
+        console.log(`[Email VIP] Fila de envio para: ${email}`);
+        return true;
     } catch (e) {
-        console.error("Erro ao enfileirar e-mail:", e);
+        console.error("[Email VIP] Erro ao enfileirar:", e);
+        return false;
     }
 }
 
@@ -62,7 +63,7 @@ exports.createVipPixPayment = functions.region("southamerica-east1").https.onCal
     try {
         const body = {
             transaction_amount: Number(amount),
-            description: `Membro VIP: ${vipEventId}`,
+            description: `Adesão Clube VIP: ${vipEventId}`,
             payment_method_id: "pix",
             notification_url: `https://southamerica-east1-${process.env.GCLOUD_PROJECT}.cloudfunctions.net/mpWebhook`,
             payer: {
@@ -116,7 +117,6 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
 
                 const batch = db.batch();
 
-                // 1. Registro de Membresia
                 const membershipRef = db.collection("vipMemberships").doc(`${promoter_id}_${vip_event_id}`);
                 batch.set(membershipRef, {
                     vipEventId: vip_event_id,
@@ -135,7 +135,6 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
-                // 2. Perfil da Divulgadora
                 const promoterRef = db.collection("promoters").doc(promoter_id);
                 batch.update(promoterRef, {
                     emocoesStatus: "confirmed",
@@ -144,31 +143,34 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
 
                 await batch.commit();
 
-                // 3. E-MAIL DE PAGAMENTO CONFIRMADO
+                // DISPARO IMEDIATO DE EMAIL DE PAGAMENTO CONFIRMADO
                 await sendVipEmail(
                     promoter_email,
-                    "Pagamento Recebido - Clube VIP",
-                    `<div style="font-family:sans-serif;color:#333;max-width:600px;margin:auto;">
-                        <h2 style="color:#7e39d5;">Olá ${pName.split(' ')[0]}!</h2>
-                        <p>Seu pagamento para o acesso <b>${eventName}</b> foi confirmado com sucesso.</p>
-                        <p>Nossa equipe está analisando os dados para liberar sua cortesia oficial. Você receberá um novo e-mail assim que o cupom estiver disponível para resgate no seu portal.</p>
-                        <hr style="border:none;border-top:1px solid #eee;margin:20px 0;"/>
-                        <p style="font-size:12px;color:#999;">Equipe Certa • Gestão Profissional</p>
+                    "Boas-vindas! Seu pagamento do Clube VIP foi confirmado 🎉",
+                    `<div style="font-family:sans-serif;color:#333;max-width:600px;margin:auto;border:1px solid #eee;border-radius:20px;padding:40px;">
+                        <h2 style="color:#7e39d5;text-align:center;">Pagamento Recebido!</h2>
+                        <p>Olá <b>${pName.split(' ')[0]}</b>,</p>
+                        <p>Seu acesso ao Clube VIP para o evento <b>${eventName}</b> foi confirmado com sucesso.</p>
+                        <p>Nossa equipe técnica já está gerando seu cupom de cortesia e vinculando seu e-mail ao sistema de entradas.</p>
+                        <div style="background:#f0e7ff;padding:20px;border-radius:15px;text-align:center;margin:30px 0;">
+                            <p style="margin:0;font-weight:bold;color:#5d1eab;">Status Atual: AGUARDANDO LIBERAÇÃO DO CUPOM</p>
+                            <p style="margin:5px 0 0 0;font-size:12px;color:#7e39d5;">Você receberá um novo e-mail assim que o resgate estiver disponível.</p>
+                        </div>
+                        <p>Você também pode acompanhar o status pela sua conta no site a qualquer momento.</p>
+                        <hr style="border:none;border-top:1px solid #eee;margin:30px 0;"/>
+                        <p style="font-size:11px;color:#999;text-align:center;">Clube VIP Oficial • Gestão Exclusiva</p>
                     </div>`
                 );
 
-                console.log(`VIP ATIVADO (PENDENTE CUPOM): ${promoter_email}`);
+                console.log(`[Webhook VIP] Sucesso para: ${promoter_email}`);
             }
         } catch (error) {
-            console.error("Erro Webhook:", error);
+            console.error("[Webhook VIP] Erro Crítico:", error);
         }
     }
     res.status(200).send("OK");
 });
 
-/**
- * Notifica ativação de VIP por e-mail (Chamada pelo Admin)
- */
 exports.notifyVipActivation = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { membershipId } = data;
     
@@ -190,32 +192,32 @@ exports.notifyVipActivation = functions.region("southamerica-east1").https.onCal
 
         await sendVipEmail(
             email,
-            "Sua Cortesia VIP está disponível!",
-            `<div style="font-family:sans-serif;color:#333;max-width:600px;margin:auto;border:1px solid #eee;border-radius:15px;padding:30px;">
-                <h2 style="color:#7e39d5;margin-bottom:20px;">Sua Cortesia foi Liberada! 🎉</h2>
-                <p>Olá <b>${name.split(' ')[0]}</b>, boas notícias!</p>
-                <p>Sua adesão ao <b>${eventName}</b> foi aprovada e seu cupom de cortesia já está ativo.</p>
+            "Sua Cortesia VIP já está disponível para resgate! 🎟️",
+            `<div style="font-family:sans-serif;color:#333;max-width:600px;margin:auto;border:1px solid #7e39d5;border-radius:20px;padding:40px;">
+                <h2 style="color:#7e39d5;text-align:center;">Tudo Pronto! 🎉</h2>
+                <p>Olá <b>${name.split(' ')[0]}</b>,</p>
+                <p>Seu cupom oficial do Clube VIP para o <b>${eventName}</b> foi ativado e já pode ser utilizado.</p>
                 
-                <div style="background:#f9f9f9;padding:20px;border-radius:10px;text-align:center;margin:25px 0;">
-                    <p style="margin:0;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#999;">Seu Código:</p>
-                    <p style="margin:5px 0;font-size:28px;font-weight:bold;color:#7e39d5;font-family:monospace;">${code}</p>
+                <div style="background:#f9f9f9;padding:30px;border-radius:20px;text-align:center;margin:30px 0;border:2px dashed #7e39d5;">
+                    <p style="margin:0;font-size:12px;text-transform:uppercase;letter-spacing:2px;color:#999;">Seu Código Exclusivo:</p>
+                    <p style="margin:10px 0;font-size:32px;font-weight:900;color:#7e39d5;font-family:monospace;">${code}</p>
                 </div>
 
-                <p>Clique no botão abaixo para ir direto ao site de compra com sua cortesia aplicada:</p>
+                <p style="text-align:center;font-weight:bold;">Clique no botão abaixo para garantir sua cortesia:</p>
                 
-                <a href="${resgateLink}" style="display:block;background:#7e39d5;color:#fff;text-decoration:none;padding:15px;text-align:center;border-radius:10px;font-weight:bold;margin:20px 0;">RESGATAR CORTESIA AGORA</a>
+                <a href="${resgateLink}" style="display:block;background:#7e39d5;color:#fff;text-decoration:none;padding:20px;text-align:center;border-radius:15px;font-weight:black;margin:25px 0;font-size:18px;box-shadow:0 10px 30px rgba(126,57,213,0.3);">RESGATAR MINHA CORTESIA</a>
                 
-                <p style="font-size:13px;color:#666;">Dica: Você também pode acessar esse código a qualquer momento no seu Portal da Divulgadora, na aba "Clube VIP".</p>
+                <p style="font-size:12px;color:#666;text-align:center;">Este cupom é pessoal e intransferível, vinculado ao seu e-mail cadastrado.</p>
                 
-                <hr style="border:none;border-top:1px solid #eee;margin:30px 0;"/>
-                <p style="font-size:11px;color:#aaa;text-align:center;">Equipe Certa • Sistema de Gestão de Divulgadoras</p>
+                <hr style="border:none;border-top:1px solid #eee;margin:40px 0;"/>
+                <p style="font-size:11px;color:#aaa;text-align:center;">Clube VIP Oficial • Equipe de Produção</p>
             </div>`
         );
         
-        console.log(`E-mail de ativação enviado para ${email}. Código: ${code}`);
+        console.log(`[Ativação VIP] Notificação enviada: ${email}`);
         return { success: true };
     } catch (e) {
-        console.error("Erro na ativação VIP:", e);
+        console.error("[Ativação VIP] Erro:", e);
         return { success: false, error: e.message };
     }
 });

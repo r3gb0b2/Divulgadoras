@@ -2,14 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getPublicOrganizations } from '../services/organizationService';
-import { getActiveVipEvents } from '../services/vipService';
-import { Organization, VipEvent } from '../types';
-import { UsersIcon, SearchIcon, SparklesIcon, MegaphoneIcon, CheckCircleIcon, TicketIcon } from '../components/Icons';
+import { Organization } from '../types';
+import { SearchIcon, MegaphoneIcon, CheckCircleIcon } from '../components/Icons';
 import { Capacitor } from '@capacitor/core';
 
 const PublicHome: React.FC = () => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [hasVipEvents, setHasVipEvents] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -20,12 +18,8 @@ const PublicHome: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const [orgs, vips] = await Promise.all([
-            getPublicOrganizations(),
-            getActiveVipEvents()
-        ]);
+        const orgs = await getPublicOrganizations();
         setOrganizations(orgs);
-        setHasVipEvents(vips.length > 0);
       } catch (err: any) {
         setError("Não foi possível carregar a lista de organizações.");
       } finally {
@@ -102,14 +96,6 @@ const PublicHome: React.FC = () => {
                   <SearchIcon className="w-6 h-6" />
                   MEU STATUS
               </Link>
-
-              {hasVipEvents && (
-                <Link to="/promocao-emocoes" className="relative px-8 md:px-10 py-5 bg-gradient-to-br from-indigo-600 to-purple-800 text-white font-black rounded-3xl shadow-2xl hover:scale-105 active:scale-95 transition-all uppercase tracking-[0.1em] text-sm md:text-lg flex items-center gap-3 border border-white/20 overflow-hidden group">
-                    <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                    <SparklesIcon className="w-6 h-6 text-yellow-400" />
-                    CLUBE VIP
-                </Link>
-              )}
           </div>
       </section>
 
