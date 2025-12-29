@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -11,11 +12,11 @@ import {
 } from '../services/vipService';
 import { updatePromoter } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
-import { VipMembership, VipEvent, Organization } from '../types';
+import { VipMembership, VipEvent } from '../types';
 import { 
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
-    EyeIcon, TicketIcon, RefreshIcon, ClockIcon, UserIcon,
-    BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon,
+    TicketIcon, RefreshIcon, ClockIcon, UserIcon,
+    BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon,
     WhatsAppIcon, InstagramIcon
 } from '../components/Icons';
 
@@ -86,12 +87,10 @@ const AdminClubVip: React.FC = () => {
         
         setIsBulkProcessing(true);
         try {
-            // FIX: Explicitly typed 'id' as string to resolve 'unknown' type error when calling updateVipMembership.
             await Promise.all(Array.from(selectedIds).map(async (id: string) => {
                 const membership = memberships.find(m => m.id === id);
                 if (membership) {
                     await updateVipMembership(id, { isBenefitActive: true });
-                    // Sincroniza com o perfil da divulgadora para aparecer no portal
                     await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
                 }
             }));
@@ -145,8 +144,8 @@ const AdminClubVip: React.FC = () => {
         return memberships.filter(m => {
             const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
             const matchesSearch = 
-                m.promoterName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                m.promoterEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (m.promoterName || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                (m.promoterEmail || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (m.promoterWhatsapp || '').includes(searchQuery);
             return matchesStatus && matchesSearch;
         });
@@ -189,7 +188,7 @@ const AdminClubVip: React.FC = () => {
 
             <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 w-fit">
                 <button onClick={() => setActiveTab('members')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'members' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Membros ({memberships.length})</button>
-                <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Configurar Eventos ({vipEvents.length})</button>
+                <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Ofertas VIP ({vipEvents.length})</button>
             </div>
 
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
@@ -197,7 +196,7 @@ const AdminClubVip: React.FC = () => {
                     <>
                         <div className="flex flex-col md:flex-row gap-4">
                             <select value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)} className="bg-dark border border-gray-700 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-1 focus:ring-primary outline-none min-w-[220px]">
-                                <option value="all">Filtro: Todos Eventos</option>
+                                <option value="all">Filtrar: Todos Eventos</option>
                                 {vipEvents.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                             </select>
                             <div className="relative flex-grow">
@@ -298,6 +297,9 @@ const AdminClubVip: React.FC = () => {
                                 </div>
                             </div>
                         ))}
+                        {vipEvents.length === 0 && !isLoading && (
+                            <div className="md:col-span-3 text-center py-20 text-gray-500 font-bold uppercase text-xs tracking-widest">Nenhuma oferta criada. Clique em "Novo Evento" acima.</div>
+                        )}
                     </div>
                 )}
             </div>
@@ -306,7 +308,7 @@ const AdminClubVip: React.FC = () => {
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-6" onClick={() => setIsModalOpen(false)}>
                     <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                        <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-6">{editingEvent?.id ? 'Editar' : 'Novo'} Evento VIP</h2>
+                        <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-6">{editingEvent?.id ? 'Editar' : 'Nova'} Oferta VIP</h2>
                         
                         <form onSubmit={handleSaveEvent} className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
                             <div>

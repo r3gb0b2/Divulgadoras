@@ -43,21 +43,25 @@ export const checkVipMembership = async (email: string, vipEventId: string): Pro
 };
 
 export const getAllVipMemberships = async (vipEventId?: string) => {
-    let query = firestore.collection(COLLECTION_MEMBERSHIPS);
+    // FIX: Explicitamente tipado como Query para evitar erro de reatribuição de CollectionReference
+    let query: firebase.firestore.Query = firestore.collection(COLLECTION_MEMBERSHIPS);
     
     if (vipEventId && vipEventId !== 'all') {
         query = query.where('vipEventId', '==', vipEventId);
     }
     
-    // Nota: Requer índice no Firebase se ordenar por submittedAt com filtro de ID
     const snap = await query.get();
     const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipMembership));
     
-    // Ordenação em memória para evitar erros de índice ausente durante a migração
+    // Ordenação em memória robusta para lidar com dados legados e timestamps do Firestore
     results.sort((a, b) => {
-        const timeA = (a.submittedAt as any)?.seconds || 0;
-        const timeB = (b.submittedAt as any)?.seconds || 0;
-        return timeB - timeA;
+        const getTime = (ts: any) => {
+            if (!ts) return 0;
+            if (ts.toMillis) return ts.toMillis();
+            if (ts.seconds) return ts.seconds * 1000;
+            return new Date(ts).getTime() || 0;
+        };
+        return getTime(b.submittedAt) - getTime(a.submittedAt);
     });
     
     return results;
