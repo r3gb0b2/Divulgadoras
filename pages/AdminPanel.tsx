@@ -260,7 +260,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const handleWhatsAppManual = (p: Promoter) => {
         const firstName = p.name.split(' ')[0];
         const msg = `Olá ${firstName}! Seu perfil foi aprovado para a equipe do evento ${p.campaignName || 'de produção'}. Para começar, acesse seu portal agora para ler as regras e entrar no grupo: https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`;
-        const url = `https://wa.me/55${p.whatsapp}?text=${encodeURIComponent(msg)}`;
+        const url = `https://wa.me/55${p.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
         window.open(url, '_blank');
     };
 
@@ -456,7 +456,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             }} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
                                         </th>
                                         <th className="px-6 py-5">Perfil / Contato</th>
-                                        <th className="px-6 py-5">Status / Admin</th>
+                                        <th className="px-6 py-5">Evento / Lista</th>
+                                        <th className="px-6 py-5">Status</th>
                                         <th className="px-6 py-5 text-center">Grupo</th>
                                         <th className="px-6 py-4 text-right">Ações</th>
                                     </tr>
@@ -498,6 +499,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                             </div>
                                                         </div>
                                                     </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <p className="text-white font-black text-[10px] uppercase tracking-tighter">{p.campaignName || 'Geral'}</p>
+                                                    {(p.associatedCampaigns || []).length > 0 && (
+                                                        <p className="text-[8px] text-gray-500 font-bold uppercase mt-0.5">+{p.associatedCampaigns!.length} extras</p>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div>{statusBadge(p.status)}</div>
@@ -547,6 +554,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             </div>
                                             <div className="overflow-hidden flex-grow">
                                                 <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name || 'Sem Nome'}</p>
+                                                <p className="text-primary text-[9px] font-black uppercase tracking-widest mt-0.5">{p.campaignName || 'Geral'}</p>
                                                 <div className="flex items-center gap-3 mt-1.5">
                                                     <a href={`https://instagram.com/${p.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-pink-500"><InstagramIcon className="w-4 h-4" /></a>
                                                     <a href={`https://wa.me/55${p.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-green-500"><WhatsAppIcon className="w-4 h-4" /></a>
