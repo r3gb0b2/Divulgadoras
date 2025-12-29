@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { findPromotersByEmail, createVipPromoter } from '../services/promoterService';
 import { getActiveVipEvents, checkVipMembership } from '../services/vipService';
 import { Promoter, VipEvent } from '../types';
@@ -9,7 +9,7 @@ import { httpsCallable } from 'firebase/functions';
 import { 
   ArrowLeftIcon, CheckCircleIcon, SparklesIcon,
   DocumentDuplicateIcon, RefreshIcon, UserIcon, PhoneIcon, InstagramIcon,
-  AlertTriangleIcon
+  AlertTriangleIcon, SearchIcon, ClockIcon
 } from '../components/Icons';
 
 type CampaignStep = 'select_event' | 'benefits' | 'identify' | 'confirm_data' | 'payment' | 'success';
@@ -139,9 +139,11 @@ const ClubVipHome: React.FC = () => {
 
     return (
         <div className="max-w-2xl mx-auto py-8 px-4">
-            <button onClick={() => step === 'select_event' ? navigate(-1) : setStep('select_event')} className="flex items-center gap-2 text-gray-500 hover:text-white mb-8 font-black text-[10px] uppercase tracking-widest transition-all">
-                <ArrowLeftIcon className="w-4 h-4" /> Voltar
-            </button>
+            {step !== 'select_event' && (
+                <button onClick={() => setStep('select_event')} className="flex items-center gap-2 text-gray-500 hover:text-white mb-8 font-black text-[10px] uppercase tracking-widest transition-all">
+                    <ArrowLeftIcon className="w-4 h-4" /> Voltar
+                </button>
+            )}
 
             <div className="bg-secondary/40 backdrop-blur-2xl rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
                 <div className="bg-gradient-to-br from-indigo-900/60 to-purple-900/40 p-12 text-center relative overflow-hidden">
@@ -155,18 +157,29 @@ const ClubVipHome: React.FC = () => {
                     {error && <div className="mb-6 p-4 bg-red-900/20 border border-red-500/50 text-red-300 rounded-2xl text-xs font-bold text-center flex items-center gap-3"><AlertTriangleIcon className="w-5 h-5 flex-shrink-0" /> {error}</div>}
 
                     {step === 'select_event' && (
-                        <div className="grid gap-6">
-                            <h2 className="text-xl font-black text-white uppercase tracking-widest text-center mb-2">Escolha sua Vantagem</h2>
-                            {events.map(ev => (
-                                <button key={ev.id} onClick={() => { setSelectedEvent(ev); setStep('benefits'); }} className="bg-dark/60 p-8 rounded-[2rem] border border-white/5 hover:border-primary text-left transition-all group flex justify-between items-center shadow-lg">
-                                    <div>
-                                        <p className="text-white font-black text-xl uppercase group-hover:text-primary transition-colors">{ev.name}</p>
-                                        <p className="text-[10px] text-gray-500 font-black uppercase mt-1">Adesão Imediata</p>
-                                    </div>
-                                    <p className="text-primary font-black text-2xl">R$ {ev.price.toFixed(2).replace('.', ',')}</p>
-                                </button>
-                            ))}
-                            {events.length === 0 && !isLoading && <p className="text-center text-gray-500 font-bold uppercase text-xs py-10">Nenhuma oferta VIP disponível no momento.</p>}
+                        <div className="space-y-8">
+                            <div className="flex flex-col sm:flex-row justify-center gap-4">
+                                <Link to="/clubvip/como-funciona" className="flex items-center justify-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all">
+                                    <ClockIcon className="w-4 h-4" /> Como Funciona?
+                                </Link>
+                                <Link to="/status" className="flex items-center justify-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all">
+                                    <SearchIcon className="w-4 h-4" /> Consultar meu Status
+                                </Link>
+                            </div>
+
+                            <div className="grid gap-6">
+                                <h2 className="text-xl font-black text-white uppercase tracking-widest text-center mb-2">Escolha sua Vantagem</h2>
+                                {events.map(ev => (
+                                    <button key={ev.id} onClick={() => { setSelectedEvent(ev); setStep('benefits'); }} className="bg-dark/60 p-8 rounded-[2rem] border border-white/5 hover:border-primary text-left transition-all group flex justify-between items-center shadow-lg">
+                                        <div>
+                                            <p className="text-white font-black text-xl uppercase group-hover:text-primary transition-colors">{ev.name}</p>
+                                            <p className="text-[10px] text-gray-500 font-black uppercase mt-1">Adesão Imediata</p>
+                                        </div>
+                                        <p className="text-primary font-black text-2xl">R$ {ev.price.toFixed(2).replace('.', ',')}</p>
+                                    </button>
+                                ))}
+                                {events.length === 0 && !isLoading && <p className="text-center text-gray-500 font-bold uppercase text-xs py-10">Nenhuma oferta VIP disponível no momento.</p>}
+                            </div>
                         </div>
                     )}
 

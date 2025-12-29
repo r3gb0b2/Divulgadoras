@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { HashRouter as Router, Routes, Route, Link, useNavigate, Navigate } from 'react-router-dom';
+import { HashRouter as Router, Routes, Route, Link, useNavigate, Navigate, useLocation } from 'react-router-dom';
 import RegistrationForm from './pages/RegistrationForm';
 import AdminAuth from './pages/AdminAuth';
 import StatusCheck from './pages/StatusCheck';
@@ -27,6 +27,7 @@ import AppleInstallTutorial from './pages/AppleInstallTutorial';
 import RegisterF1 from './pages/RegisterF1';
 import GlobalGuestListCheck from './pages/GlobalGuestListCheck';
 import ClubVipHome from './pages/ClubVipHome';
+import ClubVipHowItWorks from './pages/ClubVipHowItWorks';
 import { clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
@@ -56,6 +57,7 @@ const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { adminData } = useAdminAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handleLogout = async () => {
       try {
@@ -67,17 +69,24 @@ const Header: React.FC = () => {
       }
   };
 
+  // Detecta se estamos no fluxo do Clube VIP
+  const isVipContext = location.pathname.startsWith('/clubvip');
+  
+  const homePath = isVipContext ? '/clubvip' : '/';
+  const howItWorksPath = isVipContext ? '/clubvip/como-funciona' : '/como-funciona';
+
   return (
       <header className="bg-secondary shadow-md sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
           <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
-              <Link to="/" className="flex items-center" onClick={() => setIsMenuOpen(false)}>
+              <Link to={homePath} className="flex items-center" onClick={() => setIsMenuOpen(false)}>
                   <LogoIcon className="h-10 md:h-12 w-auto text-white" />
+                  {isVipContext && <span className="ml-3 px-2 py-0.5 bg-primary text-[10px] font-black text-white rounded uppercase tracking-widest hidden sm:block">VIP</span>}
               </Link>
               
               <div className='hidden md:flex items-center space-x-4'>
                   <OrganizationSwitcher />
-                  <Link to="/" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
-                  <Link to="/como-funciona" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Como Funciona</Link>
+                  <Link to={homePath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
+                  <Link to={howItWorksPath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Como Funciona</Link>
                   <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Status</Link>
                   <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
                   {adminData && (
@@ -94,6 +103,7 @@ const Header: React.FC = () => {
                     className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
                   >
                       <span className="sr-only">Abrir menu</span>
+                      {/* FIX: Corrected variable name from isVipOpen to isMenuOpen to resolve reference error. */}
                       {isMenuOpen ? <XIcon className="h-6 w-6" /> : <MenuIcon className="h-6 w-6" />}
                   </button>
               </div>
@@ -105,8 +115,8 @@ const Header: React.FC = () => {
                       <div className="px-2 pb-3 mb-2 border-b border-gray-700">
                           <OrganizationSwitcher />
                       </div>
-                      <Link to="/" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Início</Link>
-                      <Link to="/como-funciona" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Como Funciona</Link>
+                      <Link to={homePath} onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Início</Link>
+                      <Link to={howItWorksPath} onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Como Funciona</Link>
                       <Link to="/status" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Status</Link>
                       <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Admin</Link>
                       {adminData && (
@@ -155,6 +165,7 @@ const App: React.FC = () => {
                 
                 {/* Clube VIP - Página Separada */}
                 <Route path="/clubvip" element={<ClubVipHome />} />
+                <Route path="/clubvip/como-funciona" element={<ClubVipHowItWorks />} />
                 
                 {/* Divulgadoras */}
                 <Route path="/posts" element={<PostCheck />} />
