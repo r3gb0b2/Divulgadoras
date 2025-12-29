@@ -3,9 +3,9 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, scheduleProofPushReminder } from '../services/postService';
 import { findPromotersByEmail, changePromoterEmail } from '../services/promoterService';
+import { getActiveVipEvents, getAllVipMemberships } from '../services/vipService';
 import { testSelfPush } from '../services/messageService';
-import { PostAssignment, Promoter, Timestamp } from '../types';
-// FIX: Added SparklesIcon to imports to fix "Cannot find name 'SparklesIcon'" error.
+import { PostAssignment, Promoter, VipMembership, VipEvent } from '../types';
 import { 
     ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, 
     ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, 
@@ -318,7 +318,6 @@ const PostCheck: React.FC = () => {
 
     const pushInitializedFor = useRef<string | null>(null);
     const [pushStatus, setPushStatus] = useState<PushStatus>('idle');
-    const [pushErrorDetail, setPushErrorDetail] = useState<string | null>(null);
     
     // Contagem regressiva unificada para o teste de push
     const [pushTestCountdown, setPushTestCountdown] = useState<number | null>(null);
@@ -330,6 +329,16 @@ const PostCheck: React.FC = () => {
     const [isSubmittingJustification, setIsSubmittingJustification] = useState(false);
 
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
+
+    // VIP Data
+    const [vipMemberships, setVipMemberships] = useState<VipMembership[]>([]);
+    const [vipEventsMap, setVipEventsMap] = useState<Record<string, VipEvent>>({});
+
+    useEffect(() => {
+        const queryParams = new URLSearchParams(location.search);
+        const tab = queryParams.get('tab');
+        if (tab === 'vip') setActiveTab('rewards');
+    }, [location.search]);
 
     // Efeito para gerenciar a contagem do teste de push
     useEffect(() => {
@@ -373,10 +382,24 @@ const PostCheck: React.FC = () => {
               return timeB - timeA;
             });
             
-            setPromoter(sortedProfiles[0]);
+            const activePromoter = sortedProfiles[0];
+            setPromoter(activePromoter);
             localStorage.setItem('saved_promoter_email', searchEmail.toLowerCase().trim());
             
-            const fetchedAssignments = await getAssignmentsForPromoterByEmail(searchEmail);
+            // BUSCA DADOS VIP
+            const [fetchedAssignments, vipData, allVipEvents] = await Promise.all([
+                getAssignmentsForPromoterByEmail(searchEmail),
+                getAllVipMemberships(), // Aqui precisaríamos de um filtro por email no service, mas usaremos client-side por brevidade se for pequeno
+                getActiveVipEvents()
+            ]);
+
+            // Filtra membresias do usuário
+            const userVips = vipData.filter(m => m.promoterEmail === searchEmail.toLowerCase().trim() && m.status === 'confirmed');
+            setVipMemberships(userVips);
+            
+            const eventMap = allVipEvents.reduce((acc, ev) => ({...acc, [ev.id]: ev}), {} as Record<string, VipEvent>);
+            setVipEventsMap(eventMap);
+
             const mappedAssignments = fetchedAssignments.map(a => ({
                 ...a,
                 promoterHasJoinedGroup: producerRuleAccepted.get(a.organizationId) || false
@@ -396,9 +419,8 @@ const PostCheck: React.FC = () => {
     useEffect(() => {
         if (promoter?.id && pushInitializedFor.current !== promoter.id) {
             pushInitializedFor.current = promoter.id;
-            initPushNotifications(promoter.id, (status, detail) => {
+            initPushNotifications(promoter.id, (status) => {
                 setPushStatus(status);
-                if (detail) setPushErrorDetail(detail);
             });
         }
     }, [promoter?.id]);
@@ -513,7 +535,7 @@ const PostCheck: React.FC = () => {
                 <button onClick={() => setActiveTab('pending')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 ${activeTab === 'pending' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Ativas ({pending.length})</button>
                 <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Histórico ({history.length})</button>
                 <button onClick={() => setActiveTab('rewards')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 flex items-center justify-center gap-2 ${activeTab === 'rewards' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>
-                    <SparklesIcon className="w-3 h-3" /> Clube VIP
+                    <SparklesIcon className="w-3 h-3" /> Clube VIP ({vipMemberships.length})
                 </button>
             </div>
 
@@ -528,69 +550,61 @@ const PostCheck: React.FC = () => {
                     ) : (
                         /* ABA DE PRÊMIOS / CLUBE VIP */
                         <div className="space-y-4 animate-fadeIn">
-                            {promoter.emocoesStatus && promoter.emocoesStatus !== 'none' ? (
-                                <div className="bg-secondary p-6 rounded-[2rem] border border-white/5 shadow-xl">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center text-primary">
-                                            <SparklesIcon className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-lg font-black text-white uppercase tracking-tight leading-none">Membro Oficial</h3>
-                                            <p className="text-[10px] text-primary font-black uppercase tracking-widest mt-1">Status da Adesão</p>
-                                        </div>
-                                    </div>
+                            {vipMemberships.length > 0 ? vipMemberships.map(m => {
+                                const event = vipEventsMap[m.vipEventId];
+                                const directLink = event?.externalSlug && m.benefitCode 
+                                    ? `https://stingressos.com.br/eventos/${event.externalSlug}?cupom=${m.benefitCode}`
+                                    : null;
 
-                                    {promoter.emocoesStatus === 'pending' && (
-                                        <div className="p-5 bg-amber-900/20 border border-amber-500/30 rounded-2xl text-center">
-                                            <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                                                <ClockIcon className="w-6 h-6 text-amber-500" />
+                                return (
+                                    <div key={m.id} className="bg-secondary p-6 rounded-[2rem] border border-white/5 shadow-xl">
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center text-primary">
+                                                <SparklesIcon className="w-6 h-6" />
                                             </div>
-                                            <p className="text-white font-bold text-sm">Pagamento em Análise</p>
-                                            <p className="text-gray-400 text-xs mt-1">Sua solicitação está na fila de verificação. Você receberá um alerta quando os benefícios forem liberados!</p>
+                                            <div>
+                                                <h3 className="text-lg font-black text-white uppercase tracking-tight leading-none">{m.vipEventName}</h3>
+                                                <p className="text-[10px] text-primary font-black uppercase tracking-widest mt-1">Status Oficial Membro VIP</p>
+                                            </div>
                                         </div>
-                                    )}
 
-                                    {promoter.emocoesStatus === 'confirmed' && (
                                         <div className="space-y-4">
                                             <div className="p-4 bg-green-900/20 border border-green-500/30 rounded-2xl text-center">
                                                 <CheckCircleIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                                                <p className="text-white font-black uppercase tracking-widest text-sm">Clube Ativo! 🚀</p>
+                                                <p className="text-white font-black uppercase tracking-widest text-sm">Resgate Liberado! 🚀</p>
                                             </div>
-                                            <div className="bg-dark/50 p-4 rounded-2xl border border-white/5">
-                                                <p className="text-[10px] text-gray-500 font-black uppercase mb-3">Vantagens Liberadas:</p>
-                                                <div className="space-y-3">
-                                                    <div className="flex justify-between items-center bg-gray-800 p-3 rounded-xl border border-white/5">
-                                                        <span className="text-xs text-gray-300 font-bold uppercase">Acesso a Cortesias</span>
-                                                        <span className="text-green-400 font-black text-[10px] uppercase">LIBERADO</span>
-                                                    </div>
-                                                    <div className="flex justify-between items-center bg-gray-800 p-3 rounded-xl border border-white/5">
-                                                        <span className="text-xs text-gray-300 font-bold uppercase">Sorteios Camarim</span>
-                                                        <span className="text-primary font-mono font-bold">INSCRITA</span>
-                                                    </div>
-                                                    <div className="flex flex-col bg-gray-800 p-3 rounded-xl border border-white/5 gap-2">
-                                                        <span className="text-xs text-gray-300 font-bold uppercase">Código / Link de Desconto:</span>
-                                                        <div className="bg-black/40 p-2 rounded text-primary font-mono font-bold text-center border border-primary/20 select-all">
-                                                            {promoter.emocoesBenefitCode || 'Aguardando Código...'}
-                                                        </div>
+                                            
+                                            <div className="bg-dark/50 p-5 rounded-2xl border border-white/5 space-y-4">
+                                                <div>
+                                                    <p className="text-[10px] text-gray-500 font-black uppercase mb-2 ml-1">Seu Cupom de Desconto:</p>
+                                                    <div className="p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all flex items-center justify-between">
+                                                        <p className="text-lg font-black text-primary font-mono">{m.benefitCode || '---'}</p>
+                                                        <button onClick={() => { navigator.clipboard.writeText(m.benefitCode || ''); alert("Copiado!"); }} className="p-2 text-gray-500 hover:text-white"><DocumentDuplicateIcon className="w-4 h-4"/></button>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <p className="text-[9px] text-gray-500 text-center uppercase tracking-widest italic leading-relaxed">
-                                                Apresente este painel ou use o código acima nos eventos parceiros. Fique atenta às notificações push!
-                                            </p>
-                                        </div>
-                                    )}
 
-                                    {promoter.emocoesStatus === 'rejected' && (
-                                        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-2xl text-center">
-                                            <XIcon className="w-8 h-8 text-red-500 mx-auto mb-2" />
-                                            <p className="text-white font-bold text-sm">Problema no Pagamento</p>
-                                            <p className="text-gray-400 text-xs mt-1">Houve um erro na validação da sua taxa de adesão. Verifique o comprovante e tente reenviar.</p>
-                                            <Link to="/promocao-emocoes" className="mt-4 inline-block px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-lg">Tentar Novamente</Link>
+                                                {m.isBenefitActive && directLink && (
+                                                    <a 
+                                                        href={directLink} 
+                                                        target="_blank" 
+                                                        rel="noreferrer"
+                                                        className="block w-full py-4 bg-green-600 text-white font-black rounded-2xl text-center shadow-lg shadow-green-900/20 hover:bg-green-500 transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2"
+                                                    >
+                                                        <ExternalLinkIcon className="w-4 h-4" /> COMPRAR COM DESCONTO
+                                                    </a>
+                                                )}
+                                                
+                                                {!m.isBenefitActive && (
+                                                    <div className="p-4 bg-amber-900/10 rounded-xl border border-amber-500/20 text-center">
+                                                        <p className="text-amber-400 font-black text-[10px] uppercase">CUPOM EM VALIDAÇÃO</p>
+                                                        <p className="text-gray-500 text-[8px] mt-1">Aguarde a ativação pelo administrador para o link de compra aparecer.</p>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    )}
-                                </div>
-                            ) : (
+                                    </div>
+                                );
+                            }) : (
                                 <div className="bg-secondary p-8 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
                                     <SparklesIcon className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
                                     <h3 className="text-xl font-black text-white uppercase tracking-tight">Entre para o Clube!</h3>

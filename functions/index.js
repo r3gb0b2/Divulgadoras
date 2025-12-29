@@ -13,6 +13,18 @@ const getConfig = () => {
     };
 };
 
+/**
+ * Gera código alfanumérico de 6 caracteres
+ */
+function generateAlphanumericCode(length) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+}
+
 exports.createVipPixPayment = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { vipEventId, promoterId, email, name, amount, whatsapp, instagram } = data;
     const config = getConfig();
@@ -98,7 +110,7 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
                     organizationId: pData ? pData.organizationId : "club-vip-global",
                     status: "confirmed",
                     isBenefitActive: false, // Inicia como FALSO até o admin ativar
-                    benefitCode: "ST-" + Math.random().toString(36).substring(2, 8).toUpperCase(),
+                    benefitCode: generateAlphanumericCode(6),
                     paymentId: data.id,
                     submittedAt: admin.firestore.FieldValue.serverTimestamp(),
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()

@@ -19,6 +19,7 @@ export interface VipEvent {
   description: string;
   benefits: string[];
   pixKey: string;
+  externalSlug: string; // Ex: teste-rafael
   createdAt: Timestamp | FieldValue;
 }
 

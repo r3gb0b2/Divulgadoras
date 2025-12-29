@@ -67,9 +67,10 @@ const EmocoesCampaign: React.FC = () => {
             const profiles = await findPromotersByEmail(trimmedEmail);
             const membership = await checkVipMembership(trimmedEmail, selectedEvent.id);
             
+            // SE JÁ É VIP: Redireciona para o painel
             if (membership?.status === 'confirmed') {
-                setError("Você já é um Membro VIP deste evento!");
-                setIsLoading(false);
+                localStorage.setItem('saved_promoter_email', trimmedEmail);
+                navigate('/posts?tab=vip');
                 return;
             }
 
@@ -195,7 +196,7 @@ const EmocoesCampaign: React.FC = () => {
                                 className="w-full p-5 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold text-center"
                                 placeholder="seu@email.com"
                             />
-                            <button type="submit" disabled={isLoading} className="w-full py-5 bg-primary text-white font-black rounded-2xl uppercase text-xs tracking-widest">
+                            <button type="submit" disabled={isLoading} className="w-full py-5 bg-primary text-white font-black rounded-3xl uppercase text-xs tracking-widest">
                                 {isLoading ? 'SINCROIZANDO...' : 'AVANÇAR'}
                             </button>
                         </form>

@@ -12,12 +12,12 @@ import {
 } from '../services/vipService';
 import { updatePromoter } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
-import { VipMembership, VipEvent } from '../types';
+import { VipMembership, VipEvent, Organization } from '../types';
 import { 
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
-    TicketIcon, RefreshIcon, ClockIcon, UserIcon,
-    BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon,
-    WhatsAppIcon, InstagramIcon
+    EyeIcon, TicketIcon, RefreshIcon, ClockIcon, UserIcon,
+    BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon,
+    WhatsAppIcon, InstagramIcon, DownloadIcon
 } from '../components/Icons';
 
 const AdminClubVip: React.FC = () => {
@@ -119,6 +119,7 @@ const AdminClubVip: React.FC = () => {
                     description: editingEvent.description || '',
                     benefits: editingEvent.benefits || [],
                     pixKey: editingEvent.pixKey || '',
+                    externalSlug: editingEvent.externalSlug || '',
                     isActive: editingEvent.isActive ?? true
                 });
             }
@@ -138,6 +139,57 @@ const AdminClubVip: React.FC = () => {
             await deleteVipEvent(id);
             await fetchData();
         } catch (e) { alert("Erro ao deletar."); }
+    };
+
+    const handleDownloadExcel = () => {
+        if (filteredMembers.length === 0) return;
+
+        let table = `
+            <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+            <head>
+                <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
+            </head>
+            <body>
+                <table border="1">
+                    <thead>
+                        <tr style="background-color: #7e39d5; color: white; font-weight: bold;">
+                            <th>Data Adesão</th>
+                            <th>Evento VIP</th>
+                            <th>Membro</th>
+                            <th>E-mail</th>
+                            <th>WhatsApp</th>
+                            <th>Instagram</th>
+                            <th>Código Cupom</th>
+                            <th>Status Cupom</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        filteredMembers.forEach(m => {
+            const date = (m.submittedAt as any)?.toDate?.().toLocaleString('pt-BR') || 'N/A';
+            const status = m.isBenefitActive ? 'ATIVO' : 'PENDENTE';
+            table += `
+                <tr>
+                    <td>${date}</td>
+                    <td>${m.vipEventName}</td>
+                    <td>${m.promoterName}</td>
+                    <td>${m.promoterEmail}</td>
+                    <td>${m.promoterWhatsapp || ''}</td>
+                    <td>${m.promoterInstagram || ''}</td>
+                    <td style="font-family: monospace;">${m.benefitCode || ''}</td>
+                    <td>${status}</td>
+                </tr>
+            `;
+        });
+
+        table += `</tbody></table></body></html>`;
+
+        const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `membros_vip_${new Date().getTime()}.xls`;
+        link.click();
     };
 
     const filteredMembers = useMemo(() => {
@@ -172,8 +224,13 @@ const AdminClubVip: React.FC = () => {
                             <PlusIcon className="w-4 h-4" /> Novo Evento
                         </button>
                     )}
+                    {activeTab === 'members' && (
+                        <button onClick={handleDownloadExcel} className="flex-1 md:flex-none px-6 py-3 bg-green-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
+                            <DownloadIcon className="w-4 h-4" /> Exportar XLS
+                        </button>
+                    )}
                     {activeTab === 'members' && selectedIds.size > 0 && (
-                        <button onClick={handleBulkActivate} disabled={isBulkProcessing} className="flex-1 md:flex-none px-6 py-3 bg-green-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
+                        <button onClick={handleBulkActivate} disabled={isBulkProcessing} className="flex-1 md:flex-none px-6 py-3 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
                             {isBulkProcessing ? 'PROCESSANDO...' : `ATIVAR ${selectedIds.size} CUPONS`}
                         </button>
                     )}
@@ -283,6 +340,7 @@ const AdminClubVip: React.FC = () => {
                                 <h3 className="text-xl font-black text-white uppercase tracking-tight mb-2">{ev.name}</h3>
                                 <p className="text-primary font-black text-2xl mb-4">R$ {ev.price.toFixed(2).replace('.', ',')}</p>
                                 <div className="space-y-2 mb-6 flex-grow">
+                                    <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest">ID Link: {ev.externalSlug || 'não definido'}</p>
                                     {ev.benefits.slice(0, 3).map((b, i) => (
                                         <div key={i} className="flex gap-2 text-xs text-gray-400 font-medium">
                                             <CheckCircleIcon className="w-4 h-4 text-primary flex-shrink-0" /> <span className="truncate">{b}</span>
@@ -297,9 +355,6 @@ const AdminClubVip: React.FC = () => {
                                 </div>
                             </div>
                         ))}
-                        {vipEvents.length === 0 && !isLoading && (
-                            <div className="md:col-span-3 text-center py-20 text-gray-500 font-bold uppercase text-xs tracking-widest">Nenhuma oferta criada. Clique em "Novo Evento" acima.</div>
-                        )}
                     </div>
                 )}
             </div>
@@ -327,6 +382,11 @@ const AdminClubVip: React.FC = () => {
                                         <option value="false">Pausado</option>
                                     </select>
                                 </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">ID da URL STingressos (Slug)</label>
+                                <input type="text" value={editingEvent?.externalSlug || ''} onChange={e => setEditingEvent({...editingEvent!, externalSlug: e.target.value})} className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white font-mono text-sm" placeholder="Ex: festival-sunset-2024" />
+                                <p className="text-[8px] text-gray-600 mt-1 uppercase">O link será: stingingressos.com.br/eventos/<b>{editingEvent?.externalSlug || 'exemplo'}</b>?cupom=CÓDIGO</p>
                             </div>
                             <div>
                                 <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Benefícios (um por linha)</label>
