@@ -43,6 +43,10 @@ export interface Promoter {
     pluginStatus: string;
     platform: string;
   };
+  // Campos Campanha Emoções
+  emocoesStatus?: 'none' | 'pending' | 'confirmed' | 'rejected';
+  emocoesProofUrl?: string;
+  emocoesBenefitCode?: string;
 }
 
 export interface GlobalList {

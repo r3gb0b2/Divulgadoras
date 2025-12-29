@@ -5,11 +5,13 @@ import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustificatio
 import { findPromotersByEmail, changePromoterEmail } from '../services/promoterService';
 import { testSelfPush } from '../services/messageService';
 import { PostAssignment, Promoter, Timestamp } from '../types';
+// FIX: Added SparklesIcon to imports to fix "Cannot find name 'SparklesIcon'" error.
 import { 
     ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, 
     ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, 
     LogoutIcon, DocumentDuplicateIcon, SearchIcon, ChartBarIcon, 
-    XIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, PencilIcon 
+    XIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, PencilIcon, TicketIcon,
+    SparklesIcon
 } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
@@ -308,7 +310,7 @@ const PostCheck: React.FC = () => {
     const [promoter, setPromoter] = useState<Promoter | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [searched, setSearched] = useState(false);
-    const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
+    const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'rewards'>('pending');
     
     const [isChangingEmail, setIsChangingEmail] = useState(false);
     const [newEmailValue, setNewEmailValue] = useState('');
@@ -428,7 +430,6 @@ const PostCheck: React.FC = () => {
 
     const handleJustificationFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
-            // Fix: Cast Array.from result to File[] to prevent type error when calling URL.createObjectURL
             const files = Array.from(e.target.files) as File[];
             setJustificationFiles(files);
             setJustificationPreviews(files.map(f => URL.createObjectURL(f as Blob)));
@@ -502,15 +503,18 @@ const PostCheck: React.FC = () => {
                             </button>
                         )}
 
-                        {pushStatus === 'success' && <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-900/20 text-green-400 border border-green-900/30 rounded-full text-[10px] font-black uppercase tracking-widest"><CheckCircleIcon className="w-3 h-3"/> APP CONECTADO</span>}
+                        {pushStatus === 'success' && <span className="inline-flex items-center gap-1 px-3 py-1 bg-green-900/20 text-green-400 border border-green-800/30 rounded-full text-[10px] font-black uppercase tracking-widest"><CheckCircleIcon className="w-3 h-3"/> APP CONECTADO</span>}
                     </div>
                 </div>
                 <button onClick={handleLogout} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-red-400 transition-colors ml-4 flex-shrink-0"><LogoutIcon className="w-6 h-6" /></button>
             </div>
 
-            <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-gray-700/50">
-                <button onClick={() => setActiveTab('pending')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'pending' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Ativas ({pending.length})</button>
-                <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Finalizadas ({history.length})</button>
+            <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-gray-700/50 overflow-x-auto">
+                <button onClick={() => setActiveTab('pending')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 ${activeTab === 'pending' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Ativas ({pending.length})</button>
+                <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Histórico ({history.length})</button>
+                <button onClick={() => setActiveTab('rewards')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 flex items-center justify-center gap-2 ${activeTab === 'rewards' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>
+                    <SparklesIcon className="w-3 h-3" /> Clube VIP
+                </button>
             </div>
 
             <div className="space-y-2">
@@ -518,9 +522,77 @@ const PostCheck: React.FC = () => {
                     activeTab === 'pending' ? (
                         pending.length > 0 ? pending.map(a => <PostCard key={a.id} assignment={a} promoter={promoter} onConfirm={() => performSearch(email)} onJustify={setJustificationAssignment} onRefresh={() => performSearch(email)} />) 
                         : <div className="text-center py-20"><div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircleIcon className="w-8 h-8 text-green-500" /></div><p className="text-gray-400 font-bold">Tudo em dia! 🎉</p></div>
-                    ) : (
+                    ) : activeTab === 'history' ? (
                         history.length > 0 ? history.map(a => <PostCard key={a.id} assignment={a} promoter={promoter} onConfirm={()=>{}} onJustify={()=>{}} onRefresh={()=>{}} />) 
                         : <p className="text-center text-gray-500 py-10 font-bold uppercase tracking-widest text-[10px]">Histórico Vazio</p>
+                    ) : (
+                        /* ABA DE PRÊMIOS / CLUBE VIP */
+                        <div className="space-y-4 animate-fadeIn">
+                            {promoter.emocoesStatus && promoter.emocoesStatus !== 'none' ? (
+                                <div className="bg-secondary p-6 rounded-[2rem] border border-white/5 shadow-xl">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center text-primary">
+                                            <SparklesIcon className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-lg font-black text-white uppercase tracking-tight leading-none">Membro Oficial</h3>
+                                            <p className="text-[10px] text-primary font-black uppercase tracking-widest mt-1">Status da Adesão</p>
+                                        </div>
+                                    </div>
+
+                                    {promoter.emocoesStatus === 'pending' && (
+                                        <div className="p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-2xl text-center">
+                                            <ClockIcon className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
+                                            <p className="text-white font-bold text-sm">Pagamento em Análise</p>
+                                            <p className="text-gray-400 text-xs mt-1">Aguarde a validação administrativa para ativar seus benefícios e sorteios.</p>
+                                        </div>
+                                    )}
+
+                                    {promoter.emocoesStatus === 'confirmed' && (
+                                        <div className="space-y-4">
+                                            <div className="p-4 bg-green-900/20 border border-green-500/30 rounded-2xl text-center">
+                                                <CheckCircleIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                                                <p className="text-white font-black uppercase tracking-widest text-sm">Clube Ativo! 🚀</p>
+                                            </div>
+                                            <div className="bg-dark/50 p-4 rounded-2xl border border-white/5">
+                                                <p className="text-[10px] text-gray-500 font-black uppercase mb-3">Vantagens Liberadas:</p>
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between items-center bg-gray-800 p-3 rounded-xl border border-white/5">
+                                                        <span className="text-xs text-gray-300 font-bold uppercase">Acesso a Cortesias</span>
+                                                        <span className="text-green-400 font-black text-[10px] uppercase">LIBERADO</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center bg-gray-800 p-3 rounded-xl border border-white/5">
+                                                        <span className="text-xs text-gray-300 font-bold uppercase">Sorteios Camarim</span>
+                                                        <span className="text-primary font-mono font-bold">INSCRITA</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center bg-gray-800 p-3 rounded-xl border border-white/5">
+                                                        <span className="text-xs text-gray-300 font-bold uppercase">ID Membro</span>
+                                                        <span className="text-white font-mono font-bold text-xs">{promoter.emocoesBenefitCode || 'VIP-MEM-2024'}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <p className="text-[9px] text-gray-500 text-center uppercase tracking-widest italic">Fique atenta às notificações Push com as datas de sorteios e convites.</p>
+                                        </div>
+                                    )}
+
+                                    {promoter.emocoesStatus === 'rejected' && (
+                                        <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-2xl text-center">
+                                            <XIcon className="w-8 h-8 text-red-500 mx-auto mb-2" />
+                                            <p className="text-white font-bold text-sm">Problema no Pagamento</p>
+                                            <p className="text-gray-400 text-xs mt-1">Houve um erro na validação da sua taxa de adesão. Tente reenviar o comprovante.</p>
+                                            <Link to="/promocao-emocoes" className="mt-4 inline-block px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-lg">Tentar Novamente</Link>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="bg-secondary p-8 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
+                                    <SparklesIcon className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+                                    <h3 className="text-xl font-black text-white uppercase tracking-tight">Entre para o Clube!</h3>
+                                    <p className="text-gray-400 text-sm mt-2 mb-6">Acesse benefícios exclusivos: cortesias, descontos e sorteios de camarim.</p>
+                                    <Link to="/promocao-emocoes" className="block w-full py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-primary/20">QUERO SER MEMBRO</Link>
+                                </div>
+                            )}
+                        </div>
                     )
                 )}
             </div>

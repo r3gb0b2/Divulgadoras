@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getPublicOrganizations } from '../services/organizationService';
 import { Organization } from '../types';
-import { UsersIcon, SearchIcon, SparklesIcon, MegaphoneIcon, CheckCircleIcon } from '../components/Icons';
+import { UsersIcon, SearchIcon, SparklesIcon, MegaphoneIcon, CheckCircleIcon, TicketIcon } from '../components/Icons';
 import { Capacitor } from '@capacitor/core';
 
 const PublicHome: React.FC = () => {
@@ -15,8 +15,6 @@ const PublicHome: React.FC = () => {
   const isNative = Capacitor.isNativePlatform();
   
   useEffect(() => {
-    // Só buscamos organizações se NÃO for nativo, para permitir novos cadastros via web caso necessário
-    // mas o foco visual agora é outro.
     const fetchOrgs = async () => {
       setIsLoading(true);
       setError(null);
@@ -82,7 +80,7 @@ const PublicHome: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto space-y-10 py-12 px-4">
       
-      {/* Hero Section Reduzida */}
+      {/* Hero Section */}
       <section className="text-center space-y-8 animate-fadeIn pt-4">
           <div className="flex justify-center mb-4">
              <div className="p-4 bg-primary/10 rounded-full border border-primary/20">
@@ -90,20 +88,26 @@ const PublicHome: React.FC = () => {
              </div>
           </div>
 
-          <div className="flex flex-wrap justify-center gap-6">
-              <Link to="/posts" className="px-10 py-5 bg-primary text-white font-black rounded-3xl shadow-2xl shadow-primary/40 hover:scale-105 active:scale-95 transition-all uppercase tracking-[0.1em] text-base md:text-lg flex items-center gap-3">
+          <div className="flex flex-wrap justify-center gap-4 md:gap-6">
+              <Link to="/posts" className="px-8 md:px-10 py-5 bg-primary text-white font-black rounded-3xl shadow-2xl shadow-primary/40 hover:scale-105 active:scale-95 transition-all uppercase tracking-[0.1em] text-sm md:text-lg flex items-center gap-3">
                   <MegaphoneIcon className="w-6 h-6" />
-                  VER POSTAGENS
+                  POSTAGENS
               </Link>
               
-              <Link to="/status" className="px-10 py-5 bg-gray-800 text-white font-black rounded-3xl border border-gray-700 hover:bg-gray-700 hover:border-gray-600 transition-all uppercase tracking-[0.1em] text-base md:text-lg flex items-center gap-3">
+              <Link to="/status" className="px-8 md:px-10 py-5 bg-gray-800 text-white font-black rounded-3xl border border-gray-700 hover:bg-gray-700 hover:border-gray-600 transition-all uppercase tracking-[0.1em] text-sm md:text-lg flex items-center gap-3">
                   <SearchIcon className="w-6 h-6" />
                   MEU STATUS
+              </Link>
+
+              <Link to="/promocao-emocoes" className="relative px-8 md:px-10 py-5 bg-gradient-to-br from-indigo-600 to-purple-800 text-white font-black rounded-3xl shadow-2xl hover:scale-105 active:scale-95 transition-all uppercase tracking-[0.1em] text-sm md:text-lg flex items-center gap-3 border border-white/20 overflow-hidden group">
+                  <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                  <SparklesIcon className="w-6 h-6 text-yellow-400" />
+                  CLUBE VIP
               </Link>
           </div>
       </section>
 
-      {/* Seção de Seleção - Oculta no App (Pois o App é para quem já está dentro) */}
+      {/* Seção de Seleção */}
       {!isNative && (
         <div id="agencias" className="relative pt-10">
             <div className="absolute -inset-4 bg-gradient-to-tr from-primary/20 via-purple-600/10 to-transparent rounded-[40px] blur-3xl opacity-50 -z-10"></div>

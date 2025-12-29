@@ -113,6 +113,23 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
   }
 };
 
+export const submitEmocoesProof = async (promoterId: string, file: File): Promise<void> => {
+    try {
+        const fileName = `emocoes_proofs/${promoterId}_${Date.now()}_${file.name}`;
+        const storageRef = storage.ref(fileName);
+        await storageRef.put(file);
+        const url = await storageRef.getDownloadURL();
+
+        await firestore.collection('promoters').doc(promoterId).update({
+            emocoesStatus: 'pending',
+            emocoesProofUrl: url,
+            statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (error: any) {
+        throw new Error("Erro ao enviar comprovante: " + error.message);
+    }
+};
+
 export const checkPromoterStatus = async (email: string): Promise<Promoter[]> => {
     const snap = await firestore.collection("promoters").where("email", "==", email.toLowerCase().trim()).get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
