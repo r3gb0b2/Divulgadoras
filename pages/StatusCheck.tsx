@@ -1,10 +1,10 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { checkPromoterStatus, confirmPromoterGroupEntry } from '../services/promoterService';
 import { getAllCampaigns } from '../services/settingsService';
-import { Promoter, Campaign, Organization } from '../types';
-import { WhatsAppIcon, ArrowLeftIcon, MegaphoneIcon, LogoutIcon, CheckCircleIcon, ClockIcon, XIcon, PencilIcon, SearchIcon, ClipboardDocumentListIcon, AlertTriangleIcon } from '../components/Icons';
-import { stateMap } from '../constants/states';
+import { Promoter, Campaign } from '../types';
+import { WhatsAppIcon, ArrowLeftIcon, LogoutIcon, CheckCircleIcon, ClockIcon, XIcon, PencilIcon, SearchIcon, AlertTriangleIcon, SparklesIcon, MegaphoneIcon } from '../components/Icons';
 import { getOrganizations } from '../services/organizationService';
 
 interface RulesModalProps {
@@ -35,7 +35,7 @@ const RulesModal: React.FC<RulesModalProps> = ({ isOpen, onClose, rules, campaig
 };
 
 const RegistrationItem: React.FC<{ promoter: Promoter; orgName: string; allCampaigns: Campaign[] }> = ({ promoter, orgName, allCampaigns }) => {
-    const [isExpanded, setIsExpanded] = useState(promoter.status === 'rejected_editable'); // Auto-expand if correction needed
+    const [isExpanded, setIsExpanded] = useState(promoter.status === 'rejected_editable');
     const [hasAcceptedRules, setHasAcceptedRules] = useState(promoter.hasJoinedGroup || false);
     const [isRulesModalOpen, setIsRulesModalOpen] = useState(false);
 
@@ -226,6 +226,15 @@ const StatusCheck: React.FC = () => {
         }, {} as Record<string, Promoter[]>);
     }, [promoters]);
 
+    // Lógica para diferenciar usuários puramente VIP de membros da equipe
+    const isOnlyVip = useMemo(() => {
+        return promoters.length > 0 && promoters.every(p => p.organizationId === 'club-vip-global');
+    }, [promoters]);
+
+    const hasAnyApprovedJob = useMemo(() => {
+        return promoters.some(p => p.status === 'approved' && p.organizationId !== 'club-vip-global');
+    }, [promoters]);
+
     return (
         <div className="max-w-xl mx-auto py-6 px-4">
             <div className="flex justify-between items-center mb-10">
@@ -262,45 +271,86 @@ const StatusCheck: React.FC = () => {
 
                     {promoters.length > 0 ? (
                         <div className="space-y-6">
-                            {(Object.entries(groupedPromoters) as [string, Promoter[]][]).map(([orgId, registrations]) => (
-                                <div key={orgId} className="bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-6 border border-white/5 shadow-2xl">
-                                    <div className="flex items-center gap-3 mb-6 px-2 border-b border-white/5 pb-4">
-                                        <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shadow-lg">
-                                            <CheckCircleIcon className="w-6 h-6" />
-                                        </div>
-                                        <div className="text-left">
-                                            <h2 className="text-xl font-black text-white uppercase tracking-tight leading-none">{orgMap[orgId] || 'Produtora'}</h2>
-                                            <p className="text-[8px] text-primary font-black uppercase tracking-[0.2em] mt-1.5">Equipe Certificada</p>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="space-y-3">
-                                        {registrations.map(p => (
-                                            <RegistrationItem key={p.id} promoter={p} orgName={orgMap[orgId]} allCampaigns={allCampaigns} />
-                                        ))}
-                                    </div>
+                            {(Object.entries(groupedPromoters) as [string, Promoter[]][]).map(([orgId, registrations]) => {
+                                if (orgId === 'club-vip-global') {
+                                    const p = registrations[0];
+                                    return (
+                                        <div key={orgId} className="bg-gradient-to-br from-indigo-900/40 to-purple-900/20 backdrop-blur-lg rounded-[2.5rem] p-8 border border-primary/20 shadow-2xl overflow-hidden relative group">
+                                            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl group-hover:bg-primary/20 transition-all"></div>
+                                            <div className="flex items-center gap-4 mb-6">
+                                                <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center text-primary shadow-lg border border-primary/20">
+                                                    <SparklesIcon className="w-8 h-8" />
+                                                </div>
+                                                <div className="text-left">
+                                                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">Membro VIP</h2>
+                                                    <p className="text-[9px] text-primary font-black uppercase tracking-[0.3em] mt-2">Clube de Benefícios</p>
+                                                </div>
+                                            </div>
 
-                                    {registrations.some(r => r.status === 'approved') && (
-                                        <div className="mt-6 pt-4 px-2">
-                                            <Link to={`/posts?email=${encodeURIComponent(email)}`} className="flex items-center justify-center gap-3 w-full py-4 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-[0.2em] transition-all hover:bg-primary-dark shadow-xl shadow-primary/20">
-                                                <MegaphoneIcon className="w-4 h-4" /> ACESSAR MEU PORTAL
-                                            </Link>
+                                            {p.emocoesStatus === 'pending' ? (
+                                                <div className="p-5 bg-dark/40 rounded-2xl border border-white/5 text-center">
+                                                    <ClockIcon className="w-6 h-6 text-amber-500 mx-auto mb-2" />
+                                                    <p className="text-white font-bold text-sm">Aguardando Aprovação</p>
+                                                    <p className="text-gray-400 text-[10px] mt-1 uppercase font-bold">Seu pagamento está na fila de verificação.</p>
+                                                </div>
+                                            ) : p.emocoesStatus === 'confirmed' ? (
+                                                <div className="space-y-4">
+                                                    <div className="p-4 bg-green-500/10 rounded-2xl border border-green-500/30 text-center">
+                                                        <CheckCircleIcon className="w-6 h-6 text-green-500 mx-auto mb-2" />
+                                                        <p className="text-green-400 font-black uppercase tracking-widest text-xs">Membro VIP Ativo!</p>
+                                                    </div>
+                                                    <div className="bg-dark/60 p-4 rounded-2xl border border-white/5 space-y-3">
+                                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center">Seu Cupom de Benefício</p>
+                                                        {p.emocoesBenefitActive ? (
+                                                            <div className="p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all">
+                                                                <p className="text-lg font-black text-primary font-mono">{p.emocoesBenefitCode || '---'}</p>
+                                                                <p className="text-[8px] text-gray-400 uppercase mt-1">Aplique no site STingressos</p>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="p-4 bg-amber-900/10 rounded-xl border border-amber-500/20 text-center">
+                                                                <p className="text-amber-400 font-black text-[10px] uppercase">CUPOM PENDENTE</p>
+                                                                <p className="text-gray-500 text-[8px] mt-1">Aguarde a ativação pelo administrador.</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ) : null}
                                         </div>
-                                    )}
-                                </div>
-                            ))}
+                                    );
+                                }
+
+                                return (
+                                    <div key={orgId} className="space-y-4">
+                                        <div className="flex items-center gap-3 ml-4">
+                                            <div className="w-8 h-8 bg-white/5 rounded-xl flex items-center justify-center">
+                                                <MegaphoneIcon className="w-4 h-4 text-primary" />
+                                            </div>
+                                            <h2 className="text-lg font-black text-white uppercase tracking-tight">{orgMap[orgId] || 'Outra Organização'}</h2>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {registrations.map(p => (
+                                                <RegistrationItem key={p.id} promoter={p} orgName={orgMap[orgId]} allCampaigns={allCampaigns} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+
+                            {!isOnlyVip && hasAnyApprovedJob && (
+                                <button onClick={() => navigate('/posts')} className="w-full py-5 bg-white text-dark font-black rounded-3xl shadow-xl hover:bg-gray-100 transition-all uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-2">
+                                    ACESSAR MEU PORTAL <ArrowLeftIcon className="w-4 h-4 rotate-180" />
+                                </button>
+                            )}
                         </div>
                     ) : (
-                        <div className="bg-secondary/40 p-12 rounded-[2.5rem] text-center border border-white/5">
+                        <div className="bg-secondary/40 p-10 rounded-[2.5rem] border border-white/5 text-center">
                             <XIcon className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-                            <p className="text-gray-400 font-bold uppercase text-xs tracking-widest">Nenhuma inscrição encontrada.</p>
-                            <button onClick={() => setSearched(false)} className="mt-4 text-primary text-[10px] font-black uppercase tracking-widest hover:underline">TENTAR OUTRO E-MAIL</button>
+                            <p className="text-gray-400 font-bold uppercase text-xs tracking-widest">Nenhum cadastro encontrado.</p>
+                            <button onClick={() => navigate('/')} className="mt-6 text-primary font-black uppercase text-[10px] tracking-widest hover:underline">Ir para Início</button>
                         </div>
                     )}
                 </div>
             )}
-            
-            {error && <p className="text-red-400 text-center mt-6 bg-red-900/20 p-4 rounded-2xl border border-red-900/50 text-[10px] font-black uppercase tracking-widest animate-shake">{error}</p>}
         </div>
     );
 };

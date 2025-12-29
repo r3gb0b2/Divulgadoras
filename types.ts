@@ -29,9 +29,12 @@ export interface VipMembership {
   promoterId: string;
   promoterName: string;
   promoterEmail: string;
+  promoterWhatsapp?: string;
+  promoterInstagram?: string;
   organizationId: string;
   status: 'pending' | 'confirmed' | 'rejected';
-  proofUrl: string;
+  isBenefitActive: boolean; 
+  proofUrl?: string;
   benefitCode?: string;
   submittedAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
@@ -69,13 +72,11 @@ export interface Promoter {
     pluginStatus: string;
     platform: string;
   };
-  // Retrocompatibilidade (opcional)
   emocoesStatus?: 'none' | 'pending' | 'confirmed' | 'rejected';
-  emocoesProofUrl?: string;
   emocoesBenefitCode?: string;
+  emocoesBenefitActive?: boolean;
 }
 
-// Added Campaign interface
 export interface Campaign {
   id: string;
   organizationId: string;
@@ -92,7 +93,6 @@ export interface Campaign {
   guestListTypes?: string[];
 }
 
-// Added AdminApplication interface
 export interface AdminApplication {
   id: string;
   name: string;
@@ -102,7 +102,6 @@ export interface AdminApplication {
   organizationId?: string;
 }
 
-// Added StateConfig and StatesConfig interfaces
 export interface StateConfig {
   isActive: boolean;
   rules: string;
@@ -112,7 +111,6 @@ export interface StatesConfig {
   [stateAbbr: string]: StateConfig;
 }
 
-// Added InstructionTemplate interface
 export interface InstructionTemplate {
   id: string;
   text: string;
@@ -120,7 +118,6 @@ export interface InstructionTemplate {
   createdAt: Timestamp | FieldValue;
 }
 
-// Added LinkTemplate interface
 export interface LinkTemplate {
   id: string;
   name: string;
@@ -129,7 +126,6 @@ export interface LinkTemplate {
   createdAt: Timestamp | FieldValue;
 }
 
-// Added PushReminder interface
 export interface PushReminder {
   id: string;
   promoterId: string;
@@ -142,7 +138,6 @@ export interface PushReminder {
   assignmentId?: string;
 }
 
-// Added OneTimePost interface
 export interface OneTimePost {
   id: string;
   organizationId: string;
@@ -166,7 +161,6 @@ export interface OneTimePost {
   submissionCount?: number;
 }
 
-// Added OneTimePostSubmission interface
 export interface OneTimePostSubmission {
   id: string;
   oneTimePostId: string;
@@ -179,7 +173,6 @@ export interface OneTimePostSubmission {
   submittedAt: Timestamp | FieldValue;
 }
 
-// Added ScheduledPostData interface
 export interface ScheduledPostData {
   campaignName: string;
   eventName?: string;
@@ -201,7 +194,6 @@ export interface ScheduledPostData {
   ownerOnly?: boolean;
 }
 
-// Added ScheduledPost interface
 export interface ScheduledPost {
   id: string;
   organizationId: string;
@@ -213,7 +205,6 @@ export interface ScheduledPost {
   error?: string;
 }
 
-// Added WhatsAppReminder interface
 export interface WhatsAppReminder {
   id: string;
   promoterId: string;
@@ -288,7 +279,6 @@ export interface PostAssignment {
   reminderSentAt?: Timestamp | null;
 }
 
-// Added GuestListConfirmation interface
 export interface GuestListConfirmation {
   id: string;
   organizationId: string;
@@ -309,7 +299,6 @@ export interface GuestListConfirmation {
   guestsCheckedIn?: { name: string; checkedInAt: Timestamp | FieldValue; checkedOutAt: Timestamp | FieldValue | null }[];
 }
 
-// Added GuestListChangeRequest interface
 export interface GuestListChangeRequest {
   id: string;
   organizationId: string;
@@ -354,7 +343,6 @@ export interface GuestList {
   guestListTypes?: string[];
 }
 
-// Added PromoterStats interface
 export interface PromoterStats extends Promoter {
   assigned: number;
   completed: number;
@@ -406,14 +394,12 @@ export interface PromoterApplicationData {
   campaignName: string;
 }
 
-// FIX: Completed missing interface structure for RejectionReason.
 export interface RejectionReason {
   id: string;
   text: string;
   organizationId: string;
 }
 
-// FIX: Added missing GroupRemovalRequest interface definition.
 export interface GroupRemovalRequest {
   id: string;
   promoterId: string;
@@ -427,7 +413,6 @@ export interface GroupRemovalRequest {
   actionTakenAt?: Timestamp | FieldValue;
 }
 
-// FIX: Added missing FollowLoop interface definition.
 export interface FollowLoop {
   id: string;
   name: string;
@@ -437,7 +422,6 @@ export interface FollowLoop {
   createdAt: Timestamp | FieldValue;
 }
 
-// FIX: Added missing FollowLoopParticipant interface definition.
 export interface FollowLoopParticipant {
   id: string;
   loopId: string;
@@ -456,7 +440,6 @@ export interface FollowLoopParticipant {
   state: string;
 }
 
-// FIX: Added missing FollowInteraction interface definition.
 export interface FollowInteraction {
   id: string;
   loopId: string;
@@ -472,7 +455,6 @@ export interface FollowInteraction {
   followedInstagram: string;
 }
 
-// FIX: Added missing AppleTestRegistrant interface definition.
 export interface AppleTestRegistrant {
   id: string;
   firstName: string;

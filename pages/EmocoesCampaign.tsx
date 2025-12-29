@@ -8,7 +8,7 @@ import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { 
   ArrowLeftIcon, CheckCircleIcon, SparklesIcon,
-  DocumentDuplicateIcon, RefreshIcon, UserIcon, PhoneIcon
+  DocumentDuplicateIcon, RefreshIcon, UserIcon, PhoneIcon, InstagramIcon
 } from '../components/Icons';
 
 type CampaignStep = 'select_event' | 'benefits' | 'identify' | 'register_new' | 'payment' | 'success';
@@ -21,6 +21,7 @@ const EmocoesCampaign: React.FC = () => {
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
     const [whatsapp, setWhatsapp] = useState('');
+    const [instagram, setInstagram] = useState('');
     const [promoter, setPromoter] = useState<Promoter | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -68,10 +69,20 @@ const EmocoesCampaign: React.FC = () => {
                     setIsLoading(false);
                     return;
                 }
+                
+                // Pedimos confirmação/preenchimento dos dados de contato para o VIP
+                setName(p.name);
+                setWhatsapp(p.whatsapp);
+                setInstagram(p.instagram);
                 setPromoter(p);
-                generatePayment(p, selectedEvent);
+                setStep('register_new');
+                setIsLoading(false);
             } else {
-                // E-mail não encontrado, leva para cadastro rápido
+                // Usuário novo
+                setPromoter(null);
+                setName('');
+                setWhatsapp('');
+                setInstagram('');
                 setStep('register_new');
                 setIsLoading(false);
             }
@@ -83,15 +94,28 @@ const EmocoesCampaign: React.FC = () => {
 
     const handleCreateNewAndPay = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name.trim() || !whatsapp.trim() || !selectedEvent) return;
+        if (!name.trim() || !whatsapp.trim() || !instagram.trim() || !selectedEvent) return;
         setIsLoading(true);
         try {
-            const pId = await createVipPromoter({ name, email, whatsapp });
-            const p = { id: pId, name, email, whatsapp } as Promoter;
+            let pId = promoter?.id;
+            const sanitizedWhatsapp = whatsapp.replace(/\D/g, '');
+            const sanitizedInstagram = instagram.replace('@', '').trim();
+
+            if (!pId) {
+                pId = await createVipPromoter({ name, email, whatsapp: sanitizedWhatsapp });
+            }
+            
+            // Atualiza os dados no perfil (divulgadora)
+            await firestore.collection('promoters').doc(pId).update({
+                whatsapp: sanitizedWhatsapp,
+                instagram: sanitizedInstagram
+            });
+
+            const p = { id: pId, name, email, whatsapp: sanitizedWhatsapp, instagram: sanitizedInstagram } as Promoter;
             setPromoter(p);
             generatePayment(p, selectedEvent);
         } catch (err: any) {
-            setError("Erro ao criar cadastro: " + err.message);
+            setError("Erro ao processar cadastro: " + err.message);
             setIsLoading(false);
         }
     };
@@ -105,6 +129,8 @@ const EmocoesCampaign: React.FC = () => {
                 promoterId: p.id,
                 email: p.email,
                 name: p.name,
+                whatsapp: p.whatsapp,
+                instagram: p.instagram,
                 amount: ev.price
             });
             setPixData(res.data);
@@ -158,7 +184,7 @@ const EmocoesCampaign: React.FC = () => {
 
                     {step === 'identify' && (
                         <form onSubmit={handleCheckEmail} className="space-y-4">
-                            <h2 className="text-xl font-black text-white text-center">IDENTIFICAÇÃO</h2>
+                            <h2 className="text-xl font-black text-white text-center uppercase">Identificação</h2>
                             <input 
                                 type="email" required value={email} onChange={e => setEmail(e.target.value)}
                                 className="w-full p-5 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
@@ -172,20 +198,34 @@ const EmocoesCampaign: React.FC = () => {
 
                     {step === 'register_new' && (
                         <form onSubmit={handleCreateNewAndPay} className="space-y-4">
-                            <h2 className="text-xl font-black text-white text-center">COMPLETE SEU PERFIL</h2>
-                            <p className="text-center text-gray-400 text-xs mb-4 uppercase font-bold">Não encontramos seu e-mail. Preencha abaixo para continuar.</p>
-                            <input 
-                                type="text" required value={name} onChange={e => setName(e.target.value)}
-                                className="w-full p-5 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
-                                placeholder="Nome Completo"
-                            />
-                            <input 
-                                type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)}
-                                className="w-full p-5 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
-                                placeholder="WhatsApp com DDD"
-                            />
-                            <button type="submit" disabled={isLoading} className="w-full py-5 bg-primary text-white font-black rounded-2xl">
-                                {isLoading ? 'PROCESSANDO...' : 'GERAR PAGAMENTO'}
+                            <h2 className="text-xl font-black text-white text-center uppercase">Seus Dados de Acesso</h2>
+                            <p className="text-center text-gray-400 text-[10px] mb-4 uppercase font-bold tracking-widest">Precisamos de seus contatos para liberar o cupom VIP.</p>
+                            <div className="relative">
+                                <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                                <input 
+                                    type="text" required value={name} onChange={e => setName(e.target.value)}
+                                    className="w-full p-5 pl-14 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
+                                    placeholder="Nome Completo"
+                                />
+                            </div>
+                            <div className="relative">
+                                <PhoneIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                                <input 
+                                    type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)}
+                                    className="w-full p-5 pl-14 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
+                                    placeholder="WhatsApp com DDD"
+                                />
+                            </div>
+                            <div className="relative">
+                                <InstagramIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                                <input 
+                                    type="text" required value={instagram} onChange={e => setInstagram(e.target.value)}
+                                    className="w-full p-5 pl-14 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
+                                    placeholder="Instagram (usuário)"
+                                />
+                            </div>
+                            <button type="submit" disabled={isLoading} className="w-full py-5 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20">
+                                {isLoading ? 'PROCESSANDO...' : 'PROSSEGUIR PARA PAGAMENTO'}
                             </button>
                         </form>
                     )}
@@ -219,9 +259,9 @@ const EmocoesCampaign: React.FC = () => {
                             <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto">
                                 <CheckCircleIcon className="w-12 h-12 text-green-500" />
                             </div>
-                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter">PAGAMENTO APROVADO!</h2>
-                            <p className="text-gray-400">Seu acesso VIP foi liberado. Você já pode acessar seus benefícios no portal das divulgadoras.</p>
-                            <button onClick={() => navigate('/posts')} className="w-full py-5 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20">IR PARA O PORTAL</button>
+                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter">ADESÃO RECEBIDA!</h2>
+                            <p className="text-gray-400">Seu cupom está sendo gerado e aguarda ativação pelo administrador. Em breve você receberá um alerta push.</p>
+                            <button onClick={() => navigate('/status')} className="w-full py-5 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 uppercase text-xs tracking-widest">VER MEU STATUS VIP</button>
                         </div>
                     )}
                 </div>

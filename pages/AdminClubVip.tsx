@@ -5,83 +5,18 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { 
     getAllVipMemberships, 
     updateVipMembership, 
-    getAllVipEvents, 
-    createVipEvent, 
-    updateVipEvent, 
-    deleteVipEvent 
+    getAllVipEvents
 } from '../services/vipService';
+import { updatePromoter } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
-import { VipMembership, VipEvent, Organization } from '../types';
+import { VipMembership, VipEvent } from '../types';
 import { 
-    ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
-    EyeIcon, TicketIcon, RefreshIcon, ClockIcon, UserIcon,
-    BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon
+    ArrowLeftIcon, SearchIcon, CheckCircleIcon, 
+    TicketIcon, RefreshIcon, ClockIcon, UserIcon,
+    BuildingOfficeIcon, WhatsAppIcon, InstagramIcon,
+    // FIX: Added XIcon to imports to fix "Cannot find name 'XIcon'" error.
+    XIcon
 } from '../components/Icons';
-import PhotoViewerModal from '../components/PhotoViewerModal';
-
-const VipEventModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    onSave: (data: any) => Promise<void>;
-    event: VipEvent | null;
-}> = ({ isOpen, onClose, onSave, event }) => {
-    const [formData, setFormData] = useState({
-        name: '', price: 50, isActive: true, description: '', pixKey: '', benefits: ''
-    });
-
-    useEffect(() => {
-        if (event) setFormData({
-            name: event.name, price: event.price, isActive: event.isActive, 
-            description: event.description, pixKey: event.pixKey, benefits: event.benefits.join('\n')
-        });
-        else setFormData({ name: '', price: 50, isActive: true, description: '', pixKey: 'pix@equipecerta.com.br', benefits: '' });
-    }, [event, isOpen]);
-
-    if (!isOpen) return null;
-
-    return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-            <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 max-h-[90vh] overflow-y-auto">
-                <h3 className="text-2xl font-black text-white uppercase mb-6 tracking-tighter">{event ? 'Editar Evento VIP' : 'Novo Evento VIP'}</h3>
-                <div className="space-y-4">
-                    <div>
-                        <label className="text-[10px] font-black text-gray-500 uppercase ml-1 tracking-widest">Nome do Evento</label>
-                        <input type="text" placeholder="Ex: Camarote Verão 2024" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-dark p-4 rounded-2xl border border-gray-700 text-white font-bold outline-none focus:ring-1 focus:ring-primary" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="text-[10px] font-black text-gray-500 uppercase ml-1 tracking-widest">Preço da Adesão (R$)</label>
-                            <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} className="w-full bg-dark p-4 rounded-2xl border border-gray-700 text-white font-bold outline-none focus:ring-1 focus:ring-primary" />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-black text-gray-500 uppercase ml-1 tracking-widest">Status Inicial</label>
-                            <select value={formData.isActive ? 'true' : 'false'} onChange={e => setFormData({...formData, isActive: e.target.value === 'true'})} className="w-full bg-dark p-4 rounded-2xl border border-gray-700 text-white font-bold outline-none focus:ring-1 focus:ring-primary">
-                                <option value="true">Ativo</option>
-                                <option value="false">Pausado</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-black text-gray-500 uppercase ml-1 tracking-widest">Chave PIX (Específica do Evento)</label>
-                        <input type="text" placeholder="Chave para recebimento" value={formData.pixKey} onChange={e => setFormData({...formData, pixKey: e.target.value})} className="w-full bg-dark p-4 rounded-2xl border border-gray-700 text-white text-sm outline-none focus:ring-1 focus:ring-primary" />
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-black text-gray-500 uppercase ml-1 tracking-widest">Descrição curta</label>
-                        <textarea placeholder="Explicação rápida..." value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-dark p-4 rounded-2xl border border-gray-700 text-white text-sm h-20 outline-none focus:ring-1 focus:ring-primary" />
-                    </div>
-                    <div>
-                        <label className="text-[10px] font-black text-gray-500 uppercase ml-1 tracking-widest">Vantagens (uma por linha)</label>
-                        <textarea placeholder="Ex: Camiseta Exclusiva&#10;Entrada Sem Fila" value={formData.benefits} onChange={e => setFormData({...formData, benefits: e.target.value})} className="w-full bg-dark p-4 rounded-2xl border border-gray-700 text-white text-sm h-32 outline-none focus:ring-1 focus:ring-primary" />
-                    </div>
-                </div>
-                <div className="flex gap-4 mt-8">
-                    <button onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-bold rounded-2xl hover:bg-gray-700 transition-colors uppercase text-xs tracking-widest">Cancelar</button>
-                    <button onClick={() => onSave({...formData, benefits: formData.benefits.split('\n').filter(b => b.trim())})} className="flex-1 py-4 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all uppercase text-xs tracking-widest">Salvar Evento</button>
-                </div>
-            </div>
-        </div>
-    );
-};
 
 const AdminClubVip: React.FC = () => {
     const navigate = useNavigate();
@@ -95,10 +30,8 @@ const AdminClubVip: React.FC = () => {
     const [selectedEventId, setSelectedEventId] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     const [isActionLoading, setIsActionLoading] = useState<string | null>(null);
-    
-    const [isEventModalOpen, setIsEventModalOpen] = useState(false);
-    const [editingEvent, setEditingEvent] = useState<VipEvent | null>(null);
-    const [photoViewer, setPhotoViewer] = useState({ isOpen: false, url: '' });
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -127,62 +60,77 @@ const AdminClubVip: React.FC = () => {
         if (!authLoading) fetchData();
     }, [authLoading, fetchData]);
 
-    if (!authLoading && !isSuperAdmin) {
-        return (
-            <div className="py-20 text-center flex flex-col items-center gap-6">
-                <div className="w-20 h-20 bg-red-900/20 rounded-full flex items-center justify-center text-red-500">
-                    <AlertTriangleIcon className="w-10 h-10" />
-                </div>
-                <h1 className="text-2xl font-black text-white uppercase">Acesso Restrito</h1>
-                <p className="text-gray-400 max-w-xs">Apenas o Super Administrador pode gerenciar os eventos e adesões do Clube VIP.</p>
-                <button onClick={() => navigate('/admin')} className="px-6 py-2 bg-gray-800 text-white font-bold rounded-xl">Voltar ao Painel</button>
-            </div>
-        );
-    }
+    const handleApproveBulk = async () => {
+        if (selectedIds.size === 0) return;
+        if (!window.confirm(`Deseja ATIVAR os benefícios de ${selectedIds.size} membros selecionados?`)) return;
+        
+        setIsBulkProcessing(true);
+        try {
+            // FIX: Explicitly typed 'id' as string to resolve "Argument of type 'unknown' is not assignable to parameter of type 'string'" error on line 70.
+            await Promise.all(Array.from(selectedIds).map(async (id: string) => {
+                const membership = memberships.find(m => m.id === id);
+                if (membership) {
+                    await updateVipMembership(id, { isBenefitActive: true });
+                    await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
+                }
+            }));
+            setSelectedIds(new Set());
+            await fetchData();
+            alert("Membros ativados com sucesso!");
+        } catch (e) {
+            alert("Erro ao processar ativação em massa.");
+        } finally {
+            setIsBulkProcessing(false);
+        }
+    };
+
+    const handleToggleSelectOne = (id: string) => {
+        const next = new Set(selectedIds);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setSelectedIds(next);
+    };
+
+    const handleToggleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            setSelectedIds(new Set(filteredMembers.map(m => m.id)));
+        } else {
+            setSelectedIds(new Set());
+        }
+    };
 
     const handleApprove = async (m: VipMembership) => {
-        const code = window.prompt("Código ou Link para a divulgadora:", m.benefitCode || "VOUCHER-VIP-2024");
-        if (code === null) return;
         setIsActionLoading(m.id);
         try {
-            await updateVipMembership(m.id, { status: 'confirmed', benefitCode: code });
+            const benefitActive = !m.isBenefitActive;
+            
+            await updateVipMembership(m.id, { 
+                isBenefitActive: benefitActive 
+            });
+            await updatePromoter(m.promoterId, { 
+                emocoesBenefitActive: benefitActive 
+            });
             await fetchData();
-        } catch (e) { alert("Erro ao aprovar."); }
+        } catch (e) { alert("Erro ao processar."); }
         finally { setIsActionLoading(null); }
-    };
-
-    const handleReject = async (id: string) => {
-        if (!window.confirm("Recusar este comprovante?")) return;
-        setIsActionLoading(id);
-        try {
-            await updateVipMembership(id, { status: 'rejected' });
-            await fetchData();
-        } catch (e) { alert("Erro ao recusar."); }
-        finally { setIsActionLoading(null); }
-    };
-
-    const handleSaveEvent = async (data: any) => {
-        try {
-            if (editingEvent) await updateVipEvent(editingEvent.id, data);
-            else await createVipEvent(data);
-            setIsEventModalOpen(false);
-            await fetchData();
-        } catch (e) { alert("Erro ao salvar evento."); }
-    };
-
-    const handleDeleteEvent = async (id: string) => {
-        if (!window.confirm("Excluir este evento VIP? Isso não remove os membros já cadastrados, mas o evento deixará de aparecer para novas adesões.")) return;
-        await deleteVipEvent(id);
-        await fetchData();
     };
 
     const filteredMembers = useMemo(() => {
         return memberships.filter(m => {
             const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
-            const matchesSearch = m.promoterName.toLowerCase().includes(searchQuery.toLowerCase()) || m.promoterEmail.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesSearch = 
+                m.promoterName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                m.promoterEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (m.promoterWhatsapp || '').includes(searchQuery);
             return matchesStatus && matchesSearch;
         });
     }, [memberships, filterStatus, searchQuery]);
+
+    const formatDate = (ts: any) => {
+        if (!ts) return 'N/A';
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    };
 
     return (
         <div className="pb-20">
@@ -192,12 +140,13 @@ const AdminClubVip: React.FC = () => {
                         <TicketIcon className="w-8 h-8 text-primary" />
                         Gestão Clube VIP
                     </h1>
-                    <p className="text-[10px] text-gray-500 font-black uppercase tracking-[0.2em] mt-1.5 ml-1">Controle de Adesões e Faturamento</p>
                 </div>
                 <div className="flex gap-2 w-full md:w-auto">
-                    <button onClick={() => { setEditingEvent(null); setIsEventModalOpen(true); }} className="flex-1 md:flex-none px-4 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl shadow-primary/20 flex items-center justify-center gap-2 hover:scale-[1.02] transition-all">
-                        <PlusIcon className="w-4 h-4" /> Criar Evento VIP
-                    </button>
+                    {selectedIds.size > 0 && (
+                        <button onClick={handleApproveBulk} disabled={isBulkProcessing} className="flex-1 md:flex-none px-6 py-3 bg-green-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 transition-all hover:bg-green-500">
+                            {isBulkProcessing ? 'PROCESSANDO...' : `ATIVAR ${selectedIds.size} SELECIONADOS`}
+                        </button>
+                    )}
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
                         <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
                     </button>
@@ -207,142 +156,112 @@ const AdminClubVip: React.FC = () => {
                 </div>
             </div>
 
-            {/* Gestão de Eventos */}
-            {vipEvents.length > 0 && (
-                <div className="mb-10 px-4 md:px-0">
-                    <h2 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4 ml-1">Eventos VIP Configuráveis</h2>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                        {vipEvents.map(ev => (
-                            <div key={ev.id} className={`p-5 rounded-[2rem] border transition-all ${ev.isActive ? 'bg-primary/5 border-primary/20 shadow-lg shadow-primary/5' : 'bg-gray-800/40 border-white/5 opacity-60'}`}>
-                                <div className="flex justify-between items-start mb-3">
-                                    <p className="text-white font-black text-sm uppercase truncate leading-none pt-1">{ev.name}</p>
-                                    <div className={`w-2.5 h-2.5 rounded-full ${ev.isActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`}></div>
-                                </div>
-                                <div className="flex items-end justify-between">
-                                    <p className="text-primary font-black text-lg">R$ {ev.price}</p>
-                                    <div className="flex gap-1">
-                                        <button onClick={() => { setEditingEvent(ev); setIsEventModalOpen(true); }} className="p-2 bg-gray-800 text-gray-400 rounded-xl hover:text-white transition-colors"><PencilIcon className="w-3.5 h-3.5" /></button>
-                                        <button onClick={() => handleDeleteEvent(ev.id)} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all"><TrashIcon className="w-3.5 h-3.5" /></button>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
                 <div className="flex flex-col md:flex-row gap-4">
                     <select value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)} className="bg-dark border border-gray-700 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-1 focus:ring-primary outline-none min-w-[220px]">
-                        <option value="all">Filtro: Todos Eventos</option>
+                        <option value="all">Todos Eventos VIP</option>
                         {vipEvents.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                     </select>
                     <div className="relative flex-grow">
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
-                            type="text" placeholder="Buscar por nome ou e-mail..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                            type="text" placeholder="Buscar por nome, e-mail ou whats..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
                         />
-                    </div>
-                    <div className="flex bg-dark p-1 rounded-2xl border border-gray-700 overflow-x-auto">
-                        {(['pending', 'confirmed', 'all'] as const).map(s => (
-                            <button key={s} onClick={() => setFilterStatus(s)} className={`px-5 py-2 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all whitespace-nowrap ${filterStatus === s ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>
-                                {{'pending':'Pendentes','confirmed':'Ativos','all':'Ver Todos'}[s]}
-                            </button>
-                        ))}
                     </div>
                 </div>
 
                 {isLoading ? (
                     <div className="py-20 text-center flex flex-col items-center gap-4">
                         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando banco...</p>
-                    </div>
-                ) : filteredMembers.length === 0 ? (
-                    <div className="py-20 text-center bg-dark/40 rounded-[2rem] border border-dashed border-gray-800">
-                        <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Nenhum pedido de adesão encontrado.</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredMembers.map(m => (
-                            <div key={m.id} className="bg-dark/40 rounded-[2rem] border border-white/5 overflow-hidden group hover:border-white/10 transition-all flex flex-col">
-                                <div className="p-6">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="min-w-0">
-                                            <p className="text-sm font-black text-white uppercase tracking-tight truncate leading-none mb-1">{m.promoterName}</p>
-                                            <p className="text-primary font-black text-[9px] uppercase tracking-widest truncate">{m.vipEventName}</p>
-                                        </div>
-                                        <div className="text-right flex-shrink-0">
-                                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : m.status === 'rejected' ? 'bg-red-900/40 text-red-400 border-red-800' : 'bg-yellow-900/40 text-yellow-400 border-yellow-800'}`}>
-                                                {{'confirmed':'VIP ATIVO','pending':'PENDENTE','rejected':'RECUSADO'}[m.status]}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {m.proofUrl && (
-                                        <div className="mb-4 relative group/img cursor-pointer" onClick={() => setPhotoViewer({ isOpen: true, url: m.proofUrl })}>
-                                            <img src={m.proofUrl} alt="Comprovante" className="w-full h-40 object-cover rounded-2xl border border-gray-700 group-hover:border-primary transition-all" />
-                                            <div className="absolute inset-0 bg-primary/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center rounded-2xl">
-                                                <EyeIcon className="w-8 h-8 text-white" />
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
+                                    <th className="px-6 py-5 w-10">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={filteredMembers.length > 0 && selectedIds.size === filteredMembers.length}
+                                            onChange={handleToggleSelectAll}
+                                            className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary"
+                                        />
+                                    </th>
+                                    <th className="px-6 py-5">Comprador</th>
+                                    <th className="px-6 py-5">Contatos</th>
+                                    <th className="px-6 py-5">Evento / Produtora</th>
+                                    <th className="px-6 py-5">Código / Status</th>
+                                    <th className="px-6 py-5 text-right">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5">
+                                {filteredMembers.map(m => (
+                                    <tr key={m.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.has(m.id) ? 'bg-primary/5' : ''}`}>
+                                        <td className="px-6 py-5">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={selectedIds.has(m.id)} 
+                                                onChange={() => handleToggleSelectOne(m.id)}
+                                                className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary"
+                                            />
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <ClockIcon className="w-3 h-3 text-gray-500" />
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase">{formatDate(m.submittedAt)}</span>
                                             </div>
-                                        </div>
-                                    )}
-
-                                    <div className="mb-4 flex items-center gap-2 px-3 py-2 bg-gray-800/50 rounded-xl border border-white/5">
-                                        <BuildingOfficeIcon className="w-3.5 h-3.5 text-gray-500" />
-                                        <p className="text-[10px] font-black text-gray-400 uppercase truncate">
-                                            {organizations[m.organizationId] || 'Produtora não identificada'}
-                                        </p>
-                                    </div>
-
-                                    {m.status === 'confirmed' && (
-                                        <div className="mb-4 p-3 bg-green-900/20 rounded-xl border border-green-800/30">
-                                            <p className="text-[8px] text-green-500 font-black uppercase mb-1">Voucher Ativo:</p>
-                                            <p className="text-xs text-white font-mono font-bold truncate select-all">{m.benefitCode || 'Sem Código'}</p>
-                                        </div>
-                                    )}
-
-                                    <div className="flex gap-2 mt-auto">
-                                        <button 
-                                            onClick={() => handleApprove(m)}
-                                            disabled={isActionLoading === m.id}
-                                            className="flex-1 py-3 bg-green-600 text-white font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-green-500 transition-all flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 disabled:opacity-50"
-                                        >
-                                            {isActionLoading === m.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <CheckCircleIcon className="w-4 h-4" />}
-                                            {m.status === 'confirmed' ? 'Alterar Código' : 'Aprovar'}
-                                        </button>
-                                        {m.status === 'pending' && (
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <div className="flex flex-col gap-1.5">
+                                                <a href={`mailto:${m.promoterEmail}`} className="text-[11px] font-bold text-gray-300 hover:text-white truncate flex items-center gap-2">
+                                                    <UserIcon className="w-3.5 h-3.5 text-blue-400" /> {m.promoterEmail}
+                                                </a>
+                                                <div className="flex gap-4">
+                                                    <a href={`https://wa.me/55${m.promoterWhatsapp?.replace(/\D/g, '')}`} target="_blank" className="text-green-400 hover:text-green-300 transition-colors flex items-center gap-1.5 font-black text-[10px] uppercase tracking-widest">
+                                                        <WhatsAppIcon className="w-4 h-4" /> WhatsApp
+                                                    </a>
+                                                    {m.promoterInstagram && (
+                                                        <a href={`https://instagram.com/${m.promoterInstagram.replace('@', '')}`} target="_blank" className="text-pink-400 hover:text-pink-300 transition-colors flex items-center gap-1.5 font-black text-[10px] uppercase tracking-widest">
+                                                            <InstagramIcon className="w-4 h-4" /> Instagram
+                                                        </a>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <p className="text-primary font-black text-[10px] uppercase tracking-tighter truncate">{m.vipEventName}</p>
+                                            <p className="text-[9px] font-black text-gray-600 uppercase tracking-widest truncate mt-1">
+                                                {organizations[m.organizationId] || 'Venda Direta'}
+                                            </p>
+                                        </td>
+                                        <td className="px-6 py-5">
+                                            <div className="bg-gray-800/50 p-2 rounded-xl border border-white/5 mb-1 text-center">
+                                                <p className="text-white font-mono font-bold text-[11px]">{m.benefitCode || '---'}</p>
+                                            </div>
+                                            <div className={`text-center px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${m.isBenefitActive ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-amber-900/40 text-amber-400 border-amber-800'}`}>
+                                                {m.isBenefitActive ? 'ATIVO' : 'PENDENTE'}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-5 text-right">
                                             <button 
-                                                onClick={() => handleReject(m.id)}
+                                                onClick={() => handleApprove(m)}
                                                 disabled={isActionLoading === m.id}
-                                                className="px-4 py-3 bg-red-900/30 text-red-400 rounded-xl border border-red-900/50 hover:bg-red-900/50 transition-all disabled:opacity-50"
+                                                className={`p-3 font-black rounded-xl transition-all shadow-lg disabled:opacity-50 ${m.isBenefitActive ? 'bg-amber-600 text-white' : 'bg-green-600 text-white'}`}
+                                                title={m.isBenefitActive ? 'Pausar Benefício' : 'Ativar Benefício'}
                                             >
-                                                <XIcon className="w-4 h-4" />
+                                                {/* FIX: Added missing XIcon import above to fix "Cannot find name 'XIcon'" error on line 251. */}
+                                                {isActionLoading === m.id ? <RefreshIcon className="w-5 h-5 animate-spin" /> : (m.isBenefitActive ? <XIcon className="w-5 h-5" /> : <CheckCircleIcon className="w-5 h-5" />)}
                                             </button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 )}
             </div>
-
-            <VipEventModal 
-                isOpen={isEventModalOpen} 
-                onClose={() => setIsEventModalOpen(false)} 
-                onSave={handleSaveEvent} 
-                event={editingEvent} 
-            />
-
-            {photoViewer.isOpen && (
-                <PhotoViewerModal 
-                    imageUrls={[photoViewer.url]} 
-                    startIndex={0} 
-                    isOpen={photoViewer.isOpen} 
-                    onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} 
-                />
-            )}
         </div>
     );
 };
