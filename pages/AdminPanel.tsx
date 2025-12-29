@@ -79,14 +79,12 @@ const calculateAge = (dob: string): number => {
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
     const { selectedOrgId, organizationsForAdmin, loading: authLoading } = useAdminAuth();
     
-    // Dados Principais
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 });
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [orgsMap, setOrgsMap] = useState<Record<string, string>>({});
 
-    // Estado da UI e Filtros
     const [isLoading, setIsLoading] = useState(true);
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [error, setError] = useState('');
@@ -96,10 +94,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [selectedCampaign, setSelectedCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     
-    // Seleção em Massa
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-    // Controle de Modais
     const [selectedPromoter, setSelectedPromoter] = useState<Promoter | null>(null);
     const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -107,7 +103,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         isOpen: false, urls: [], index: 0 
     });
 
-    // Busca por E-mail (Global)
     const [lookupEmail, setLookupEmail] = useState('');
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [lookupResults, setLookupResults] = useState<Promoter[] | null>(null);
@@ -259,7 +254,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const handleWhatsAppManual = (p: Promoter) => {
         const firstName = p.name.split(' ')[0];
         const msg = `Olá ${firstName}! Seu perfil foi aprovado para a equipe do evento ${p.campaignName || 'de produção'}. Para começar, acesse seu portal agora para ler as regras e entrar no grupo: https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`;
-        const url = `https://wa.me/55${p.whatsapp}?text=${encodeURIComponent(msg)}`;
+        const url = `https://wa.me/55${p.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
         window.open(url, '_blank');
     };
 
@@ -285,7 +280,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    // --- FILTRAGEM LOCAL TOTAL ---
     const filteredPromoters = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
         let results = promoters.filter(p => {
@@ -445,7 +439,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             }} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" />
                                         </th>
                                         <th className="px-6 py-5">Perfil / Contato</th>
-                                        <th className="px-6 py-5">Status / Admin</th>
+                                        <th className="px-6 py-5">Evento / Lista</th>
+                                        <th className="px-6 py-5">Status</th>
                                         <th className="px-6 py-5 text-center">Grupo</th>
                                         <th className="px-6 py-4 text-right">Ações</th>
                                     </tr>
@@ -466,7 +461,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                         <div className="overflow-hidden">
                                                             <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name || 'Sem Nome'}</p>
                                                             <div className="flex items-center gap-3 mt-1.5">
-                                                                <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="text-pink-500 hover:text-pink-400 transition-colors flex items-center gap-1">
+                                                                <a href={`https://instagram.com/${p.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-pink-500 hover:text-pink-400 transition-colors flex items-center gap-1">
                                                                     <InstagramIcon className="w-3.5 h-3.5" />
                                                                     <span className="text-[10px] font-bold">@{p.instagram}</span>
                                                                 </a>
@@ -475,7 +470,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                                     <span className="text-[10px] font-bold">WhatsApp</span>
                                                                 </a>
                                                                 {p.tiktok && (
-                                                                    <a href={`https://tiktok.com/@${p.tiktok}`} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-white transition-colors flex items-center gap-1">
+                                                                    <a href={`https://tiktok.com/@${p.tiktok.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-white transition-colors flex items-center gap-1">
                                                                         <TikTokIcon className="w-3.5 h-3.5" />
                                                                         <span className="text-[10px] font-bold">TikTok</span>
                                                                     </a>
@@ -487,6 +482,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                             </div>
                                                         </div>
                                                     </div>
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <p className="text-white font-black text-[10px] uppercase tracking-tighter">{p.campaignName || 'Geral'}</p>
+                                                    {(p.associatedCampaigns || []).length > 0 && (
+                                                        <p className="text-[8px] text-gray-500 font-bold uppercase mt-0.5">+{p.associatedCampaigns!.length} extras</p>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div>{statusBadge(p.status)}</div>
@@ -536,16 +537,16 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             </div>
                                             <div className="overflow-hidden flex-grow">
                                                 <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name || 'Sem Nome'}</p>
+                                                <p className="text-primary text-[9px] font-black uppercase tracking-widest mt-0.5">{p.campaignName || 'Geral'}</p>
                                                 <div className="flex items-center gap-3 mt-1.5">
-                                                    <a href={`https://instagram.com/${p.instagram}`} target="_blank" rel="noreferrer" className="text-pink-500"><InstagramIcon className="w-4 h-4" /></a>
+                                                    <a href={`https://instagram.com/${p.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-pink-500"><InstagramIcon className="w-4 h-4" /></a>
                                                     <a href={`https://wa.me/55${p.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-green-500"><WhatsAppIcon className="w-4 h-4" /></a>
-                                                    {p.tiktok && <a href={`https://tiktok.com/@${p.tiktok}`} target="_blank" rel="noreferrer" className="text-white"><TikTokIcon className="w-4 h-4" /></a>}
+                                                    {p.tiktok && <a href={`https://tiktok.com/@${p.tiktok.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-white"><TikTokIcon className="w-4 h-4" /></a>}
                                                 </div>
                                                 <div className="flex items-center gap-2 mt-2">
                                                     {statusBadge(p.status)}
                                                     {p.hasJoinedGroup && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
                                                 </div>
-                                                <p className="text-gray-600 text-[8px] font-black uppercase tracking-widest mt-1">Por: {p.actionTakenByEmail?.split('@')[0] || '-'}</p>
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">

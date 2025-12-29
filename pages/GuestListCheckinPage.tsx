@@ -6,7 +6,6 @@ import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Promoter, GuestList, Campaign, Timestamp, FieldValue } from '../types';
 import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, UsersIcon, ClockIcon, DocumentDuplicateIcon } from '../components/Icons';
 import { getAllCampaigns } from '../services/settingsService';
-// FIX: Import firebase to use Timestamp as a value.
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/firestore';
 
@@ -22,7 +21,6 @@ type Person = {
     promoterName: string;
 };
 
-// --- Áudio Feedback Helper ---
 const playSound = (type: 'success' | 'error') => {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     if (!audioContext) return;
@@ -49,8 +47,6 @@ const playSound = (type: 'success' | 'error') => {
     oscillator.stop(audioContext.currentTime + 0.3);
 };
 
-
-// --- Swipeable Row Component ---
 const SwipeableRow: React.FC<{
     children: React.ReactNode;
     onSwipeRight: () => void;
@@ -73,7 +69,7 @@ const SwipeableRow: React.FC<{
         if (!isSwiping.current || !enabled) return;
         const currentX = e.targetTouches[0].clientX;
         const diffX = currentX - touchStartX.current;
-        if (diffX > 0 && rowRef.current) { // Only allow right swipe
+        if (diffX > 0 && rowRef.current) {
             rowRef.current.style.transform = `translateX(${diffX}px)`;
         }
     };
@@ -84,9 +80,8 @@ const SwipeableRow: React.FC<{
         if (rowRef.current) {
             const currentTransform = new WebKitCSSMatrix(window.getComputedStyle(rowRef.current).transform).m41;
             rowRef.current.style.transition = 'transform 0.3s ease';
-            if (currentTransform > 100) { // Swipe threshold
+            if (currentTransform > 100) {
                 onSwipeRight();
-                // No need to reset transform here, as the component will re-render in a checked-in state
             } else {
                 rowRef.current.style.transform = 'translateX(0px)';
             }
@@ -146,7 +141,6 @@ const PhotoModal: React.FC<{ imageUrl: string | null; onClose: () => void }> = (
         </div>
     );
 };
-
 
 const formatTime = (timestamp: any): string => {
     if (!timestamp) return '';
@@ -247,7 +241,6 @@ const PersonRow: React.FC<{
     );
 };
 
-
 const GuestListCheckinPage: React.FC = () => {
     const { campaignId } = useParams<{ campaignId: string }>();
     const navigate = useNavigate();
@@ -274,13 +267,11 @@ const GuestListCheckinPage: React.FC = () => {
         setPhotoModalUrl(null);
     };
 
-    // --- Modernization: High Contrast Mode ---
     useEffect(() => {
         document.documentElement.classList.add('bg-black');
         return () => document.documentElement.classList.remove('bg-black');
     }, []);
 
-    // --- Feedback Effect ---
     useEffect(() => {
         if (feedback.type !== 'idle') {
             const timer = setTimeout(() => setFeedback(prev => ({ ...prev, type: 'idle' })), 400);
@@ -302,7 +293,7 @@ const GuestListCheckinPage: React.FC = () => {
             const [confirmations, activeLists, allCampaigns] = await Promise.all([
                 getGuestListForCampaign(campaignId),
                 getActiveGuestListsForCampaign(campaignId),
-                getAllCampaigns() // simpler to get all and find
+                getAllCampaigns()
             ]);
             
             const camp = allCampaigns.find(c => c.id === campaignId);
@@ -367,7 +358,7 @@ const GuestListCheckinPage: React.FC = () => {
                     checkedOutAt: conf.promoterCheckedOutAt,
                     photoUrl: conf.promoterPhotoUrl,
                     listName: conf.listName,
-                    promoterName: conf.promoterName // Self-reference for consistent data structure
+                    promoterName: conf.promoterName
                 });
             }
             (conf.guestNames || []).filter(name => name.trim()).forEach(guestName => {
@@ -389,12 +380,11 @@ const GuestListCheckinPage: React.FC = () => {
 
     const listStats = useMemo(() => {
         const total = allPeople.length;
-        const checkedIn = allPeople.filter(p => p.checkedInAt && !p.checkedOutAt).length; // Currently inside
+        const checkedIn = allPeople.filter(p => p.checkedInAt && !p.checkedOutAt).length;
         const pending = total - allPeople.filter(p => p.checkedInAt).length;
         const rate = total > 0 ? Math.round((allPeople.filter(p => p.checkedInAt).length / total) * 100) : 0;
         return { total, checkedIn, pending, rate };
     }, [allPeople]);
-
 
     const filteredPeople = useMemo(() => {
         let results = allPeople;
@@ -419,7 +409,6 @@ const GuestListCheckinPage: React.FC = () => {
         return results;
     }, [allPeople, searchQuery, statusFilter]);
 
-
     const handleCheckIn = async (confirmationId: string, personName: string) => {
         const checkinKey = `${confirmationId}-${personName}`;
         setProcessingCheckin(checkinKey);
@@ -432,12 +421,11 @@ const GuestListCheckinPage: React.FC = () => {
 
             setAllConfirmations(prev => prev.map(conf => {
                 if (conf.id === confirmationId) {
-                    // FIX: Use firebase.firestore.Timestamp.now() as Timestamp is only a type.
                     const now = firebase.firestore.Timestamp.now();
                     const updatedConf = { ...conf };
                     if (personName === conf.promoterName) {
                         updatedConf.promoterCheckedInAt = now;
-                        updatedConf.promoterCheckedOutAt = null; // Reset checkout on new check-in
+                        updatedConf.promoterCheckedOutAt = null;
                     }
                     else {
                          const guestIndex = (updatedConf.guestsCheckedIn || []).findIndex(g => g.name === personName);
@@ -492,7 +480,6 @@ const GuestListCheckinPage: React.FC = () => {
             setProcessingCheckin(null);
         }
     };
-
 
     const renderCheckinList = () => {
         if (isLoading) return <div className="flex justify-center items-center py-10"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;

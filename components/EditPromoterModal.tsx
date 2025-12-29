@@ -136,8 +136,8 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
               </div>
           </div>
           
-          <div>
-            <label className="block text-sm font-medium text-gray-300">Evento Principal (Obrigatório para Aprovação)</label>
+          <div className="bg-dark/40 p-4 rounded-xl border border-white/5">
+            <label className="block text-[10px] font-black text-primary uppercase tracking-widest mb-1.5">Lista de Inscrição Original</label>
             <select 
               name="campaignName" 
               value={formData.campaignName || ''} 
