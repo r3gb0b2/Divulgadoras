@@ -57,7 +57,17 @@ const AdminDashboard: React.FC = () => {
                         <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Criar tarefas, subir artes e validar os prints de comprovação.</p>
                     </Link>
 
-                    {/* CARD: FILA DE PUSH (Agora visível APENAS para superadmin conforme solicitado) */}
+                    <Link to="/admin/club-vip" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-amber-600 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
+                        <div className="flex items-center">
+                            <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                <TicketIcon className="w-8 h-8" />
+                            </div>
+                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Clube VIP</h2>
+                        </div>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-amber-100 line-clamp-2">Validar pagamentos de adesão e liberar códigos de benefícios para membros.</p>
+                    </Link>
+
+                    {/* CARD: FILA DE PUSH */}
                     {isSuperAdmin && (
                         <Link to="/admin/push-queue" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-indigo-600 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
                             <div className="flex items-center">

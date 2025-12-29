@@ -43,6 +43,7 @@ import SettingsPage from './SettingsPage';
 import AdminLoginPage from './AdminLoginPage';
 import AdminAppleTestReview from './AdminAppleTestReview';
 import AdminGlobalLists from './AdminGlobalLists';
+import AdminClubVip from './AdminClubVip';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
@@ -87,7 +88,7 @@ const AdminAuth: React.FC = () => {
             <Route path="posts/:postId" element={<ProtectedRoute><PostDetails /></ProtectedRoute>} />
             
             <Route path="lists" element={<ProtectedRoute><AdminLists /></ProtectedRoute>} />
-            <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} /> {/* Corrigido de GuestListAssignments para GuestListPage */}
+            <Route path="guestlist/:campaignId" element={<ProtectedRoute><GuestListPage /></ProtectedRoute>} /> 
             <Route path="guestlist-assignments/:listId" element={<ProtectedRoute><GuestListAssignments /></ProtectedRoute>} />
             <Route path="checkin-dashboard" element={<ProtectedRoute><GuestListCheckinPage /></ProtectedRoute>} />
             <Route path="checkin/scanner" element={<ProtectedRoute><QrCodeScannerPage /></ProtectedRoute>} />
@@ -110,6 +111,8 @@ const AdminAuth: React.FC = () => {
             <Route path="push-campaign" element={<ProtectedRoute><AdminPushCampaignPage /></ProtectedRoute>} />
             <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
             <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
+            
+            <Route path="club-vip" element={<ProtectedRoute><AdminClubVip /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>

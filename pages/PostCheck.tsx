@@ -541,10 +541,12 @@ const PostCheck: React.FC = () => {
                                     </div>
 
                                     {promoter.emocoesStatus === 'pending' && (
-                                        <div className="p-4 bg-yellow-900/20 border border-yellow-500/30 rounded-2xl text-center">
-                                            <ClockIcon className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
+                                        <div className="p-5 bg-amber-900/20 border border-amber-500/30 rounded-2xl text-center">
+                                            <div className="w-10 h-10 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                                <ClockIcon className="w-6 h-6 text-amber-500" />
+                                            </div>
                                             <p className="text-white font-bold text-sm">Pagamento em Análise</p>
-                                            <p className="text-gray-400 text-xs mt-1">Aguarde a validação administrativa para ativar seus benefícios e sorteios.</p>
+                                            <p className="text-gray-400 text-xs mt-1">Sua solicitação está na fila de verificação. Você receberá um alerta quando os benefícios forem liberados!</p>
                                         </div>
                                     )}
 
@@ -565,13 +567,17 @@ const PostCheck: React.FC = () => {
                                                         <span className="text-xs text-gray-300 font-bold uppercase">Sorteios Camarim</span>
                                                         <span className="text-primary font-mono font-bold">INSCRITA</span>
                                                     </div>
-                                                    <div className="flex justify-between items-center bg-gray-800 p-3 rounded-xl border border-white/5">
-                                                        <span className="text-xs text-gray-300 font-bold uppercase">ID Membro</span>
-                                                        <span className="text-white font-mono font-bold text-xs">{promoter.emocoesBenefitCode || 'VIP-MEM-2024'}</span>
+                                                    <div className="flex flex-col bg-gray-800 p-3 rounded-xl border border-white/5 gap-2">
+                                                        <span className="text-xs text-gray-300 font-bold uppercase">Código / Link de Desconto:</span>
+                                                        <div className="bg-black/40 p-2 rounded text-primary font-mono font-bold text-center border border-primary/20 select-all">
+                                                            {promoter.emocoesBenefitCode || 'Aguardando Código...'}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <p className="text-[9px] text-gray-500 text-center uppercase tracking-widest italic">Fique atenta às notificações Push com as datas de sorteios e convites.</p>
+                                            <p className="text-[9px] text-gray-500 text-center uppercase tracking-widest italic leading-relaxed">
+                                                Apresente este painel ou use o código acima nos eventos parceiros. Fique atenta às notificações push!
+                                            </p>
                                         </div>
                                     )}
 
@@ -579,7 +585,7 @@ const PostCheck: React.FC = () => {
                                         <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-2xl text-center">
                                             <XIcon className="w-8 h-8 text-red-500 mx-auto mb-2" />
                                             <p className="text-white font-bold text-sm">Problema no Pagamento</p>
-                                            <p className="text-gray-400 text-xs mt-1">Houve um erro na validação da sua taxa de adesão. Tente reenviar o comprovante.</p>
+                                            <p className="text-gray-400 text-xs mt-1">Houve um erro na validação da sua taxa de adesão. Verifique o comprovante e tente reenviar.</p>
                                             <Link to="/promocao-emocoes" className="mt-4 inline-block px-6 py-2 bg-primary text-white font-black text-[10px] uppercase rounded-lg">Tentar Novamente</Link>
                                         </div>
                                     )}
