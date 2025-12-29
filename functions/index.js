@@ -14,27 +14,25 @@ const getConfig = () => {
 };
 
 exports.createVipPixPayment = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { vipEventId, promoterId, email, name, amount } = data;
+    const { vipEventId, promoterId, email, name, amount, whatsapp, instagram } = data;
     const config = getConfig();
 
     if (!config.mpAccessToken) {
-        throw new functions.https.HttpsError("failed-precondition", "Mercado Pago não configurado no servidor (Token ausente).");
+        throw new functions.https.HttpsError("failed-precondition", "Token Mercado Pago ausente.");
     }
 
     const client = new MercadoPagoConfig({ accessToken: config.mpAccessToken });
     const payment = new Payment(client);
 
-    // Tratamento de nome para evitar erros de campos vazios
     const nameParts = name.trim().split(' ');
-    const firstName = nameParts[0] || "Divulgadora";
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : "Cadastrada";
+    const firstName = nameParts[0] || "Membro";
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : "VIP";
 
     try {
         const body = {
             transaction_amount: Number(amount),
-            description: `Adesão VIP: ${vipEventId}`,
+            description: `Membro VIP: ${vipEventId}`,
             payment_method_id: "pix",
-            // URL dinâmica baseada no ID do projeto atual
             notification_url: `https://southamerica-east1-${process.env.GCLOUD_PROJECT}.cloudfunctions.net/mpWebhook`,
             payer: {
                 email: email,
@@ -44,7 +42,9 @@ exports.createVipPixPayment = functions.region("southamerica-east1").https.onCal
             metadata: {
                 vip_event_id: vipEventId,
                 promoter_id: promoterId,
-                promoter_email: email
+                promoter_email: email,
+                promoter_whatsapp: whatsapp || "",
+                promoter_instagram: instagram || ""
             }
         };
 
@@ -57,23 +57,14 @@ exports.createVipPixPayment = functions.region("southamerica-east1").https.onCal
             status: response.status
         };
     } catch (error) {
-        console.error("Erro detalhado do Mercado Pago:", error);
-        
-        // Se o erro for por falta de chave Pix, enviamos uma mensagem clara ao frontend
-        if (error.message && error.message.includes("key enabled")) {
-            throw new functions.https.HttpsError("internal", "A conta recebedora não possui uma chave Pix ativa no Mercado Pago. Cadastre uma chave no app do Mercado Pago para continuar.");
-        }
-        
-        throw new functions.https.HttpsError("internal", error.message || "Erro ao processar pagamento.");
+        console.error("Erro MP:", error);
+        throw new functions.https.HttpsError("internal", error.message || "Erro no Pix.");
     }
 });
 
 exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     const { action, data } = req.body;
     const config = getConfig();
-
-    // Log para você acompanhar as chegadas do webhook no console do Firebase
-    console.log(`Webhook recebido: ${action}`, data);
 
     if (action === "payment.updated" && data?.id) {
         try {
@@ -82,14 +73,12 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
             const paymentInfo = await payment.get({ id: data.id });
 
             if (paymentInfo.status === "approved") {
-                const { vip_event_id, promoter_id, promoter_email } = paymentInfo.metadata;
+                const { vip_event_id, promoter_id, promoter_email, promoter_whatsapp, promoter_instagram } = paymentInfo.metadata;
 
-                // Buscar nome do evento para o registro de membresia ficar completo
                 const eventSnap = await db.collection("vipEvents").doc(vip_event_id).get();
                 const eventData = eventSnap.data();
                 const eventName = eventData ? eventData.name : "Evento VIP";
 
-                // Buscar nome do promoter para evitar exibir "sem nome" no admin
                 const promoterSnap = await db.collection("promoters").doc(promoter_id).get();
                 const pData = promoterSnap.data();
                 const pName = pData ? pData.name : "Membro VIP";
@@ -97,7 +86,6 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
                 const batch = db.batch();
 
                 // 1. Atualiza Registro de Membresia
-                // O campo 'submittedAt' é crucial para aparecer na lista do Super Admin
                 const membershipRef = db.collection("vipMemberships").doc(`${promoter_id}_${vip_event_id}`);
                 batch.set(membershipRef, {
                     vipEventId: vip_event_id,
@@ -105,26 +93,29 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
                     promoterId: promoter_id,
                     promoterName: pName,
                     promoterEmail: promoter_email,
+                    promoterWhatsapp: promoter_whatsapp || "",
+                    promoterInstagram: promoter_instagram || "",
                     organizationId: pData ? pData.organizationId : "club-vip-global",
                     status: "confirmed",
+                    isBenefitActive: false, // Inicia como FALSO até o admin ativar
+                    benefitCode: "ST-" + Math.random().toString(36).substring(2, 8).toUpperCase(),
                     paymentId: data.id,
-                    method: "auto-pix-mp",
                     submittedAt: admin.firestore.FieldValue.serverTimestamp(),
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 }, { merge: true });
 
-                // 2. Atualiza o Perfil da Divulgadora (para o Portal reconhecer)
+                // 2. Perfil da Divulgadora
                 const promoterRef = db.collection("promoters").doc(promoter_id);
                 batch.update(promoterRef, {
                     emocoesStatus: "confirmed",
-                    emocoesBenefitCode: "VIP-MP-" + data.id.toString().slice(-6).toUpperCase()
+                    emocoesBenefitActive: false 
                 });
 
                 await batch.commit();
-                console.log(`PAGAMENTO APROVADO: VIP Ativado para ${promoter_email}`);
+                console.log(`VIP ATIVADO (PENDENTE CUPOM): ${promoter_email}`);
             }
         } catch (error) {
-            console.error("Erro ao processar Webhook:", error);
+            console.error("Erro Webhook:", error);
         }
     }
     res.status(200).send("OK");

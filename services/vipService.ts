@@ -42,29 +42,25 @@ export const checkVipMembership = async (email: string, vipEventId: string): Pro
     return { id: snap.docs[0].id, ...snap.docs[0].data() } as VipMembership;
 };
 
-export const submitVipMembership = async (data: Omit<VipMembership, 'id' | 'submittedAt' | 'updatedAt' | 'proofUrl'>, file: File) => {
-    const fileName = `vip_proofs/${data.vipEventId}_${data.promoterId}_${Date.now()}`;
-    const ref = storage.ref(fileName);
-    await ref.put(file);
-    const proofUrl = await ref.getDownloadURL();
-
-    const membershipData = {
-        ...data,
-        proofUrl,
-        submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    };
-
-    return firestore.collection(COLLECTION_MEMBERSHIPS).add(membershipData);
-};
-
 export const getAllVipMemberships = async (vipEventId?: string) => {
-    let query = firestore.collection(COLLECTION_MEMBERSHIPS).orderBy('submittedAt', 'desc');
+    let query = firestore.collection(COLLECTION_MEMBERSHIPS);
+    
     if (vipEventId && vipEventId !== 'all') {
         query = query.where('vipEventId', '==', vipEventId);
     }
+    
+    // Nota: Requer índice no Firebase se ordenar por submittedAt com filtro de ID
     const snap = await query.get();
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipMembership));
+    const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipMembership));
+    
+    // Ordenação em memória para evitar erros de índice ausente durante a migração
+    results.sort((a, b) => {
+        const timeA = (a.submittedAt as any)?.seconds || 0;
+        const timeB = (b.submittedAt as any)?.seconds || 0;
+        return timeB - timeA;
+    });
+    
+    return results;
 };
 
 export const updateVipMembership = async (id: string, data: Partial<VipMembership>) => {

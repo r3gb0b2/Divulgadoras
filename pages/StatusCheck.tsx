@@ -228,6 +228,7 @@ const StatusCheck: React.FC = () => {
 
     // Lógica para diferenciar usuários puramente VIP de membros da equipe
     const isOnlyVip = useMemo(() => {
+        // É apenas VIP se todos os registros pertencerem à organização global do clube
         return promoters.length > 0 && promoters.every(p => p.organizationId === 'club-vip-global');
     }, [promoters]);
 
@@ -283,7 +284,7 @@ const StatusCheck: React.FC = () => {
                                                 </div>
                                                 <div className="text-left">
                                                     <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">Membro VIP</h2>
-                                                    <p className="text-[9px] text-primary font-black uppercase tracking-[0.3em] mt-2">Clube de Benefícios</p>
+                                                    <p className="text-[9px] text-primary font-black uppercase tracking-[0.3em] mt-2">Status Oficial</p>
                                                 </div>
                                             </div>
 
@@ -297,7 +298,7 @@ const StatusCheck: React.FC = () => {
                                                 <div className="space-y-4">
                                                     <div className="p-4 bg-green-500/10 rounded-2xl border border-green-500/30 text-center">
                                                         <CheckCircleIcon className="w-6 h-6 text-green-500 mx-auto mb-2" />
-                                                        <p className="text-green-400 font-black uppercase tracking-widest text-xs">Membro VIP Ativo!</p>
+                                                        <p className="text-green-400 font-black uppercase tracking-widest text-xs">Acesso VIP Ativado!</p>
                                                     </div>
                                                     <div className="bg-dark/60 p-4 rounded-2xl border border-white/5 space-y-3">
                                                         <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center">Seu Cupom de Benefício</p>
@@ -308,7 +309,7 @@ const StatusCheck: React.FC = () => {
                                                             </div>
                                                         ) : (
                                                             <div className="p-4 bg-amber-900/10 rounded-xl border border-amber-500/20 text-center">
-                                                                <p className="text-amber-400 font-black text-[10px] uppercase">CUPOM PENDENTE</p>
+                                                                <p className="text-amber-400 font-black text-[10px] uppercase">CUPOM EM VALIDAÇÃO</p>
                                                                 <p className="text-gray-500 text-[8px] mt-1">Aguarde a ativação pelo administrador.</p>
                                                             </div>
                                                         )}
@@ -336,10 +337,17 @@ const StatusCheck: React.FC = () => {
                                 );
                             })}
 
+                            {/* Oculta o botão do portal se for APENAS cliente VIP */}
                             {!isOnlyVip && hasAnyApprovedJob && (
                                 <button onClick={() => navigate('/posts')} className="w-full py-5 bg-white text-dark font-black rounded-3xl shadow-xl hover:bg-gray-100 transition-all uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-2">
                                     ACESSAR MEU PORTAL <ArrowLeftIcon className="w-4 h-4 rotate-180" />
                                 </button>
+                            )}
+                            
+                            {isOnlyVip && (
+                                <div className="p-6 text-center text-gray-500 font-medium italic text-sm">
+                                    Dúvidas sobre o seu acesso VIP? <br/>Entre em contato pelo suporte.
+                                </div>
                             )}
                         </div>
                     ) : (
