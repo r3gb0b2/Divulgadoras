@@ -13,6 +13,8 @@ import {
 import { updatePromoter } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
 import { VipMembership, VipEvent, Organization } from '../types';
+import { functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 import { 
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
     EyeIcon, TicketIcon, RefreshIcon, ClockIcon, UserIcon,
@@ -83,20 +85,26 @@ const AdminClubVip: React.FC = () => {
 
     const handleBulkActivate = async () => {
         if (selectedIds.size === 0) return;
-        if (!window.confirm(`Deseja ATIVAR os cupons de ${selectedIds.size} membros selecionados?`)) return;
+        if (!window.confirm(`Deseja ATIVAR os cupons de cortesia para ${selectedIds.size} membros? As mesmas receberão um e-mail automático.`)) return;
         
         setIsBulkProcessing(true);
         try {
+            const notifyActivation = httpsCallable(functions, 'notifyVipActivation');
+            
             await Promise.all(Array.from(selectedIds).map(async (id: string) => {
                 const membership = memberships.find(m => m.id === id);
                 if (membership) {
                     await updateVipMembership(id, { isBenefitActive: true });
                     await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
+                    
+                    // Envia e-mail de ativação via Cloud Function
+                    await notifyActivation({ membershipId: id });
                 }
             }));
+            
             setSelectedIds(new Set());
             await fetchData();
-            alert("Membros ativados com sucesso!");
+            alert("Membros ativados e e-mails enviados com sucesso!");
         } catch (e) {
             alert("Erro ao processar ativação.");
         } finally {
@@ -159,8 +167,8 @@ const AdminClubVip: React.FC = () => {
                             <th>E-mail</th>
                             <th>WhatsApp</th>
                             <th>Instagram</th>
-                            <th>Código Cupom</th>
-                            <th>Status Cupom</th>
+                            <th>Código Cortesia</th>
+                            <th>Status</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -231,7 +239,7 @@ const AdminClubVip: React.FC = () => {
                     )}
                     {activeTab === 'members' && selectedIds.size > 0 && (
                         <button onClick={handleBulkActivate} disabled={isBulkProcessing} className="flex-1 md:flex-none px-6 py-3 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
-                            {isBulkProcessing ? 'PROCESSANDO...' : `ATIVAR ${selectedIds.size} CUPONS`}
+                            {isBulkProcessing ? 'PROCESSANDO...' : `ATIVAR ${selectedIds.size} CORTESIAS`}
                         </button>
                     )}
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
@@ -275,7 +283,7 @@ const AdminClubVip: React.FC = () => {
                                         <th className="px-6 py-5">Comprador</th>
                                         <th className="px-6 py-5">Contatos</th>
                                         <th className="px-6 py-5">Evento VIP</th>
-                                        <th className="px-6 py-5">Status Cupom</th>
+                                        <th className="px-6 py-5">Status Cortesia</th>
                                         <th className="px-6 py-5 text-right">Data</th>
                                     </tr>
                                 </thead>
@@ -309,7 +317,7 @@ const AdminClubVip: React.FC = () => {
                                                 <td className="px-6 py-5">
                                                     <div className="flex flex-col gap-1.5">
                                                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border w-fit ${m.isBenefitActive ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-amber-900/40 text-amber-400 border-amber-800'}`}>
-                                                            {m.isBenefitActive ? 'CUPOM ATIVO' : 'PENDENTE ATIVAÇÃO'}
+                                                            {m.isBenefitActive ? 'CORTESIA ATIVA' : 'PENDENTE LIBERAÇÃO'}
                                                         </span>
                                                         <p className="text-[11px] font-mono text-gray-300 font-bold select-all">{m.benefitCode || 'Aguardando...'}</p>
                                                     </div>

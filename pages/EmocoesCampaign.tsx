@@ -150,7 +150,7 @@ const EmocoesCampaign: React.FC = () => {
                 <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/20 p-10 text-center">
                     <SparklesIcon className="w-12 h-12 text-primary mx-auto mb-4" />
                     <h1 className="text-4xl font-black text-white uppercase tracking-tighter">Clube <span className="text-primary">VIP</span></h1>
-                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-[0.3em] mt-2">Benefícios Exclusivos</p>
+                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-[0.3em] mt-2">Benefícios e Cortesias</p>
                 </div>
 
                 <div className="p-8">
@@ -176,6 +176,7 @@ const EmocoesCampaign: React.FC = () => {
                         <div className="space-y-6">
                             <h2 className="text-2xl font-black text-white uppercase tracking-tight text-center">{selectedEvent?.name}</h2>
                             <div className="bg-dark/30 p-6 rounded-3xl border border-white/5 space-y-4">
+                                <p className="text-[10px] font-black text-primary uppercase tracking-widest text-center">Seus Benefícios Inclusos:</p>
                                 {selectedEvent?.benefits.map((b, i) => (
                                     <div key={i} className="flex gap-4 text-gray-300 text-sm">
                                         <CheckCircleIcon className="w-5 h-5 text-primary flex-shrink-0" /> 
@@ -183,14 +184,14 @@ const EmocoesCampaign: React.FC = () => {
                                     </div>
                                 ))}
                             </div>
-                            <button onClick={() => setStep('identify')} className="w-full py-5 bg-primary text-white font-black rounded-2xl hover:bg-primary-dark shadow-xl shadow-primary/20 transition-all uppercase text-xs tracking-widest">QUERO ESTE ACESSO</button>
+                            <button onClick={() => setStep('identify')} className="w-full py-5 bg-primary text-white font-black rounded-2xl hover:bg-primary-dark shadow-xl shadow-primary/20 transition-all uppercase text-xs tracking-widest">QUERO MEU ACESSO VIP</button>
                         </div>
                     )}
 
                     {step === 'identify' && (
                         <form onSubmit={handleCheckEmail} className="space-y-4 text-center">
                             <h2 className="text-xl font-black text-white uppercase">Identificação</h2>
-                            <p className="text-gray-400 text-xs mb-6 font-medium">Informe seu e-mail para vincularmos seus benefícios.</p>
+                            <p className="text-gray-400 text-xs mb-6 font-medium">Informe seu e-mail para vincularmos sua cortesia.</p>
                             <input 
                                 type="email" required value={email} onChange={e => setEmail(e.target.value)}
                                 className="w-full p-5 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold text-center"
@@ -205,7 +206,7 @@ const EmocoesCampaign: React.FC = () => {
                     {step === 'confirm_data' && (
                         <form onSubmit={handleProceedToPayment} className="space-y-4">
                             <h2 className="text-xl font-black text-white text-center uppercase mb-2">Seus Dados de Acesso</h2>
-                            <p className="text-center text-gray-400 text-[10px] mb-6 uppercase font-bold tracking-widest">Precisamos de seus contatos para liberar o cupom VIP.</p>
+                            <p className="text-center text-gray-400 text-[10px] mb-6 uppercase font-bold tracking-widest">Precisamos de seus contatos para liberar o cupom de cortesia.</p>
                             
                             <div className="relative">
                                 <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
@@ -258,7 +259,7 @@ const EmocoesCampaign: React.FC = () => {
                                 <CheckCircleIcon className="w-12 h-12 text-green-500" />
                             </div>
                             <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-none">ADESÃO CONFIRMADA!</h2>
-                            <p className="text-gray-400 font-medium">Seu cupom foi gerado e aguarda ativação manual pelo administrador para garantir a validade no sistema externo.</p>
+                            <p className="text-gray-400 font-medium">Seu cupom de cortesia está em processamento e você receberá um e-mail assim que ele for ativado.</p>
                             <button onClick={() => navigate('/status')} className="w-full py-5 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 uppercase text-xs tracking-widest">VER MEU STATUS VIP</button>
                         </div>
                     )}

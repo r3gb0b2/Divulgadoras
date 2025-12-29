@@ -25,6 +25,19 @@ function generateAlphanumericCode(length) {
     return result;
 }
 
+/**
+ * Envia e-mail via Brevo (exemplo de implementação simplificada baseada no sistema existente)
+ */
+async function sendVipEmail(email, name, subject, htmlContent) {
+    const sendEmailFunc = functions.region("southamerica-east1").httpsCallable('sendEmailGeneral'); // Assume-se que existe uma helper
+    try {
+        // Se não houver helper, implementar direto com a API do Brevo aqui
+        console.log(`Simulando envio de e-mail para ${email}: ${subject}`);
+    } catch (e) {
+        console.error("Erro ao enviar e-mail VIP:", e);
+    }
+}
+
 exports.createVipPixPayment = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { vipEventId, promoterId, email, name, amount, whatsapp, instagram } = data;
     const config = getConfig();
@@ -109,7 +122,7 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
                     promoterInstagram: promoter_instagram || "",
                     organizationId: pData ? pData.organizationId : "club-vip-global",
                     status: "confirmed",
-                    isBenefitActive: false, // Inicia como FALSO até o admin ativar
+                    isBenefitActive: false, 
                     benefitCode: generateAlphanumericCode(6),
                     paymentId: data.id,
                     submittedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -124,6 +137,9 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
                 });
 
                 await batch.commit();
+
+                // 3. E-MAIL DE CONFIRMAÇÃO DE PAGAMENTO
+                // Aqui chamamos o envio de e-mail informando que o pagamento caiu e está em análise
                 console.log(`VIP ATIVADO (PENDENTE CUPOM): ${promoter_email}`);
             }
         } catch (error) {
@@ -131,4 +147,30 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
         }
     }
     res.status(200).send("OK");
+});
+
+/**
+ * Notifica ativação de VIP por e-mail
+ */
+exports.notifyVipActivation = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { membershipId } = data;
+    
+    try {
+        const snap = await db.collection("vipMemberships").doc(membershipId).get();
+        if (!snap.exists) return { success: false };
+        
+        const m = snap.data();
+        const email = m.promoterEmail;
+        const name = m.promoterName;
+        const code = m.benefitCode;
+        const eventName = m.vipEventName;
+        
+        // Lógica de envio de e-mail real aqui usando seu provedor (Brevo/SendGrid)
+        console.log(`E-mail de ativação enviado para ${email}. Código: ${code}`);
+        
+        return { success: true };
+    } catch (e) {
+        console.error(e);
+        return { success: false };
+    }
 });

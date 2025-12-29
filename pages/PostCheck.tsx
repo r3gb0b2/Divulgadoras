@@ -389,7 +389,7 @@ const PostCheck: React.FC = () => {
             // BUSCA DADOS VIP
             const [fetchedAssignments, vipData, allVipEvents] = await Promise.all([
                 getAssignmentsForPromoterByEmail(searchEmail),
-                getAllVipMemberships(), // Aqui precisaríamos de um filtro por email no service, mas usaremos client-side por brevidade se for pequeno
+                getAllVipMemberships(),
                 getActiveVipEvents()
             ]);
 
@@ -475,6 +475,17 @@ const PostCheck: React.FC = () => {
     const pending = assignments.filter(a => !isHistoryAssignment(a));
     const history = assignments.filter(a => isHistoryAssignment(a));
 
+    // Lógica para esconder as abas de trabalho se o usuário for puramente VIP
+    const isOnlyVip = useMemo(() => {
+        return assignments.length === 0 && vipMemberships.length > 0;
+    }, [assignments, vipMemberships]);
+
+    useEffect(() => {
+        if (isOnlyVip && activeTab !== 'rewards') {
+            setActiveTab('rewards');
+        }
+    }, [isOnlyVip, activeTab]);
+
     if (!searched || !promoter) {
         return (
             <div className="max-w-md mx-auto py-10 px-4">
@@ -532,8 +543,8 @@ const PostCheck: React.FC = () => {
             </div>
 
             <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-gray-700/50 overflow-x-auto">
-                <button onClick={() => setActiveTab('pending')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 ${activeTab === 'pending' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Ativas ({pending.length})</button>
-                <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Histórico ({history.length})</button>
+                {!isOnlyVip && <button onClick={() => setActiveTab('pending')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 ${activeTab === 'pending' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Ativas ({pending.length})</button>}
+                {!isOnlyVip && <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Histórico ({history.length})</button>}
                 <button onClick={() => setActiveTab('rewards')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap px-4 flex items-center justify-center gap-2 ${activeTab === 'rewards' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>
                     <SparklesIcon className="w-3 h-3" /> Clube VIP ({vipMemberships.length})
                 </button>
@@ -541,10 +552,10 @@ const PostCheck: React.FC = () => {
 
             <div className="space-y-2">
                 {isLoading ? <div className="text-center py-20 animate-pulse text-primary font-black uppercase">Sincronizando tarefas...</div> : (
-                    activeTab === 'pending' ? (
+                    activeTab === 'pending' && !isOnlyVip ? (
                         pending.length > 0 ? pending.map(a => <PostCard key={a.id} assignment={a} promoter={promoter} onConfirm={() => performSearch(email)} onJustify={setJustificationAssignment} onRefresh={() => performSearch(email)} />) 
                         : <div className="text-center py-20"><div className="w-16 h-16 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-4"><CheckCircleIcon className="w-8 h-8 text-green-500" /></div><p className="text-gray-400 font-bold">Tudo em dia! 🎉</p></div>
-                    ) : activeTab === 'history' ? (
+                    ) : activeTab === 'history' && !isOnlyVip ? (
                         history.length > 0 ? history.map(a => <PostCard key={a.id} assignment={a} promoter={promoter} onConfirm={()=>{}} onJustify={()=>{}} onRefresh={()=>{}} />) 
                         : <p className="text-center text-gray-500 py-10 font-bold uppercase tracking-widest text-[10px]">Histórico Vazio</p>
                     ) : (
@@ -568,18 +579,41 @@ const PostCheck: React.FC = () => {
                                             </div>
                                         </div>
 
-                                        <div className="space-y-4">
-                                            <div className="p-4 bg-green-900/20 border border-green-500/30 rounded-2xl text-center">
-                                                <CheckCircleIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                                                <p className="text-white font-black uppercase tracking-widest text-sm">Resgate Liberado! 🚀</p>
-                                            </div>
+                                        <div className="space-y-6">
+                                            {m.isBenefitActive ? (
+                                                <div className="p-4 bg-green-900/20 border border-green-500/30 rounded-2xl text-center">
+                                                    <CheckCircleIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                                                    <p className="text-white font-black uppercase tracking-widest text-sm">CORTESIA DISPONÍVEL! 🚀</p>
+                                                </div>
+                                            ) : (
+                                                <div className="p-4 bg-orange-900/20 border border-orange-500/30 rounded-2xl text-center">
+                                                    <ClockIcon className="w-8 h-8 text-orange-500 mx-auto mb-2" />
+                                                    <p className="text-white font-black uppercase tracking-widest text-sm">AGUARDANDO ANÁLISE</p>
+                                                    <p className="text-[10px] text-orange-300 uppercase font-bold mt-1">Seu pagamento foi confirmado. Aguarde a liberação do cupom.</p>
+                                                </div>
+                                            )}
                                             
+                                            {/* SEÇÃO CONHEÇA SEUS BENEFÍCIOS */}
+                                            {event?.benefits && event.benefits.length > 0 && (
+                                                <div className="bg-dark/30 p-5 rounded-2xl border border-white/5">
+                                                    <p className="text-[10px] text-primary font-black uppercase tracking-[0.2em] mb-3 ml-1">Conheça seus Benefícios:</p>
+                                                    <div className="space-y-2">
+                                                        {event.benefits.map((b, i) => (
+                                                            <div key={i} className="flex items-center gap-3 text-xs text-gray-300 font-medium">
+                                                                <CheckCircleIcon className="w-4 h-4 text-primary flex-shrink-0" />
+                                                                <span>{b}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
                                             <div className="bg-dark/50 p-5 rounded-2xl border border-white/5 space-y-4">
                                                 <div>
-                                                    <p className="text-[10px] text-gray-500 font-black uppercase mb-2 ml-1">Seu Cupom de Desconto:</p>
+                                                    <p className="text-[10px] text-gray-500 font-black uppercase mb-2 ml-1">Seu Cupom de Cortesia:</p>
                                                     <div className="p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all flex items-center justify-between">
-                                                        <p className="text-lg font-black text-primary font-mono">{m.benefitCode || '---'}</p>
-                                                        <button onClick={() => { navigator.clipboard.writeText(m.benefitCode || ''); alert("Copiado!"); }} className="p-2 text-gray-500 hover:text-white"><DocumentDuplicateIcon className="w-4 h-4"/></button>
+                                                        <p className="text-lg font-black text-primary font-mono">{m.isBenefitActive ? (m.benefitCode || '---') : '******'}</p>
+                                                        {m.isBenefitActive && <button onClick={() => { navigator.clipboard.writeText(m.benefitCode || ''); alert("Copiado!"); }} className="p-2 text-gray-500 hover:text-white"><DocumentDuplicateIcon className="w-4 h-4"/></button>}
                                                     </div>
                                                 </div>
 
@@ -590,14 +624,14 @@ const PostCheck: React.FC = () => {
                                                         rel="noreferrer"
                                                         className="block w-full py-4 bg-green-600 text-white font-black rounded-2xl text-center shadow-lg shadow-green-900/20 hover:bg-green-500 transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2"
                                                     >
-                                                        <ExternalLinkIcon className="w-4 h-4" /> COMPRAR COM DESCONTO
+                                                        <ExternalLinkIcon className="w-4 h-4" /> RESGATAR CORTESIA
                                                     </a>
                                                 )}
                                                 
                                                 {!m.isBenefitActive && (
                                                     <div className="p-4 bg-amber-900/10 rounded-xl border border-amber-500/20 text-center">
                                                         <p className="text-amber-400 font-black text-[10px] uppercase">CUPOM EM VALIDAÇÃO</p>
-                                                        <p className="text-gray-500 text-[8px] mt-1">Aguarde a ativação pelo administrador para o link de compra aparecer.</p>
+                                                        <p className="text-gray-500 text-[8px] mt-1">Aguarde a ativação pelo administrador para o link de resgate aparecer.</p>
                                                     </div>
                                                 )}
                                             </div>
@@ -608,7 +642,7 @@ const PostCheck: React.FC = () => {
                                 <div className="bg-secondary p-8 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
                                     <SparklesIcon className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
                                     <h3 className="text-xl font-black text-white uppercase tracking-tight">Entre para o Clube!</h3>
-                                    <p className="text-gray-400 text-sm mt-2 mb-6">Acesse benefícios exclusivos: cortesias, descontos e sorteios de camarim.</p>
+                                    <p className="text-gray-400 text-sm mt-2 mb-6">Acesse benefícios exclusivos: cortesias, experiências e sorteios de camarim.</p>
                                     <Link to="/promocao-emocoes" className="block w-full py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-primary/20">QUERO SER MEMBRO</Link>
                                 </div>
                             )}
