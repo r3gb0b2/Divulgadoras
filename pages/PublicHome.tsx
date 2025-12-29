@@ -2,32 +2,37 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getPublicOrganizations } from '../services/organizationService';
-import { Organization } from '../types';
+import { getActiveVipEvents } from '../services/vipService';
+import { Organization, VipEvent } from '../types';
 import { UsersIcon, SearchIcon, SparklesIcon, MegaphoneIcon, CheckCircleIcon, TicketIcon } from '../components/Icons';
 import { Capacitor } from '@capacitor/core';
 
 const PublicHome: React.FC = () => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [hasVipEvents, setHasVipEvents] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Detecta se é App Nativo
   const isNative = Capacitor.isNativePlatform();
   
   useEffect(() => {
-    const fetchOrgs = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       setError(null);
       try {
-        const orgs = await getPublicOrganizations();
+        const [orgs, vips] = await Promise.all([
+            getPublicOrganizations(),
+            getActiveVipEvents()
+        ]);
         setOrganizations(orgs);
+        setHasVipEvents(vips.length > 0);
       } catch (err: any) {
         setError("Não foi possível carregar a lista de organizações.");
       } finally {
         setIsLoading(false);
       }
     };
-    fetchOrgs();
+    fetchData();
   }, []);
   
   const renderContent = () => {
@@ -80,7 +85,6 @@ const PublicHome: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto space-y-10 py-12 px-4">
       
-      {/* Hero Section */}
       <section className="text-center space-y-8 animate-fadeIn pt-4">
           <div className="flex justify-center mb-4">
              <div className="p-4 bg-primary/10 rounded-full border border-primary/20">
@@ -99,15 +103,16 @@ const PublicHome: React.FC = () => {
                   MEU STATUS
               </Link>
 
-              <Link to="/promocao-emocoes" className="relative px-8 md:px-10 py-5 bg-gradient-to-br from-indigo-600 to-purple-800 text-white font-black rounded-3xl shadow-2xl hover:scale-105 active:scale-95 transition-all uppercase tracking-[0.1em] text-sm md:text-lg flex items-center gap-3 border border-white/20 overflow-hidden group">
-                  <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
-                  <SparklesIcon className="w-6 h-6 text-yellow-400" />
-                  CLUBE VIP
-              </Link>
+              {hasVipEvents && (
+                <Link to="/promocao-emocoes" className="relative px-8 md:px-10 py-5 bg-gradient-to-br from-indigo-600 to-purple-800 text-white font-black rounded-3xl shadow-2xl hover:scale-105 active:scale-95 transition-all uppercase tracking-[0.1em] text-sm md:text-lg flex items-center gap-3 border border-white/20 overflow-hidden group">
+                    <div className="absolute inset-0 bg-white/10 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                    <SparklesIcon className="w-6 h-6 text-yellow-400" />
+                    CLUBE VIP
+                </Link>
+              )}
           </div>
       </section>
 
-      {/* Seção de Seleção */}
       {!isNative && (
         <div id="agencias" className="relative pt-10">
             <div className="absolute -inset-4 bg-gradient-to-tr from-primary/20 via-purple-600/10 to-transparent rounded-[40px] blur-3xl opacity-50 -z-10"></div>
@@ -126,7 +131,6 @@ const PublicHome: React.FC = () => {
         </div>
       )}
 
-      {/* Info Rápida */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto py-10 border-y border-white/5">
         <div className="flex gap-4 items-start">
            <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary flex-shrink-0">
@@ -157,7 +161,6 @@ const PublicHome: React.FC = () => {
         </div>
       </div>
 
-      {/* Rodapé de Ações */}
       <section className="flex flex-col items-center gap-6 pt-10">
         <div className="flex flex-wrap justify-center gap-8">
             <Link to="/como-funciona" className="text-gray-400 hover:text-white font-black text-[10px] uppercase tracking-widest transition-colors underline decoration-primary/50 underline-offset-4">
