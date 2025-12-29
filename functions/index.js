@@ -26,15 +26,21 @@ function generateAlphanumericCode(length) {
 }
 
 /**
- * Envia e-mail via Brevo (exemplo de implementação simplificada baseada no sistema existente)
+ * Envia e-mail formatado via sistema de e-mail existente (mail collection para o Trigger Email extension)
+ * ou via chamada direta se configurado. Aqui usamos o padrão de coleção 'mail' que é comum em Firebase.
  */
-async function sendVipEmail(email, name, subject, htmlContent) {
-    const sendEmailFunc = functions.region("southamerica-east1").httpsCallable('sendEmailGeneral'); // Assume-se que existe uma helper
+async function sendVipEmail(email, subject, html) {
     try {
-        // Se não houver helper, implementar direto com a API do Brevo aqui
-        console.log(`Simulando envio de e-mail para ${email}: ${subject}`);
+        await db.collection("mail").add({
+            to: email,
+            message: {
+                subject: subject,
+                html: html,
+            }
+        });
+        console.log(`E-mail registrado na fila para: ${email}`);
     } catch (e) {
-        console.error("Erro ao enviar e-mail VIP:", e);
+        console.error("Erro ao enfileirar e-mail:", e);
     }
 }
 
@@ -110,7 +116,7 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
 
                 const batch = db.batch();
 
-                // 1. Atualiza Registro de Membresia
+                // 1. Registro de Membresia
                 const membershipRef = db.collection("vipMemberships").doc(`${promoter_id}_${vip_event_id}`);
                 batch.set(membershipRef, {
                     vipEventId: vip_event_id,
@@ -138,8 +144,19 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
 
                 await batch.commit();
 
-                // 3. E-MAIL DE CONFIRMAÇÃO DE PAGAMENTO
-                // Aqui chamamos o envio de e-mail informando que o pagamento caiu e está em análise
+                // 3. E-MAIL DE PAGAMENTO CONFIRMADO
+                await sendVipEmail(
+                    promoter_email,
+                    "Pagamento Recebido - Clube VIP",
+                    `<div style="font-family:sans-serif;color:#333;max-width:600px;margin:auto;">
+                        <h2 style="color:#7e39d5;">Olá ${pName.split(' ')[0]}!</h2>
+                        <p>Seu pagamento para o acesso <b>${eventName}</b> foi confirmado com sucesso.</p>
+                        <p>Nossa equipe está analisando os dados para liberar sua cortesia oficial. Você receberá um novo e-mail assim que o cupom estiver disponível para resgate no seu portal.</p>
+                        <hr style="border:none;border-top:1px solid #eee;margin:20px 0;"/>
+                        <p style="font-size:12px;color:#999;">Equipe Certa • Gestão Profissional</p>
+                    </div>`
+                );
+
                 console.log(`VIP ATIVADO (PENDENTE CUPOM): ${promoter_email}`);
             }
         } catch (error) {
@@ -150,27 +167,55 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
 });
 
 /**
- * Notifica ativação de VIP por e-mail
+ * Notifica ativação de VIP por e-mail (Chamada pelo Admin)
  */
 exports.notifyVipActivation = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { membershipId } = data;
     
     try {
         const snap = await db.collection("vipMemberships").doc(membershipId).get();
-        if (!snap.exists) return { success: false };
+        if (!snap.exists) return { success: false, message: "Membro não encontrado." };
         
         const m = snap.data();
+        const eventSnap = await db.collection("vipEvents").doc(m.vipEventId).get();
+        const ev = eventSnap.data();
+        
         const email = m.promoterEmail;
         const name = m.promoterName;
         const code = m.benefitCode;
         const eventName = m.vipEventName;
+        const slug = ev?.externalSlug || "";
         
-        // Lógica de envio de e-mail real aqui usando seu provedor (Brevo/SendGrid)
+        const resgateLink = `https://stingressos.com.br/eventos/${slug}?cupom=${code}`;
+
+        await sendVipEmail(
+            email,
+            "Sua Cortesia VIP está disponível!",
+            `<div style="font-family:sans-serif;color:#333;max-width:600px;margin:auto;border:1px solid #eee;border-radius:15px;padding:30px;">
+                <h2 style="color:#7e39d5;margin-bottom:20px;">Sua Cortesia foi Liberada! 🎉</h2>
+                <p>Olá <b>${name.split(' ')[0]}</b>, boas notícias!</p>
+                <p>Sua adesão ao <b>${eventName}</b> foi aprovada e seu cupom de cortesia já está ativo.</p>
+                
+                <div style="background:#f9f9f9;padding:20px;border-radius:10px;text-align:center;margin:25px 0;">
+                    <p style="margin:0;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#999;">Seu Código:</p>
+                    <p style="margin:5px 0;font-size:28px;font-weight:bold;color:#7e39d5;font-family:monospace;">${code}</p>
+                </div>
+
+                <p>Clique no botão abaixo para ir direto ao site de compra com sua cortesia aplicada:</p>
+                
+                <a href="${resgateLink}" style="display:block;background:#7e39d5;color:#fff;text-decoration:none;padding:15px;text-align:center;border-radius:10px;font-weight:bold;margin:20px 0;">RESGATAR CORTESIA AGORA</a>
+                
+                <p style="font-size:13px;color:#666;">Dica: Você também pode acessar esse código a qualquer momento no seu Portal da Divulgadora, na aba "Clube VIP".</p>
+                
+                <hr style="border:none;border-top:1px solid #eee;margin:30px 0;"/>
+                <p style="font-size:11px;color:#aaa;text-align:center;">Equipe Certa • Sistema de Gestão de Divulgadoras</p>
+            </div>`
+        );
+        
         console.log(`E-mail de ativação enviado para ${email}. Código: ${code}`);
-        
         return { success: true };
     } catch (e) {
-        console.error(e);
-        return { success: false };
+        console.error("Erro na ativação VIP:", e);
+        return { success: false, error: e.message };
     }
 });

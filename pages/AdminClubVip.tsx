@@ -85,7 +85,7 @@ const AdminClubVip: React.FC = () => {
 
     const handleBulkActivate = async () => {
         if (selectedIds.size === 0) return;
-        if (!window.confirm(`Deseja ATIVAR os cupons de cortesia para ${selectedIds.size} membros? As mesmas receberão um e-mail automático.`)) return;
+        if (!window.confirm(`Deseja ATIVAR as cortesias de ${selectedIds.size} membros? Eles receberão um e-mail com o link de resgate.`)) return;
         
         setIsBulkProcessing(true);
         try {
@@ -96,15 +96,13 @@ const AdminClubVip: React.FC = () => {
                 if (membership) {
                     await updateVipMembership(id, { isBenefitActive: true });
                     await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
-                    
-                    // Envia e-mail de ativação via Cloud Function
+                    // Gatilho de e-mail de ativação
                     await notifyActivation({ membershipId: id });
                 }
             }));
-            
             setSelectedIds(new Set());
             await fetchData();
-            alert("Membros ativados e e-mails enviados com sucesso!");
+            alert("Cortesias ativadas e e-mails enviados!");
         } catch (e) {
             alert("Erro ao processar ativação.");
         } finally {
