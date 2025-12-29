@@ -13,7 +13,7 @@ import PhotoViewerModal from '../components/PhotoViewerModal';
 
 const AdminClubVip: React.FC = () => {
     const navigate = useNavigate();
-    const { selectedOrgId, adminData } = useAdminAuth();
+    const { selectedOrgId, adminData, loading: authLoading } = useAdminAuth();
     
     const [members, setMembers] = useState<Promoter[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -24,7 +24,12 @@ const AdminClubVip: React.FC = () => {
     const [photoViewer, setPhotoViewer] = useState({ isOpen: false, url: '' });
 
     const fetchData = useCallback(async () => {
-        if (!selectedOrgId) return;
+        // Se não houver organização selecionada, não há o que buscar, mas paramos o loading
+        if (!selectedOrgId) {
+            setIsLoading(false);
+            return;
+        }
+
         setIsLoading(true);
         try {
             const snap = await firestore.collection('promoters')
@@ -36,13 +41,18 @@ const AdminClubVip: React.FC = () => {
             const vipMembers = all.filter(p => p.emocoesStatus && p.emocoesStatus !== 'none');
             setMembers(vipMembers);
         } catch (e) {
-            console.error(e);
+            console.error("Erro ao carregar membros VIP:", e);
         } finally {
             setIsLoading(false);
         }
     }, [selectedOrgId]);
 
-    useEffect(() => { fetchData(); }, [fetchData]);
+    // Dispara a busca quando o Auth termina de carregar ou a Org muda
+    useEffect(() => {
+        if (!authLoading) {
+            fetchData();
+        }
+    }, [authLoading, selectedOrgId, fetchData]);
 
     const handleApprove = async (promoter: Promoter) => {
         const code = window.prompt("Insira o Código do Ingresso ou Link de Desconto para esta pessoa:", promoter.emocoesBenefitCode || "VIP-PROMO-2024");
@@ -104,7 +114,7 @@ const AdminClubVip: React.FC = () => {
 
     return (
         <div className="pb-20">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex justify-between items-center mb-8 px-4 md:px-0">
                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
                     <TicketIcon className="w-8 h-8 text-primary" />
                     Gestão Clube VIP

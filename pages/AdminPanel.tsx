@@ -132,7 +132,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const fetchData = useCallback(async (silent = false) => {
         const orgId = selectedOrgId || (isSuperAdmin ? undefined : selectedOrgId);
         
-        // Se não for superadmin e não tiver org selecionada, não há o que buscar
+        // Se não for superadmin e não tiver org selecionada, mostramos lista vazia e paramos o loading
         if (!isSuperAdmin && !orgId) {
             if (isMounted.current) setIsLoading(false);
             setPromoters([]);
@@ -145,7 +145,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setError('');
         
         try {
-            // Se for SuperAdmin e orgId for undefined (vazio no switcher), getAllPromotersForAdmin buscará vazios ou falhará
             // Para SuperAdmin sem org selecionada, mostramos lista vazia por padrão para evitar lag global
             if (isSuperAdmin && !orgId) {
                 setPromoters([]);
@@ -181,13 +180,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     }, [selectedOrgId, isSuperAdmin]);
 
-    // O efeito principal deve reagir tanto à mudança de Org quanto ao fim do carregamento do Auth
     useEffect(() => {
         if (!authLoading) {
             fetchData();
-        } else {
-            // Enquanto o auth está carregando, mantemos o estado de loading local
-            setIsLoading(true);
         }
     }, [selectedOrgId, fetchData, authLoading]);
 
