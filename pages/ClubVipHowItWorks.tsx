@@ -96,7 +96,7 @@ const ClubVipHowItWorks: React.FC = () => {
                         ESCOLHER MEU EVENTO
                     </button>
                     <button 
-                        onClick={() => navigate('/status')} 
+                        onClick={() => navigate('/clubvip/status')} 
                         className="px-10 py-5 bg-gray-700 text-white font-black rounded-3xl hover:bg-gray-600 transition-all uppercase text-xs tracking-widest transform active:scale-95"
                     >
                         CONSULTAR STATUS ATUAL

@@ -28,6 +28,7 @@ import RegisterF1 from './pages/RegisterF1';
 import GlobalGuestListCheck from './pages/GlobalGuestListCheck';
 import ClubVipHome from './pages/ClubVipHome';
 import ClubVipHowItWorks from './pages/ClubVipHowItWorks';
+import ClubVipStatus from './pages/ClubVipStatus';
 import { clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
@@ -74,6 +75,7 @@ const Header: React.FC = () => {
   
   const homePath = isVipContext ? '/clubvip' : '/';
   const howItWorksPath = isVipContext ? '/clubvip/como-funciona' : '/como-funciona';
+  const statusPath = isVipContext ? '/clubvip/status' : '/status';
 
   return (
       <header className="bg-secondary shadow-md sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
@@ -87,7 +89,7 @@ const Header: React.FC = () => {
                   <OrganizationSwitcher />
                   <Link to={homePath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
                   <Link to={howItWorksPath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Como Funciona</Link>
-                  <Link to="/status" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Status</Link>
+                  <Link to={statusPath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Status</Link>
                   <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
                   {adminData && (
                       <button onClick={handleLogout} className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors">
@@ -103,7 +105,6 @@ const Header: React.FC = () => {
                     className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
                   >
                       <span className="sr-only">Abrir menu</span>
-                      {/* FIX: Corrected variable name from isVipOpen to isMenuOpen to resolve reference error. */}
                       {isMenuOpen ? <XIcon className="h-6 w-6" /> : <MenuIcon className="h-6 w-6" />}
                   </button>
               </div>
@@ -117,7 +118,7 @@ const Header: React.FC = () => {
                       </div>
                       <Link to={homePath} onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Início</Link>
                       <Link to={howItWorksPath} onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Como Funciona</Link>
-                      <Link to="/status" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Status</Link>
+                      <Link to={statusPath} onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Status</Link>
                       <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Admin</Link>
                       {adminData && (
                           <button onClick={handleLogout} className="w-full text-left flex items-center gap-2 text-red-400 hover:text-red-500 px-3 py-2 rounded-md text-base font-medium">
@@ -166,6 +167,7 @@ const App: React.FC = () => {
                 {/* Clube VIP - Página Separada */}
                 <Route path="/clubvip" element={<ClubVipHome />} />
                 <Route path="/clubvip/como-funciona" element={<ClubVipHowItWorks />} />
+                <Route path="/clubvip/status" element={<ClubVipStatus />} />
                 
                 {/* Divulgadoras */}
                 <Route path="/posts" element={<PostCheck />} />

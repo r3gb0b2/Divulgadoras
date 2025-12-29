@@ -67,10 +67,10 @@ const ClubVipHome: React.FC = () => {
             const profiles = await findPromotersByEmail(trimmedEmail);
             const membership = await checkVipMembership(trimmedEmail, selectedEvent.id);
             
-            // SE JÁ É VIP: Redireciona para o painel de status
+            // SE JÁ É VIP: Redireciona para o painel de status VIP
             if (membership?.status === 'confirmed') {
                 localStorage.setItem('saved_promoter_email', trimmedEmail);
-                navigate('/status');
+                navigate('/clubvip/status');
                 return;
             }
 
@@ -162,7 +162,7 @@ const ClubVipHome: React.FC = () => {
                                 <Link to="/clubvip/como-funciona" className="flex items-center justify-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all">
                                     <ClockIcon className="w-4 h-4" /> Como Funciona?
                                 </Link>
-                                <Link to="/status" className="flex items-center justify-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all">
+                                <Link to="/clubvip/status" className="flex items-center justify-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all">
                                     <SearchIcon className="w-4 h-4" /> Consultar meu Status
                                 </Link>
                             </div>
@@ -283,7 +283,7 @@ const ClubVipHome: React.FC = () => {
                                 <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-4">Bem-vindo ao Clube VIP</p>
                             </div>
                             <p className="text-gray-300 font-medium px-4">Seu acesso foi processado. Você receberá um e-mail com as instruções de resgate assim que sua cortesia oficial for ativada pelo sistema.</p>
-                            <button onClick={() => navigate('/status')} className="w-full py-6 bg-primary text-white font-black rounded-3xl shadow-2xl shadow-primary/40 uppercase text-xs tracking-widest transform active:scale-95">MEU STATUS VIP</button>
+                            <button onClick={() => navigate('/clubvip/status')} className="w-full py-6 bg-primary text-white font-black rounded-3xl shadow-2xl shadow-primary/40 uppercase text-xs tracking-widest transform active:scale-95">MEU STATUS VIP</button>
                         </div>
                     )}
                 </div>
