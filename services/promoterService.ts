@@ -1,7 +1,30 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
+
+/**
+ * Cria um perfil básico para quem quer apenas o VIP
+ */
+export const createVipPromoter = async (data: { name: string, email: string, whatsapp: string }): Promise<string> => {
+    const emailLower = data.email.toLowerCase().trim();
+    const promoterRef = firestore.collection('promoters').doc();
+    
+    await promoterRef.set({
+        id: promoterRef.id,
+        name: data.name,
+        email: emailLower,
+        whatsapp: data.whatsapp.replace(/\D/g, ''),
+        instagram: 'vip_member',
+        status: 'approved', // Já entra como aprovado para fins de portal
+        organizationId: 'club-vip-global',
+        campaignName: 'Membro Clube VIP',
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        state: 'N/A',
+        photoUrls: []
+    });
+    
+    return promoterRef.id;
+};
 
 /**
  * Auxiliar para obter timestamp unix de forma segura para ordenação em memória.
@@ -14,23 +37,23 @@ const getUnixTime = (ts: any): number => {
     return isNaN(d.getTime()) ? 0 : d.getTime() / 1000;
 };
 
+// FIX: Added missing cleanForCallable helper function to sanitize data for Cloud Function calls.
 /**
- * Limpa objetos para envio seguro via Cloud Functions.
+ * Auxiliar para limpar objetos que não podem ser serializados em chamadas HTTPS (como FieldValue).
  */
-const cleanForCallable = (obj: any): any => {
-    if (obj === null || typeof obj !== 'object') return obj;
-    if (obj instanceof firebase.firestore.FieldValue) return undefined; 
-    if (Array.isArray(obj)) return obj.map(cleanForCallable);
-    const cleaned: any = {};
-    for (const key in obj) {
-        if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            const val = cleanForCallable(obj[key]);
-            if (val !== undefined) cleaned[key] = val;
+const cleanForCallable = (data: any): any => {
+    const clean: any = {};
+    Object.keys(data).forEach(key => {
+        const val = data[key];
+        // Remove undefined e FieldValues que causam erro de serialização no httpsCallable
+        if (val !== undefined && !(val && typeof val === 'object' && val.constructor?.name === 'FieldValue')) {
+            clean[key] = val;
         }
-    }
-    return cleaned;
+    });
+    return clean;
 };
 
+// ... restante do arquivo (mantendo as funções existentes)
 export const changePromoterEmail = async (promoterId: string, oldEmail: string, newEmail: string): Promise<void> => {
     try {
         const updateFunc = functions.httpsCallable('updatePromoterEmail');

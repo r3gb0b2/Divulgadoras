@@ -1,17 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { findPromotersByEmail } from '../services/promoterService';
+import { findPromotersByEmail, createVipPromoter } from '../services/promoterService';
 import { getActiveVipEvents, checkVipMembership } from '../services/vipService';
 import { Promoter, VipEvent } from '../types';
 import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { 
   ArrowLeftIcon, CheckCircleIcon, SparklesIcon,
-  DocumentDuplicateIcon, RefreshIcon
+  DocumentDuplicateIcon, RefreshIcon, UserIcon, PhoneIcon
 } from '../components/Icons';
 
-type CampaignStep = 'select_event' | 'benefits' | 'identify' | 'payment' | 'success';
+type CampaignStep = 'select_event' | 'benefits' | 'identify' | 'register_new' | 'payment' | 'success';
 
 const EmocoesCampaign: React.FC = () => {
     const navigate = useNavigate();
@@ -19,12 +19,13 @@ const EmocoesCampaign: React.FC = () => {
     const [events, setEvents] = useState<VipEvent[]>([]);
     const [selectedEvent, setSelectedEvent] = useState<VipEvent | null>(null);
     const [email, setEmail] = useState('');
+    const [name, setName] = useState('');
+    const [whatsapp, setWhatsapp] = useState('');
     const [promoter, setPromoter] = useState<Promoter | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [pixData, setPixData] = useState<{ qr_code: string, qr_code_base64: string } | null>(null);
 
-    // Carregar eventos VIP iniciais
     useEffect(() => {
         getActiveVipEvents().then(data => {
             setEvents(data);
@@ -35,7 +36,6 @@ const EmocoesCampaign: React.FC = () => {
         });
     }, []);
 
-    // LISTENER EM TEMPO REAL: Detecta quando o Webhook aprova o pagamento no banco
     useEffect(() => {
         if (step === 'payment' && promoter && selectedEvent) {
             const unsubscribe = firestore.collection('promoters').doc(promoter.id)
@@ -68,23 +68,47 @@ const EmocoesCampaign: React.FC = () => {
                     setIsLoading(false);
                     return;
                 }
-
                 setPromoter(p);
-                
-                const createPix = httpsCallable(functions, 'createVipPixPayment');
-                const res: any = await createPix({
-                    vipEventId: selectedEvent.id,
-                    promoterId: p.id,
-                    email: p.email,
-                    name: p.name,
-                    amount: selectedEvent.price
-                });
-                
-                setPixData(res.data);
-                setStep('payment');
+                generatePayment(p, selectedEvent);
             } else {
-                setError("E-mail não encontrado. Cadastre-se primeiro em uma produtora.");
+                // E-mail não encontrado, leva para cadastro rápido
+                setStep('register_new');
+                setIsLoading(false);
             }
+        } catch (err: any) {
+            setError("Erro ao verificar e-mail: " + err.message);
+            setIsLoading(false);
+        }
+    };
+
+    const handleCreateNewAndPay = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!name.trim() || !whatsapp.trim() || !selectedEvent) return;
+        setIsLoading(true);
+        try {
+            const pId = await createVipPromoter({ name, email, whatsapp });
+            const p = { id: pId, name, email, whatsapp } as Promoter;
+            setPromoter(p);
+            generatePayment(p, selectedEvent);
+        } catch (err: any) {
+            setError("Erro ao criar cadastro: " + err.message);
+            setIsLoading(false);
+        }
+    };
+
+    const generatePayment = async (p: Promoter, ev: VipEvent) => {
+        setIsLoading(true);
+        try {
+            const createPix = httpsCallable(functions, 'createVipPixPayment');
+            const res: any = await createPix({
+                vipEventId: ev.id,
+                promoterId: p.id,
+                email: p.email,
+                name: p.name,
+                amount: ev.price
+            });
+            setPixData(res.data);
+            setStep('payment');
         } catch (err: any) {
             setError("Erro ao gerar pagamento: " + err.message);
         } finally {
@@ -138,10 +162,30 @@ const EmocoesCampaign: React.FC = () => {
                             <input 
                                 type="email" required value={email} onChange={e => setEmail(e.target.value)}
                                 className="w-full p-5 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
-                                placeholder="Seu e-mail cadastrado"
+                                placeholder="Seu e-mail"
                             />
                             <button type="submit" disabled={isLoading} className="w-full py-5 bg-primary text-white font-black rounded-2xl">
-                                {isLoading ? 'GERANDO PIX...' : 'GERAR PAGAMENTO'}
+                                {isLoading ? 'VERIFICANDO...' : 'AVANÇAR'}
+                            </button>
+                        </form>
+                    )}
+
+                    {step === 'register_new' && (
+                        <form onSubmit={handleCreateNewAndPay} className="space-y-4">
+                            <h2 className="text-xl font-black text-white text-center">COMPLETE SEU PERFIL</h2>
+                            <p className="text-center text-gray-400 text-xs mb-4 uppercase font-bold">Não encontramos seu e-mail. Preencha abaixo para continuar.</p>
+                            <input 
+                                type="text" required value={name} onChange={e => setName(e.target.value)}
+                                className="w-full p-5 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
+                                placeholder="Nome Completo"
+                            />
+                            <input 
+                                type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)}
+                                className="w-full p-5 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
+                                placeholder="WhatsApp com DDD"
+                            />
+                            <button type="submit" disabled={isLoading} className="w-full py-5 bg-primary text-white font-black rounded-2xl">
+                                {isLoading ? 'PROCESSANDO...' : 'GERAR PAGAMENTO'}
                             </button>
                         </form>
                     )}
