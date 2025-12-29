@@ -34,7 +34,22 @@ const EmocoesCampaign: React.FC = () => {
         try {
             const profiles = await findPromotersByEmail(trimmedEmail);
             if (profiles.length > 0) {
-                setPromoter(profiles[0]);
+                const p = profiles[0];
+                
+                // VERIFICAÇÃO DE STATUS JÁ EXISTENTE
+                if (p.emocoesStatus === 'pending') {
+                    setError("Você já enviou seu comprovante de adesão! Nossa equipe está analisando o pagamento. Verifique seu status no portal em instantes.");
+                    setIsLoading(false);
+                    return;
+                }
+
+                if (p.emocoesStatus === 'confirmed') {
+                    setError("Seu perfil já é um Membro VIP ativo! Não é necessário pagar novamente. Acesse o portal 'Minhas Tarefas' para ver seus prêmios.");
+                    setIsLoading(false);
+                    return;
+                }
+
+                setPromoter(p);
                 setStep('payment');
             } else {
                 setError("E-mail não encontrado. Você precisa realizar seu cadastro inicial em uma de nossas produtoras parceiras antes de aderir ao Clube de Benefícios.");

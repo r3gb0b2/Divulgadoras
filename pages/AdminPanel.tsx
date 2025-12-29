@@ -86,7 +86,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [orgsMap, setOrgsMap] = useState<Record<string, string>>({});
 
     const [isLoading, setIsLoading] = useState(true);
-    const [isActionLoading, setIsActionLoading] = useState(false); // Para ações individuais/silenciosas
+    const [isActionLoading, setIsActionLoading] = useState(false); 
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [error, setError] = useState('');
     const [filterState, setFilterState] = useState('all');
@@ -130,10 +130,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     }, [currentOrg, isSuperAdmin, selectedOrgId]);
 
     const fetchData = useCallback(async (silent = false) => {
-        const orgId = selectedOrgId || (isSuperAdmin ? undefined : (selectedOrgId as string | undefined));
+        const orgId = selectedOrgId || (isSuperAdmin ? undefined : selectedOrgId);
         
-        if (!orgId) {
-            setIsLoading(false);
+        // Se não for superadmin e não tiver org selecionada, não há o que buscar
+        if (!isSuperAdmin && !orgId) {
+            if (isMounted.current) setIsLoading(false);
             setPromoters([]);
             return;
         }
@@ -144,11 +145,20 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setError('');
         
         try {
+            // Se for SuperAdmin e orgId for undefined (vazio no switcher), getAllPromotersForAdmin buscará vazios ou falhará
+            // Para SuperAdmin sem org selecionada, mostramos lista vazia por padrão para evitar lag global
+            if (isSuperAdmin && !orgId) {
+                setPromoters([]);
+                setStats({ total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 });
+                if (isMounted.current) setIsLoading(false);
+                return;
+            }
+
             const [allPromoters, statsData, camps, reasons, allOrgs] = await Promise.all([
-                getAllPromotersForAdmin({ organizationId: orgId, status: 'all' }),
-                getPromoterStats({ organizationId: orgId }),
-                getAllCampaigns(orgId),
-                getRejectionReasons(orgId),
+                getAllPromotersForAdmin({ organizationId: orgId!, status: 'all' }),
+                getPromoterStats({ organizationId: orgId! }),
+                getAllCampaigns(orgId!),
+                getRejectionReasons(orgId!),
                 getOrganizations()
             ]);
 
@@ -171,9 +181,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     }, [selectedOrgId, isSuperAdmin]);
 
+    // O efeito principal deve reagir tanto à mudança de Org quanto ao fim do carregamento do Auth
     useEffect(() => {
         if (!authLoading) {
             fetchData();
+        } else {
+            // Enquanto o auth está carregando, mantemos o estado de loading local
+            setIsLoading(true);
         }
     }, [selectedOrgId, fetchData, authLoading]);
 
@@ -216,7 +230,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 });
             }));
             setSelectedIds(new Set());
-            await fetchData(true); // Atualização silenciosa
+            await fetchData(true); 
         } catch (e) {
             alert("Erro ao aprovar perfis em massa.");
         } finally {
@@ -235,7 +249,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 allCampaigns: allCampaigns,
                 actionTakenByEmail: adminData.email
             });
-            await fetchData(true); // Atualização silenciosa
+            await fetchData(true); 
         } catch (err: any) {
             console.error("Falha ao aprovar:", err);
             await fetchData(true); 
@@ -267,7 +281,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
         const statusToSet: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
         setIsBulkProcessing(true);
-        setIsRejectionModalOpen(false); // Fecha o modal imediatamente para resposta tátil rápida
+        setIsRejectionModalOpen(false); 
 
         try {
             if (isBulkAction) {
@@ -287,7 +301,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 });
                 setSelectedPromoter(null);
             }
-            await fetchData(true); // Atualização silenciosa
+            await fetchData(true); 
         } catch (err: any) {
             await fetchData(true);
         } finally {

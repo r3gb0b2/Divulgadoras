@@ -207,6 +207,9 @@ export const getAllPromoters = async (options: {
     try {
         const orgId = options.filterOrgId && options.filterOrgId !== 'all' ? options.filterOrgId : options.organizationId;
         
+        // Proteção contra orgId nulo em ambientes Super Admin sem org selecionada
+        if (!orgId) return [];
+
         let q: firebase.firestore.Query = firestore.collection("promoters")
             .where("organizationId", "==", orgId);
         
