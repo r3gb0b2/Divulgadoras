@@ -5,7 +5,7 @@ import { getGuestListForCampaign, unlockGuestListConfirmation } from '../service
 import { getAllCampaigns } from '../services/settingsService';
 import { getPromotersByIds } from '../services/promoterService';
 import { GuestListConfirmation, Campaign, Promoter } from '../types';
-import { ArrowLeftIcon, DownloadIcon, CheckCircleIcon } from '../components/Icons';
+import { ArrowLeftIcon, DownloadIcon, CheckCircleIcon, InstagramIcon, WhatsAppIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const GuestListPage: React.FC = () => {
@@ -32,7 +32,7 @@ const GuestListPage: React.FC = () => {
         try {
             const confirmationData = await getGuestListForCampaign(campaignId);
             
-            // Fetch promoter details to check `hasJoinedGroup` status
+            // Fetch promoter details to check `hasJoinedGroup` status and get handles
             const promoterIds = [...new Set(confirmationData.map((c) => c.promoterId))];
             if (promoterIds.length > 0) {
                 const promotersData = await getPromotersByIds(promoterIds);
@@ -78,7 +78,7 @@ const GuestListPage: React.FC = () => {
         setUnlockingId(confirmationId);
         try {
             await unlockGuestListConfirmation(confirmationId);
-            await fetchData(); // Refresh data to show updated lock status
+            await fetchData(); 
         } catch (err: any) {
             setError(err.message || 'Falha ao liberar para edição.');
         } finally {
@@ -105,7 +105,6 @@ const GuestListPage: React.FC = () => {
     }, [filteredConfirmations]);
 
     useEffect(() => {
-        // Set the first list as active by default
         const listNames = Object.keys(groupedConfirmations);
         if (listNames.length > 0 && (!activeList || !groupedConfirmations[activeList])) {
             setActiveList(listNames[0]);
@@ -131,13 +130,10 @@ const GuestListPage: React.FC = () => {
             let guestEmails = "";
 
             if (conf.guests && conf.guests.length > 0) {
-                // Use detailed structure if available
                 guestNames = conf.guests.map(g => g.name).filter(n => n.trim()).join('\n');
                 guestEmails = conf.guests.map(g => g.email).filter(e => e.trim()).join('\n');
             } else {
-                // Fallback to simple names array
                 guestNames = (conf.guestNames || []).filter(name => name.trim() !== '').join('\n');
-                guestEmails = ""; // No email data in legacy structure
             }
 
             return [
@@ -151,10 +147,8 @@ const GuestListPage: React.FC = () => {
         });
 
         const csvContent = [headers.join(','), ...rows].join('\n');
-        
         const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
         const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
-        
         const link = document.createElement("a");
         if (link.download !== undefined) {
             const url = URL.createObjectURL(blob);
@@ -171,7 +165,6 @@ const GuestListPage: React.FC = () => {
     const handleDownloadExcel = () => {
         if (filteredConfirmations.length === 0) return;
 
-        // Construct HTML Table for Excel
         let table = `
             <html xmlns:x="urn:schemas-microsoft-com:office:excel">
             <head>
@@ -201,7 +194,6 @@ const GuestListPage: React.FC = () => {
             let guestNames = "";
             let guestEmails = "";
 
-            // Style for line break inside Excel cell: mso-data-placement:same-cell;
             if (conf.guests && conf.guests.length > 0) {
                 guestNames = conf.guests.map(g => g.name).filter(n => n.trim()).join('<br style="mso-data-placement:same-cell;" />');
                 guestEmails = conf.guests.map(g => g.email).filter(e => e.trim()).join('<br style="mso-data-placement:same-cell;" />');
@@ -324,7 +316,15 @@ const GuestListPage: React.FC = () => {
                                         <div className={`text-sm font-medium ${conf.promoterDetails?.hasJoinedGroup ? 'text-green-400 font-semibold' : 'text-white'}`}>
                                             {conf.promoterName}
                                         </div>
-                                        <div className="text-sm text-gray-400">{conf.isPromoterAttending ? "Confirmada" : "Não vai"}</div>
+                                        <div className="flex items-center gap-3 mt-1.5">
+                                            <a href={`https://wa.me/55${conf.promoterDetails?.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-green-500 hover:text-green-400">
+                                                <WhatsAppIcon className="w-3.5 h-3.5" />
+                                            </a>
+                                            <a href={`https://instagram.com/${conf.promoterDetails?.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-pink-500 hover:text-pink-400">
+                                                <InstagramIcon className="w-3.5 h-3.5" />
+                                            </a>
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1 uppercase font-bold">{conf.isPromoterAttending ? "Confirmada" : "Não vai"}</div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-pre-wrap text-sm text-gray-300">
                                         {conf.guests ? (

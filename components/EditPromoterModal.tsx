@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Promoter, Campaign } from '../types';
 import { getAllCampaigns } from '../services/settingsService';
 import { stateMap } from '../constants/states';
+import { InstagramIcon, WhatsAppIcon, TikTokIcon, ExternalLinkIcon } from './Icons';
 
 interface EditPromoterModalProps {
   promoter: Promoter | null;
@@ -34,7 +35,7 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         hasJoinedGroup: promoter.hasJoinedGroup || false,
         observation: promoter.observation || '',
         associatedCampaigns: promoter.associatedCampaigns || [],
-        campaignName: promoter.campaignName || '', // Agora incluído no formData para edição
+        campaignName: promoter.campaignName || '', 
       });
       
       if (isOpen) {
@@ -90,13 +91,12 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
         dataToSave.email = dataToSave.email.toLowerCase().trim();
       }
       if (dataToSave.status !== 'rejected') {
-        dataToSave.rejectionReason = ''; // Limpar motivo se não for rejeitado
+        dataToSave.rejectionReason = ''; 
       }
       if (dataToSave.status !== 'approved') {
-        dataToSave.hasJoinedGroup = false; // Limpar status do grupo se não for aprovado
+        dataToSave.hasJoinedGroup = false; 
       }
       
-      // Garante que o campaignName atual esteja na lista de allCampaigns
       const allCampaigns = [
         dataToSave.campaignName,
         ...(dataToSave.associatedCampaigns || [])
@@ -150,7 +150,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
                 <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>
               ))}
             </select>
-            <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold">Este é o evento que aparecerá no e-mail e no portal dela.</p>
           </div>
 
           <div>
@@ -163,11 +162,32 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
           </div>
            <div>
             <label className="block text-sm font-medium text-gray-300">WhatsApp</label>
-            <input type="tel" name="whatsapp" value={formData.whatsapp || ''} onChange={handleChange} className={formInputStyle} />
+            <div className="flex gap-2">
+                <input type="tel" name="whatsapp" value={formData.whatsapp || ''} onChange={handleChange} className={formInputStyle} />
+                <a href={`https://wa.me/55${formData.whatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="mt-1 p-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center">
+                    <WhatsAppIcon className="w-5 h-5" />
+                </a>
+            </div>
           </div>
            <div>
             <label className="block text-sm font-medium text-gray-300">Instagram</label>
-            <input type="text" name="instagram" value={formData.instagram || ''} onChange={handleChange} className={formInputStyle} />
+            <div className="flex gap-2">
+                <input type="text" name="instagram" value={formData.instagram || ''} onChange={handleChange} className={formInputStyle} />
+                <a href={`https://instagram.com/${formData.instagram?.replace('@', '')}`} target="_blank" rel="noreferrer" className="mt-1 p-2 bg-pink-600 text-white rounded-md hover:bg-pink-700 flex items-center justify-center">
+                    <InstagramIcon className="w-5 h-5" />
+                </a>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300">TikTok</label>
+            <div className="flex gap-2">
+                <input type="text" name="tiktok" value={formData.tiktok || ''} onChange={handleChange} className={formInputStyle} />
+                {formData.tiktok && (
+                    <a href={`https://tiktok.com/@${formData.tiktok?.replace('@', '')}`} target="_blank" rel="noreferrer" className="mt-1 p-2 bg-white text-black rounded-md hover:bg-gray-200 flex items-center justify-center">
+                        <TikTokIcon className="w-5 h-5" />
+                    </a>
+                )}
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300">Data de Nascimento</label>
@@ -224,32 +244,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
               <option value="rejected">Rejeitada (Estatístico)</option>
               <option value="rejected_editable">Solicitar Correção</option>
             </select>
-            
-            {formData.status === 'approved' && (
-                <label className="flex items-center text-sm font-medium text-green-400 mt-4 cursor-pointer">
-                    <input 
-                        type="checkbox" 
-                        name="hasJoinedGroup" 
-                        checked={!!formData.hasJoinedGroup} 
-                        onChange={handleChange}
-                        className={formCheckboxStyle}
-                    />
-                    <span className="ml-2">Marcar como já entrou no grupo (manual)</span>
-                </label>
-            )}
-            
-            {(formData.status === 'rejected' || formData.status === 'rejected_editable') && (
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-300">Motivo (enviado à divulgadora)</label>
-                  <textarea
-                    name="rejectionReason"
-                    value={formData.rejectionReason || ''}
-                    onChange={handleChange}
-                    className={formInputStyle + ' min-h-[60px]'}
-                    placeholder="Informe o motivo..."
-                  />
-                </div>
-            )}
           </div>
 
           <div className="mt-6 flex justify-end space-x-3 pt-4 border-t border-gray-700">
