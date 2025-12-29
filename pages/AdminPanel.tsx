@@ -79,15 +79,14 @@ const calculateAge = (dob: string): number => {
 export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
     const { selectedOrgId, organizationsForAdmin, loading: authLoading } = useAdminAuth();
     
-    // Dados Principais
     const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [stats, setStats] = useState({ total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 });
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [orgsMap, setOrgsMap] = useState<Record<string, string>>({});
 
-    // Estado da UI e Filtros
     const [isLoading, setIsLoading] = useState(true);
+    const [isActionLoading, setIsActionLoading] = useState(false); // Para ações individuais/silenciosas
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [error, setError] = useState('');
     const [filterState, setFilterState] = useState('all');
@@ -96,11 +95,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [selectedCampaign, setSelectedCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     
-    // Seleção em Massa
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isBulkAction, setIsBulkAction] = useState(false);
 
-    // Controle de Modais
     const [selectedPromoter, setSelectedPromoter] = useState<Promoter | null>(null);
     const [isRejectionModalOpen, setIsRejectionModalOpen] = useState(false);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -108,7 +105,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         isOpen: false, urls: [], index: 0 
     });
 
-    // Busca por E-mail (Global)
     const [lookupEmail, setLookupEmail] = useState('');
     const [isLookingUp, setIsLookingUp] = useState(false);
     const [lookupResults, setLookupResults] = useState<Promoter[] | null>(null);
@@ -133,7 +129,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         return states;
     }, [currentOrg, isSuperAdmin, selectedOrgId]);
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (silent = false) => {
         const orgId = selectedOrgId || (isSuperAdmin ? undefined : (selectedOrgId as string | undefined));
         
         if (!orgId) {
@@ -142,7 +138,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             return;
         }
 
-        setIsLoading(true);
+        if (!silent) setIsLoading(true);
+        else setIsActionLoading(true);
+        
         setError('');
         
         try {
@@ -166,7 +164,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         } catch (err: any) {
             if (isMounted.current) setError(err.message || 'Falha ao carregar dados da equipe.');
         } finally {
-            if (isMounted.current) setIsLoading(false);
+            if (isMounted.current) {
+                setIsLoading(false);
+                setIsActionLoading(false);
+            }
         }
     }, [selectedOrgId, isSuperAdmin]);
 
@@ -215,7 +216,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 });
             }));
             setSelectedIds(new Set());
-            await fetchData();
+            await fetchData(true); // Atualização silenciosa
         } catch (e) {
             alert("Erro ao aprovar perfis em massa.");
         } finally {
@@ -234,11 +235,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 allCampaigns: allCampaigns,
                 actionTakenByEmail: adminData.email
             });
-            setSelectedIds(new Set());
-            await fetchData();
+            await fetchData(true); // Atualização silenciosa
         } catch (err: any) {
             console.error("Falha ao aprovar:", err);
-            await fetchData(); 
+            await fetchData(true); 
         } finally {
             setIsBulkProcessing(false);
         }
@@ -267,6 +267,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
         const statusToSet: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
         setIsBulkProcessing(true);
+        setIsRejectionModalOpen(false); // Fecha o modal imediatamente para resposta tátil rápida
+
         try {
             if (isBulkAction) {
                 await Promise.all(Array.from(selectedIds).map(async (id: string) => {
@@ -285,17 +287,15 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 });
                 setSelectedPromoter(null);
             }
-            await fetchData();
+            await fetchData(true); // Atualização silenciosa
         } catch (err: any) {
-            await fetchData();
+            await fetchData(true);
         } finally {
             setIsBulkProcessing(false);
-            setIsRejectionModalOpen(false);
             setIsBulkAction(false);
         }
     };
 
-    // --- FILTRAGEM LOCAL TOTAL ---
     const filteredPromoters = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
         let results = promoters.filter(p => {
@@ -356,7 +356,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     return (
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
-                <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Equipe</h1>
+                <div className="flex items-center gap-3">
+                    <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Equipe</h1>
+                    {isActionLoading && <RefreshIcon className="w-5 h-5 text-primary animate-spin" />}
+                </div>
                 <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 w-full md:w-auto">
                     {[
                         { label: 'Total', val: stats.total, color: 'text-white' },
@@ -428,8 +431,8 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 <div className="mx-2 md:mx-0 p-4 bg-primary rounded-2xl shadow-lg flex items-center justify-between animate-fadeIn sticky top-24 z-30">
                     <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} selecionadas</p>
                     <div className="flex gap-2">
-                        <button onClick={handleBulkApprove} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-colors">Aprovar</button>
-                        <button onClick={() => { setIsBulkAction(true); setIsRejectionModalOpen(true); }} className="px-4 py-2 bg-red-600 text-white font-black text-[10px] uppercase rounded-xl hover:bg-red-700 transition-colors">Reprovar</button>
+                        <button onClick={handleBulkApprove} disabled={isBulkProcessing} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-colors">Aprovar</button>
+                        <button onClick={() => { setIsBulkAction(true); setIsRejectionModalOpen(true); }} disabled={isBulkProcessing} className="px-4 py-2 bg-red-600 text-white font-black text-[10px] uppercase rounded-xl hover:bg-red-700 transition-colors">Reprovar</button>
                         <button onClick={() => { setSelectedIds(new Set()); setIsBulkAction(false); }} className="px-4 py-2 bg-black/20 text-white font-black text-[10px] uppercase rounded-xl">Cancelar</button>
                     </div>
                 </div>
@@ -530,7 +533,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                         {p.status === 'pending' && (
                                                             <button onClick={() => handleApprove(p)} disabled={isBulkProcessing} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>
                                                         )}
-                                                        <button onClick={() => { setSelectedPromoter(p); setIsBulkAction(false); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => { setSelectedPromoter(p); setIsBulkAction(false); setIsRejectionModalOpen(true); }} disabled={isBulkProcessing} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
                                                         <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
                                                     </div>
                                                 </td>
@@ -575,7 +578,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                     <button onClick={() => handleNotifyEmailManual(p)} className="p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-500 transition-all flex-1 flex justify-center"><MailIcon className="w-5 h-5" /></button>
                                                 </>
                                             )}
-                                            <button onClick={() => { setSelectedPromoter(p); setIsBulkAction(false); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2"><XIcon className="w-4 h-4" /> Rejeitar</button>
+                                            <button onClick={() => { setSelectedPromoter(p); setIsBulkAction(false); setIsRejectionModalOpen(true); }} disabled={isBulkProcessing} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2"><XIcon className="w-4 h-4" /> Rejeitar</button>
                                         </div>
                                     </div>
                                 );
@@ -587,7 +590,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
             <PhotoViewerModal isOpen={photoViewer.isOpen} imageUrls={photoViewer.urls} startIndex={photoViewer.index} onClose={() => setPhotoViewer({ ...photoViewer, isOpen: false })} />
             <RejectionModal isOpen={isRejectionModalOpen} onClose={() => { setIsRejectionModalOpen(false); setIsBulkAction(false); }} onConfirm={handleRejectConfirm} reasons={rejectionReasons} />
-            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id: string, data: any) => { await updatePromoter(id, data); fetchData(); }} />
+            <EditPromoterModal isOpen={isEditModalOpen} onClose={() => setIsEditModalOpen(false)} promoter={selectedPromoter} onSave={async (id: string, data: any) => { await updatePromoter(id, data); fetchData(true); }} />
             <PromoterLookupModal 
               isOpen={isLookupModalOpen} onClose={() => setIsLookupModalOpen(false)} isLoading={isLookingUp} results={lookupResults} error={null} organizationsMap={orgsMap} 
               onGoToPromoter={(p) => { 
@@ -602,7 +605,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     try {
                         await deletePromoter(p.id);
                         setIsLookupModalOpen(false);
-                        fetchData();
+                        fetchData(true);
                     } catch(err: any) { 
                         alert(err?.message || "Ocorreu um erro ao excluir."); 
                     } finally { 

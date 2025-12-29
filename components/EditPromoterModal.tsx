@@ -93,9 +93,6 @@ const EditPromoterModal: React.FC<EditPromoterModalProps> = ({ promoter, isOpen,
       if (dataToSave.status !== 'rejected') {
         dataToSave.rejectionReason = ''; 
       }
-      if (dataToSave.status !== 'approved') {
-        dataToSave.hasJoinedGroup = false; 
-      }
       
       const allCampaigns = [
         dataToSave.campaignName,
