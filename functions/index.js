@@ -6,8 +6,8 @@ const { MercadoPagoConfig, Payment } = require("mercadopago");
 admin.initializeApp();
 const db = admin.firestore();
 
-// Definido como constante global para evitar erros
-const DEFAULT_SENDER = "r3gb0b@gmail.com";
+// Atualizado para o novo domínio profissional
+const DEFAULT_SENDER = "Equipe Certa <contato@equipecerta.app>";
 
 const getConfig = () => {
     const config = functions.config();
@@ -27,7 +27,7 @@ function generateAlphanumericCode(length) {
 
 async function sendVipEmail(email, subject, html) {
     try {
-        // Criando o documento com remetente fixo e explícito
+        // Criando o documento com remetente profissional configurado
         await db.collection("mail").add({
             to: email,
             message: {
