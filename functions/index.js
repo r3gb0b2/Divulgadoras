@@ -27,7 +27,7 @@ function generateAlphanumericCode(length) {
 
 /**
  * Envia e-mail via coleção 'mail' (Trigger Email Extension)
- * Forçando o remetente r3gb0b@gmail.com
+ * IMPORTANTE: O campo 'from' aqui deve ser aceito pelo seu SMTP (Brevo)
  */
 async function sendVipEmail(email, subject, html) {
     try {
@@ -39,7 +39,7 @@ async function sendVipEmail(email, subject, html) {
                 html: html,
             }
         });
-        console.log(`[Email VIP] Enfileirado para: ${email} usando r3gb0b@gmail.com`);
+        console.log(`[Email VIP] Fila de envio para: ${email} (Remetente: r3gb0b@gmail.com)`);
         return true;
     } catch (e) {
         console.error("[Email VIP] Erro ao enfileirar:", e);
@@ -164,7 +164,7 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
                     </div>`
                 );
 
-                console.log(`[Webhook VIP] Sucesso para: ${promoter_email} via r3gb0b@gmail.com`);
+                console.log(`[Webhook VIP] Sucesso para: ${promoter_email}`);
             }
         } catch (error) {
             console.error("[Webhook VIP] Erro Crítico:", error);
@@ -216,7 +216,7 @@ exports.notifyVipActivation = functions.region("southamerica-east1").https.onCal
             </div>`
         );
         
-        console.log(`[Ativação VIP] Notificação enviada: ${email} via r3gb0b@gmail.com`);
+        console.log(`[Ativação VIP] Notificação enviada: ${email}`);
         return { success: true };
     } catch (e) {
         console.error("[Ativação VIP] Erro:", e);
