@@ -6,6 +6,9 @@ const { MercadoPagoConfig, Payment } = require("mercadopago");
 admin.initializeApp();
 const db = admin.firestore();
 
+// Definido como constante global para evitar erros
+const DEFAULT_SENDER = "r3gb0b@gmail.com";
+
 const getConfig = () => {
     const config = functions.config();
     return {
@@ -13,9 +16,6 @@ const getConfig = () => {
     };
 };
 
-/**
- * Gera código alfanumérico de 6 caracteres
- */
 function generateAlphanumericCode(length) {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     let result = '';
@@ -25,21 +25,19 @@ function generateAlphanumericCode(length) {
     return result;
 }
 
-/**
- * Envia e-mail via coleção 'mail' (Trigger Email Extension)
- * IMPORTANTE: r3gb0b@gmail.com DEVE estar cadastrado como "Sender" no seu painel do Brevo.
- */
 async function sendVipEmail(email, subject, html) {
     try {
+        // Criando o documento com remetente fixo e explícito
         await db.collection("mail").add({
             to: email,
             message: {
-                from: "r3gb0b@gmail.com",
+                from: DEFAULT_SENDER,
+                replyTo: DEFAULT_SENDER,
                 subject: subject,
                 html: html,
             }
         });
-        console.log(`[Email VIP] Fila de envio para: ${email} (Remetente forçado: r3gb0b@gmail.com)`);
+        console.log(`[Email VIP] Enfileirado: Para ${email} vindo de ${DEFAULT_SENDER}`);
         return true;
     } catch (e) {
         console.error("[Email VIP] Erro ao enfileirar:", e);
@@ -145,7 +143,6 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
 
                 await batch.commit();
 
-                // DISPARO IMEDIATO DE EMAIL DE PAGAMENTO CONFIRMADO
                 await sendVipEmail(
                     promoter_email,
                     "Boas-vindas! Seu pagamento do Clube VIP foi confirmado 🎉",
@@ -163,8 +160,6 @@ exports.mpWebhook = functions.region("southamerica-east1").https.onRequest(async
                         <p style="font-size:11px;color:#999;text-align:center;">Clube VIP Oficial • Gestão Exclusiva</p>
                     </div>`
                 );
-
-                console.log(`[Webhook VIP] Sucesso para: ${promoter_email} via r3gb0b@gmail.com`);
             }
         } catch (error) {
             console.error("[Webhook VIP] Erro Crítico:", error);
@@ -216,7 +211,6 @@ exports.notifyVipActivation = functions.region("southamerica-east1").https.onCal
             </div>`
         );
         
-        console.log(`[Ativação VIP] Notificação enviada para: ${email} via r3gb0b@gmail.com`);
         return { success: true };
     } catch (e) {
         console.error("[Ativação VIP] Erro:", e);
