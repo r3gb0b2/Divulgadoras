@@ -8,51 +8,30 @@ const db = admin.firestore();
 
 /**
  * CONFIGURAÇÃO BREVO SDK v2.x
- * Certifique-se de ter rodado: 
  * firebase functions:config:set brevo.key="SUA_API_KEY_V3"
  */
 const getBrevoApi = () => {
     const config = functions.config();
     const apiKey = config.brevo?.key;
-    
     if (!apiKey) {
-        console.error("ERRO: API Key do Brevo (brevo.key) não encontrada nas configurações do Firebase.");
+        console.error("ERRO: API Key do Brevo não configurada.");
         return null;
     }
-
-    try {
-        const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-        // Novo método de autenticação para @getbrevo/brevo v2.x
-        apiInstance.setApiKey(SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey, apiKey);
-        return apiInstance;
-    } catch (e) {
-        console.error("Erro ao inicializar API do Brevo:", e.message);
-        return null;
-    }
+    const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+    apiInstance.setApiKey(SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey, apiKey);
+    return apiInstance;
 };
 
-// REMETENTE: Deve estar EXATAMENTE igual ao configurado em 'Senders' no painel do Brevo
+// REMETENTE ÚNICO E VERIFICADO
 const SENDER_EMAIL = "contato@equipecerta.app";
 const SENDER_NAME = "Equipe Certa";
 
-function generateAlphanumericCode(length) {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return result;
-}
-
 /**
- * Envio de e-mail transacional via Brevo API v3
+ * Função Central de Envio
  */
 async function sendSystemEmail(toEmail, subject, htmlContent) {
     const apiInstance = getBrevoApi();
-    if (!apiInstance) {
-        console.error("Falha no envio: API do Brevo não disponível.");
-        return false;
-    }
+    if (!apiInstance) return false;
 
     const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
     sendSmtpEmail.subject = subject;
@@ -61,79 +40,107 @@ async function sendSystemEmail(toEmail, subject, htmlContent) {
     sendSmtpEmail.to = [{ email: toEmail }];
 
     try {
-        const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
-        console.log(`[Brevo Success] ID: ${data.body?.messageId || 'enviado'} para ${toEmail}`);
+        await apiInstance.sendTransacEmail(sendSmtpEmail);
+        console.log(`[Email Sent] ${subject} -> ${toEmail}`);
         return true;
     } catch (error) {
-        // Log detalhado para depuração no Firebase Console
-        const errorDetail = error.response?.body || error.message;
-        console.error(`[Brevo Error] Falha ao enviar para ${toEmail}:`, JSON.stringify(errorDetail));
+        console.error(`[Email Error] ${toEmail}:`, JSON.stringify(error.response?.body || error.message));
         return false;
     }
 }
 
-// --- FUNÇÃO DE TESTE PARA O SUPER ADMIN ---
-exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const testHtml = `
-        <div style="font-family:sans-serif; padding:20px; border:1px solid #eee;">
-            <h1 style="color:#7e39d5;">Teste de Conexão Brevo</h1>
-            <p>Se você recebeu isso, a integração via SDK está <b>correta</b>.</p>
-            <p>Remetente configurado: ${SENDER_EMAIL}</p>
-        </div>
-    `;
-    const success = await sendSystemEmail(SENDER_EMAIL, "Teste de Sistema - Equipe Certa", testHtml);
-    return { 
-        success, 
-        message: success ? "E-mail de teste enviado com sucesso!" : "Falha ao enviar e-mail. Verifique os logs do Firebase Functions para o erro detalhado." 
-    };
+// --- 1. NOTIFICAÇÃO DE NOVA PUBLICAÇÃO (POST) ---
+exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { postId } = data;
+    try {
+        const postSnap = await db.collection("posts").doc(postId).get();
+        const post = postSnap.data();
+        
+        const assignmentsSnap = await db.collection("postAssignments")
+            .where("postId", "==", postId)
+            .where("status", "==", "pending")
+            .get();
+
+        const promises = assignmentsSnap.docs.map(doc => {
+            const a = doc.data();
+            const html = `
+                <div style="font-family:sans-serif; max-width:600px; border:1px solid #eee; padding:30px; border-radius:15px;">
+                    <h2 style="color:#7e39d5;">Nova Publicação Disponível! 📢</h2>
+                    <p>Olá <b>${a.promoterName.split(' ')[0]}</b>,</p>
+                    <p>Uma nova tarefa foi designada para você no evento: <b>${post.campaignName}</b></p>
+                    <div style="background:#f4f4f4; padding:20px; border-radius:10px; margin:20px 0;">
+                        <p style="margin:0;"><b>Instruções:</b> ${post.instructions.substring(0, 100)}...</p>
+                    </div>
+                    <a href="https://divulgadoras.vercel.app/#/posts" style="display:inline-block; background:#7e39d5; color:#fff; padding:15px 25px; text-decoration:none; border-radius:10px; font-weight:bold;">ACESSAR MEU PORTAL</a>
+                </div>
+            `;
+            return sendSystemEmail(a.promoterEmail, `📢 Nova Publicação: ${post.campaignName}`, html);
+        });
+
+        await Promise.all(promises);
+        return { success: true, message: `Disparo concluído para ${assignmentsSnap.size} divulgadoras.` };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
 });
 
-// --- NOTIFICAÇÃO VIP ---
+// --- 2. BOAS-VINDAS VIP (Gatilho ao criar cadastro) ---
+exports.onVipMembershipCreated = functions.region("southamerica-east1").firestore
+    .document("vipMemberships/{id}")
+    .onCreate(async (snap, context) => {
+        const m = snap.data();
+        const html = `
+            <div style="font-family:sans-serif; max-width:600px; padding:30px; border:1px solid #7e39d5; border-radius:20px;">
+                <h2 style="color:#7e39d5;">Recebemos seu cadastro! 🎉</h2>
+                <p>Olá <b>${m.promoterName}</b>,</p>
+                <p>Sua solicitação para o <b>${m.vipEventName}</b> foi registrada com sucesso.</p>
+                <p><b>O que acontece agora?</b></p>
+                <ul>
+                    <li>Se você já pagou o Pix, nosso sistema validará em instantes.</li>
+                    <li>Assim que validado, você receberá um novo e-mail com seu <b>Código de Cortesia</b>.</li>
+                </ul>
+                <p>Você também pode acompanhar o status em tempo real no nosso site.</p>
+                <div style="margin-top:30px; border-top:1px solid #eee; pt:20px; font-size:11px; color:#999;">Equipe Certa App</div>
+            </div>
+        `;
+        return sendSystemEmail(m.promoterEmail, `✅ Recebemos seu cadastro: ${m.vipEventName}`, html);
+    });
+
+// --- 3. ATIVAÇÃO VIP (Liberar código) ---
 exports.notifyVipActivation = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { membershipId } = data;
-    console.log(`[VIP Notification] Iniciando para: ${membershipId}`);
-    
     try {
         const snap = await db.collection("vipMemberships").doc(membershipId).get();
-        if (!snap.exists) {
-            return { success: false, message: "Cadastro VIP não encontrado no banco." };
-        }
-        
         const m = snap.data();
-        
-        // Gera código caso não exista
-        let code = m.benefitCode;
-        if (!code) {
-            code = generateAlphanumericCode(6);
-            await db.collection("vipMemberships").doc(membershipId).update({ benefitCode: code });
-        }
-
         const eventSnap = await db.collection("vipEvents").doc(m.vipEventId).get();
         const ev = eventSnap.data();
-        const slug = ev?.externalSlug || "";
-        const resgateLink = `https://stingressos.com.br/eventos/${slug}?cupom=${code}`;
+        
+        const code = m.benefitCode || "VIP-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+        if (!m.benefitCode) await snap.ref.update({ benefitCode: code });
+
+        const resgateLink = `https://stingressos.com.br/eventos/${ev?.externalSlug || ""}?cupom=${code}`;
 
         const html = `
-            <div style="font-family:sans-serif;color:#333;max-width:600px;margin:auto;border:1px solid #7e39d5;border-radius:20px;padding:40px;">
-                <h2 style="color:#7e39d5;text-align:center;">Sua Cortesia VIP Chegou! 🎉</h2>
-                <p>Olá <b>${m.promoterName.split(' ')[0]}</b>,</p>
-                <p>Seu código exclusivo para o <b>${m.vipEventName}</b> já está ativo:</p>
-                <div style="background:#f9f9f9;padding:30px;border-radius:20px;text-align:center;margin:30px 0;border:2px dashed #7e39d5;">
-                    <p style="margin:10px 0;font-size:32px;font-weight:900;color:#7e39d5;font-family:monospace;">${code}</p>
+            <div style="font-family:sans-serif; max-width:600px; padding:40px; border:2px solid #7e39d5; border-radius:20px;">
+                <h2 style="color:#7e39d5; text-align:center;">Sua Cortesia Está Liberada! 🎟️</h2>
+                <p>Olá <b>${m.promoterName}</b>,</p>
+                <p>Seu acesso VIP para o evento <b>${m.vipEventName}</b> foi confirmado!</p>
+                <div style="background:#f9f9f9; padding:20px; text-align:center; border-radius:15px; margin:20px 0;">
+                    <span style="font-size:10px; color:#999; display:block; margin-bottom:5px;">SEU CÓDIGO:</span>
+                    <b style="font-size:28px; color:#7e39d5; font-family:monospace;">${code}</b>
                 </div>
-                <a href="${resgateLink}" style="display:block;background:#7e39d5;color:#fff;text-decoration:none;padding:20px;text-align:center;border-radius:15px;font-weight:bold;font-size:18px;">RESGATAR MINHA CORTESIA</a>
-                <p style="font-size:11px; color:#999; margin-top:20px; text-align:center;">Este é um e-mail automático. Equipe Certa.</p>
+                <a href="${resgateLink}" style="display:block; background:#7e39d5; color:#fff; text-align:center; padding:18px; text-decoration:none; border-radius:12px; font-weight:bold;">RESGATAR INGRESSO AGORA</a>
+                <p style="font-size:12px; color:#666; margin-top:20px;">*Este código é pessoal e dá direito a 1 ingresso de cortesia no setor selecionado.</p>
             </div>
         `;
 
-        const sent = await sendSystemEmail(m.promoterEmail, `🎟️ Sua Cortesia VIP: ${m.vipEventName}`, html);
-        
-        return { 
-            success: sent, 
-            message: sent ? "E-mail enviado!" : "Erro ao disparar via Brevo. Verifique os logs." 
-        };
+        return { success: await sendSystemEmail(m.promoterEmail, `🎟️ Cortesia Liberada: ${m.vipEventName}`, html) };
     } catch (e) {
-        console.error(`[VIP technical error]`, e);
-        return { success: false, message: e.message };
+        return { success: false, error: e.message };
     }
+});
+
+// TESTE DE SISTEMA
+exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    return { success: await sendSystemEmail(SENDER_EMAIL, "Teste de Conexão Brevo", "<h1>Funcionando!</h1>") };
 });
