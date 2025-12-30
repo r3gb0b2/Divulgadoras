@@ -6,22 +6,32 @@ const SibApiV3Sdk = require("@getbrevo/brevo");
 admin.initializeApp();
 const db = admin.firestore();
 
-// CONFIGURAÇÃO BREVO (API KEY deve estar configurada no Firebase Config)
-// Comando: firebase functions:config:set brevo.key="SUA_API_V3_KEY"
+/**
+ * CONFIGURAÇÃO BREVO SDK v2.x
+ * Certifique-se de ter rodado: 
+ * firebase functions:config:set brevo.key="SUA_API_KEY_V3"
+ */
 const getBrevoApi = () => {
     const config = functions.config();
     const apiKey = config.brevo?.key;
+    
     if (!apiKey) {
-        console.error("ERRO: API Key do Brevo não configurada no Firebase Functions.");
+        console.error("ERRO: API Key do Brevo (brevo.key) não encontrada nas configurações do Firebase.");
         return null;
     }
-    const defaultClient = SibApiV3Sdk.ApiClient.instance;
-    const apiKeyAuth = defaultClient.authentications['api-key'];
-    apiKeyAuth.apiKey = apiKey;
-    return new SibApiV3Sdk.TransactionalEmailsApi();
+
+    try {
+        const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+        // Novo método de autenticação para @getbrevo/brevo v2.x
+        apiInstance.setApiKey(SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey, apiKey);
+        return apiInstance;
+    } catch (e) {
+        console.error("Erro ao inicializar API do Brevo:", e.message);
+        return null;
+    }
 };
 
-// REMETENTE VERIFICADO (Deve estar idêntico ao cadastrado no Brevo)
+// REMETENTE: Deve estar EXATAMENTE igual ao configurado em 'Senders' no painel do Brevo
 const SENDER_EMAIL = "contato@equipecerta.app";
 const SENDER_NAME = "Equipe Certa";
 
@@ -35,58 +45,73 @@ function generateAlphanumericCode(length) {
 }
 
 /**
- * Envio direto via Brevo SDK (Substitui a fila 'mail' do Firebase)
+ * Envio de e-mail transacional via Brevo API v3
  */
 async function sendSystemEmail(toEmail, subject, htmlContent) {
     const apiInstance = getBrevoApi();
-    if (!apiInstance) return false;
+    if (!apiInstance) {
+        console.error("Falha no envio: API do Brevo não disponível.");
+        return false;
+    }
 
     const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
     sendSmtpEmail.subject = subject;
     sendSmtpEmail.htmlContent = htmlContent;
-    sendSmtpEmail.sender = { "name": SENDER_NAME, "email": SENDER_EMAIL };
-    sendSmtpEmail.to = [{ "email": toEmail }];
+    sendSmtpEmail.sender = { name: SENDER_NAME, email: SENDER_EMAIL };
+    sendSmtpEmail.to = [{ email: toEmail }];
 
     try {
         const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
-        console.log(`[Brevo] E-mail enviado para ${toEmail}. MessageId: ${data.messageId}`);
+        console.log(`[Brevo Success] ID: ${data.body?.messageId || 'enviado'} para ${toEmail}`);
         return true;
     } catch (error) {
-        console.error(`[Brevo] Erro ao enviar para ${toEmail}:`, error.response?.body || error.message);
+        // Log detalhado para depuração no Firebase Console
+        const errorDetail = error.response?.body || error.message;
+        console.error(`[Brevo Error] Falha ao enviar para ${toEmail}:`, JSON.stringify(errorDetail));
         return false;
     }
 }
 
 // --- FUNÇÃO DE TESTE PARA O SUPER ADMIN ---
 exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const testHtml = `<h1>Teste de Conexão</h1><p>Se você recebeu isso, o Brevo está configurado corretamente com o remetente ${SENDER_EMAIL}.</p>`;
-    const success = await sendSystemEmail(SENDER_EMAIL, "Teste de Sistema Equipe Certa", testHtml);
-    return { success, message: success ? "E-mail de teste enviado com sucesso!" : "Falha ao enviar e-mail de teste. Verifique os logs e a API Key." };
+    const testHtml = `
+        <div style="font-family:sans-serif; padding:20px; border:1px solid #eee;">
+            <h1 style="color:#7e39d5;">Teste de Conexão Brevo</h1>
+            <p>Se você recebeu isso, a integração via SDK está <b>correta</b>.</p>
+            <p>Remetente configurado: ${SENDER_EMAIL}</p>
+        </div>
+    `;
+    const success = await sendSystemEmail(SENDER_EMAIL, "Teste de Sistema - Equipe Certa", testHtml);
+    return { 
+        success, 
+        message: success ? "E-mail de teste enviado com sucesso!" : "Falha ao enviar e-mail. Verifique os logs do Firebase Functions para o erro detalhado." 
+    };
 });
 
 // --- NOTIFICAÇÃO VIP ---
 exports.notifyVipActivation = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { membershipId } = data;
-    console.log(`[VIP] Iniciando notificação para Membership: ${membershipId}`);
+    console.log(`[VIP Notification] Iniciando para: ${membershipId}`);
     
     try {
         const snap = await db.collection("vipMemberships").doc(membershipId).get();
         if (!snap.exists) {
-            console.error(`[VIP] Erro: Documento ${membershipId} não existe.`);
-            return { success: false, message: "Membresia não encontrada." };
+            return { success: false, message: "Cadastro VIP não encontrado no banco." };
         }
         
         const m = snap.data();
-        const eventSnap = await db.collection("vipEvents").doc(m.vipEventId).get();
-        const ev = eventSnap.data();
         
-        // Se não tiver código, gera um agora para não travar o e-mail
-        const code = m.benefitCode || generateAlphanumericCode(6);
-        if (!m.benefitCode) {
+        // Gera código caso não exista
+        let code = m.benefitCode;
+        if (!code) {
+            code = generateAlphanumericCode(6);
             await db.collection("vipMemberships").doc(membershipId).update({ benefitCode: code });
         }
 
-        const resgateLink = `https://stingressos.com.br/eventos/${ev?.externalSlug || ""}?cupom=${code}`;
+        const eventSnap = await db.collection("vipEvents").doc(m.vipEventId).get();
+        const ev = eventSnap.data();
+        const slug = ev?.externalSlug || "";
+        const resgateLink = `https://stingressos.com.br/eventos/${slug}?cupom=${code}`;
 
         const html = `
             <div style="font-family:sans-serif;color:#333;max-width:600px;margin:auto;border:1px solid #7e39d5;border-radius:20px;padding:40px;">
@@ -97,17 +122,18 @@ exports.notifyVipActivation = functions.region("southamerica-east1").https.onCal
                     <p style="margin:10px 0;font-size:32px;font-weight:900;color:#7e39d5;font-family:monospace;">${code}</p>
                 </div>
                 <a href="${resgateLink}" style="display:block;background:#7e39d5;color:#fff;text-decoration:none;padding:20px;text-align:center;border-radius:15px;font-weight:bold;font-size:18px;">RESGATAR MINHA CORTESIA</a>
-                <p style="font-size:11px; color:#999; margin-top:20px; text-align:center;">Equipe Certa - Gestão de Eventos</p>
+                <p style="font-size:11px; color:#999; margin-top:20px; text-align:center;">Este é um e-mail automático. Equipe Certa.</p>
             </div>
         `;
 
-        const sent = await sendSystemEmail(m.promoterEmail, `🎟️ Sua Cortesia VIP para ${m.vipEventName}`, html);
+        const sent = await sendSystemEmail(m.promoterEmail, `🎟️ Sua Cortesia VIP: ${m.vipEventName}`, html);
         
-        return { success: sent, message: sent ? "E-mail enviado!" : "Erro ao disparar e-mail via Brevo." };
+        return { 
+            success: sent, 
+            message: sent ? "E-mail enviado!" : "Erro ao disparar via Brevo. Verifique os logs." 
+        };
     } catch (e) {
-        console.error(`[VIP] Erro técnico: ${e.message}`);
-        return { success: false, error: e.message };
+        console.error(`[VIP technical error]`, e);
+        return { success: false, message: e.message };
     }
 });
-
-// Mantemos as outras funções (mpWebhook, etc) apenas atualizando para usar sendSystemEmail

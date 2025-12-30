@@ -69,7 +69,6 @@ const AdminClubVip: React.FC = () => {
         if (!authLoading) fetchData();
     }, [authLoading, fetchData]);
 
-    // --- FILTROS ---
     const filteredMembers = useMemo(() => {
         return memberships.filter(m => {
             const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
@@ -89,7 +88,6 @@ const AdminClubVip: React.FC = () => {
         });
     }, [memberships, filterStatus, filterBenefit, searchQuery, selectedEventId]);
 
-    // --- DASHBOARD DE FATURAMENTO ---
     const financialStats = useMemo(() => {
         const confirmed = memberships.filter(m => m.status === 'confirmed');
         const pending = memberships.filter(m => m.status === 'pending');
@@ -114,7 +112,7 @@ const AdminClubVip: React.FC = () => {
         const docId = `${membership.promoterId}_${membership.vipEventId}`;
 
         try {
-            // Ativa no banco e no perfil
+            // Garante que está ativo no banco
             await updateVipMembership(docId, { isBenefitActive: true });
             await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
             
@@ -123,13 +121,13 @@ const AdminClubVip: React.FC = () => {
             const result: any = await notifyActivation({ membershipId: docId });
 
             if (result.data?.success) {
-                alert(`Sucesso! E-mail enviado via Brevo para ${membership.promoterName}`);
+                alert(`Sucesso! E-mail enviado para ${membership.promoterName}`);
             } else {
-                alert(`Atenção: A ativação foi feita no banco, mas o Brevo recusou o envio: ${result.data?.message || 'Erro no remetente'}`);
+                alert(`Atenção: O cupom foi ativado no banco de dados, mas o e-mail não foi enviado. Erro: ${result.data?.message || 'Configuração da API Key'}`);
             }
             await fetchData();
         } catch (e: any) {
-            alert(`Falha técnica ao processar: ${e.message}`);
+            alert(`Falha técnica: ${e.message}`);
         } finally {
             setIsBulkProcessing(false);
         }
@@ -196,6 +194,27 @@ const AdminClubVip: React.FC = () => {
         } else {
             setSelectedIds(new Set());
         }
+    };
+
+    const handleSaveEvent = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingEvent?.name) return;
+        setIsBulkProcessing(true);
+        try {
+            if (editingEvent.id) await updateVipEvent(editingEvent.id, editingEvent);
+            else await createVipEvent({
+                name: editingEvent.name!,
+                price: editingEvent.price || 0,
+                description: editingEvent.description || '',
+                benefits: editingEvent.benefits || [],
+                pixKey: editingEvent.pixKey || '',
+                externalSlug: editingEvent.externalSlug || '',
+                isActive: editingEvent.isActive ?? true
+            });
+            setIsModalOpen(false);
+            setEditingEvent(null);
+            await fetchData();
+        } catch (e) { alert("Erro ao salvar evento."); } finally { setIsBulkProcessing(false); }
     };
 
     const formatDate = (ts: any) => {
@@ -412,7 +431,11 @@ const AdminClubVip: React.FC = () => {
 
                         <div className="flex gap-4 mt-8 pt-6 border-t border-white/5">
                            <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 bg-gray-800 text-gray-400 font-bold rounded-2xl uppercase text-xs">Cancelar</button>
-                           <button type="submit" onClick={handleSaveEvent} disabled={isBulkProcessing} className="flex-[2] py-4 bg-primary text-white font-black rounded-2xl shadow-xl uppercase text-xs tracking-widest">{isBulkProcessing ? 'SALVANDO...' : 'CONFIRMAR'}</button>
+                           <button type="submit" onClick={() => {
+                               // Simulação de clique no submit
+                               const form = document.querySelector('form');
+                               if (form) handleSaveEvent({ preventDefault: () => {} } as any);
+                           }} disabled={isBulkProcessing} className="flex-[2] py-4 bg-primary text-white font-black rounded-2xl shadow-xl uppercase text-xs tracking-widest">{isBulkProcessing ? 'SALVANDO...' : 'CONFIRMAR'}</button>
                         </div>
                     </div>
                 </div>
