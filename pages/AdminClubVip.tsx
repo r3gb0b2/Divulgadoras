@@ -70,16 +70,22 @@ const AdminClubVip: React.FC = () => {
 
     const handleToggleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.checked) {
-            setSelectedIds(new Set(filteredMembers.map(m => m.id)));
+            // SÓ PODE SELECIONAR QUEM TEM PAGAMENTO CONFIRMADO
+            const validIds = filteredMembers
+                .filter(m => m.status === 'confirmed')
+                .map(m => m.id);
+            setSelectedIds(new Set(validIds));
         } else {
             setSelectedIds(new Set());
         }
     };
 
-    const handleToggleSelectOne = (id: string) => {
+    const handleToggleSelectOne = (membership: VipMembership) => {
+        if (membership.status !== 'confirmed') return;
+        
         const next = new Set(selectedIds);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
+        if (next.has(membership.id)) next.delete(membership.id);
+        else next.add(membership.id);
         setSelectedIds(next);
     };
 
@@ -159,14 +165,15 @@ const AdminClubVip: React.FC = () => {
                 <table border="1">
                     <thead>
                         <tr style="background-color: #7e39d5; color: white; font-weight: bold;">
-                            <th>Data Adesão</th>
+                            <th>Data Cadastro</th>
+                            <th>Status Pagto</th>
                             <th>Evento VIP</th>
                             <th>Membro</th>
                             <th>E-mail</th>
                             <th>WhatsApp</th>
                             <th>Instagram</th>
                             <th>Código Cortesia</th>
-                            <th>Status</th>
+                            <th>Ingresso Enviado?</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -174,17 +181,19 @@ const AdminClubVip: React.FC = () => {
 
         filteredMembers.forEach(m => {
             const date = (m.submittedAt as any)?.toDate?.().toLocaleString('pt-BR') || 'N/A';
-            const status = m.isBenefitActive ? 'ATIVO' : 'PENDENTE';
+            const statusPagto = m.status === 'confirmed' ? 'PAGO' : 'PENDENTE';
+            const statusCortesia = m.isBenefitActive ? 'SIM' : 'NÃO';
             table += `
                 <tr>
                     <td>${date}</td>
+                    <td>${statusPagto}</td>
                     <td>${m.vipEventName}</td>
                     <td>${m.promoterName}</td>
                     <td>${m.promoterEmail}</td>
                     <td>${m.promoterWhatsapp || ''}</td>
                     <td>${m.promoterInstagram || ''}</td>
                     <td style="font-family: monospace;">${m.benefitCode || ''}</td>
-                    <td>${status}</td>
+                    <td>${statusCortesia}</td>
                 </tr>
             `;
         });
@@ -194,7 +203,7 @@ const AdminClubVip: React.FC = () => {
         const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
         const link = document.createElement("a");
         link.href = URL.createObjectURL(blob);
-        link.download = `membros_vip_${new Date().getTime()}.xls`;
+        link.download = `gestao_clube_vip_${new Date().getTime()}.xls`;
         link.click();
     };
 
@@ -237,7 +246,7 @@ const AdminClubVip: React.FC = () => {
                     )}
                     {activeTab === 'members' && selectedIds.size > 0 && (
                         <button onClick={handleBulkActivate} disabled={isBulkProcessing} className="flex-1 md:flex-none px-6 py-3 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
-                            {isBulkProcessing ? 'PROCESSANDO...' : `ATIVAR ${selectedIds.size} CORTESIAS`}
+                            {isBulkProcessing ? 'PROCESSANDO...' : `LIBERAR ${selectedIds.size} INGRESSOS`}
                         </button>
                     )}
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
@@ -276,12 +285,12 @@ const AdminClubVip: React.FC = () => {
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
                                         <th className="px-6 py-5 w-10">
-                                            <input type="checkbox" checked={filteredMembers.length > 0 && selectedIds.size === filteredMembers.length} onChange={handleToggleSelectAll} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
+                                            <input type="checkbox" checked={filteredMembers.length > 0 && selectedIds.size === filteredMembers.filter(m => m.status === 'confirmed').length} onChange={handleToggleSelectAll} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
                                         </th>
                                         <th className="px-6 py-5">Comprador</th>
                                         <th className="px-6 py-5">Contatos</th>
-                                        <th className="px-6 py-5">Evento VIP</th>
-                                        <th className="px-6 py-5">Status Cortesia</th>
+                                        <th className="px-6 py-5">Status Pagto</th>
+                                        <th className="px-6 py-5">Status Ingresso</th>
                                         <th className="px-6 py-5 text-right">Data</th>
                                     </tr>
                                 </thead>
@@ -294,7 +303,13 @@ const AdminClubVip: React.FC = () => {
                                         filteredMembers.map(m => (
                                             <tr key={m.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.has(m.id) ? 'bg-primary/5' : ''}`}>
                                                 <td className="px-6 py-5">
-                                                    <input type="checkbox" checked={selectedIds.has(m.id)} onChange={() => handleToggleSelectOne(m.id)} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
+                                                    <input 
+                                                        type="checkbox" 
+                                                        checked={selectedIds.has(m.id)} 
+                                                        onChange={() => handleToggleSelectOne(m)} 
+                                                        disabled={m.status !== 'confirmed'}
+                                                        className={`w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary ${m.status !== 'confirmed' ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}`} 
+                                                    />
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
@@ -309,15 +324,18 @@ const AdminClubVip: React.FC = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5">
-                                                    <p className="text-primary font-black text-[10px] uppercase tracking-tighter truncate">{m.vipEventName}</p>
-                                                    <p className="text-[9px] text-gray-600 uppercase font-black tracking-widest mt-1">{organizations[m.organizationId] || 'Venda Direta'}</p>
+                                                    {m.status === 'confirmed' ? (
+                                                        <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">PAGO</span>
+                                                    ) : (
+                                                        <span className="px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-400 border border-orange-800 text-[8px] font-black uppercase tracking-widest">PENDENTE (NÃO FINALIZOU)</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <div className="flex flex-col gap-1.5">
                                                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border w-fit ${m.isBenefitActive ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-amber-900/40 text-amber-400 border-amber-800'}`}>
-                                                            {m.isBenefitActive ? 'CORTESIA ATIVA' : 'PENDENTE LIBERAÇÃO'}
+                                                            {m.isBenefitActive ? 'ENVIADO' : 'AGUARDANDO ADMIN'}
                                                         </span>
-                                                        <p className="text-[11px] font-mono text-gray-300 font-bold select-all">{m.benefitCode || 'Aguardando...'}</p>
+                                                        <p className="text-[11px] font-mono text-gray-300 font-bold select-all">{m.benefitCode || (m.status === 'confirmed' ? 'Aguardando...' : 'N/A')}</p>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5 text-right">

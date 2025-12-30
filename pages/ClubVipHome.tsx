@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { findPromotersByEmail, createVipPromoter } from '../services/promoterService';
-import { getActiveVipEvents, checkVipMembership } from '../services/vipService';
+import { getActiveVipEvents, checkVipMembership, createInitialVipMembership } from '../services/vipService';
 import { Promoter, VipEvent } from '../types';
 import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
@@ -112,6 +112,19 @@ const ClubVipHome: React.FC = () => {
             await firestore.collection('promoters').doc(pId).update({
                 whatsapp: sanitizedWhatsapp,
                 instagram: sanitizedInstagram
+            });
+
+            // CRIAÇÃO DO REGISTRO PENDENTE (Lead no Painel Admin)
+            await createInitialVipMembership({
+                vipEventId: selectedEvent.id,
+                vipEventName: selectedEvent.name,
+                promoterId: pId,
+                promoterName: name.trim(),
+                promoterEmail: email.toLowerCase().trim(),
+                promoterWhatsapp: sanitizedWhatsapp,
+                promoterInstagram: sanitizedInstagram,
+                organizationId: 'club-vip-global',
+                status: 'pending'
             });
 
             const finalPromoter = { id: pId, name, email, whatsapp: sanitizedWhatsapp, instagram: sanitizedInstagram } as Promoter;

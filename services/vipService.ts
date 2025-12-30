@@ -42,8 +42,22 @@ export const checkVipMembership = async (email: string, vipEventId: string): Pro
     return { id: snap.docs[0].id, ...snap.docs[0].data() } as VipMembership;
 };
 
+/**
+ * Cria o registro inicial do membro antes mesmo do Pix.
+ * Se o usuário desistir no pagamento, o admin ainda vê os dados.
+ */
+export const createInitialVipMembership = async (data: Partial<VipMembership>) => {
+    const docId = `${data.promoterId}_${data.vipEventId}`;
+    return firestore.collection(COLLECTION_MEMBERSHIPS).doc(docId).set({
+        ...data,
+        status: 'pending',
+        isBenefitActive: false,
+        submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+};
+
 export const getAllVipMemberships = async (vipEventId?: string) => {
-    // FIX: Explicitamente tipado como Query para evitar erro de reatribuição de CollectionReference
     let query: firebase.firestore.Query = firestore.collection(COLLECTION_MEMBERSHIPS);
     
     if (vipEventId && vipEventId !== 'all') {
@@ -53,7 +67,6 @@ export const getAllVipMemberships = async (vipEventId?: string) => {
     const snap = await query.get();
     const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipMembership));
     
-    // Ordenação em memória robusta para lidar com dados legados e timestamps do Firestore
     results.sort((a, b) => {
         const getTime = (ts: any) => {
             if (!ts) return 0;
