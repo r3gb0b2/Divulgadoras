@@ -19,7 +19,7 @@ import {
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
     TicketIcon, RefreshIcon, ClockIcon, UserIcon,
     BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon,
-    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon
+    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon
 } from '../components/Icons';
 
 const AdminClubVip: React.FC = () => {
@@ -80,18 +80,19 @@ const AdminClubVip: React.FC = () => {
             const matchesSearch = 
                 (m.promoterName || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
                 (m.promoterEmail || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (m.promoterWhatsapp || '').includes(searchQuery);
+                (m.promoterWhatsapp || '').includes(searchQuery) ||
+                (m.benefitCode || '').toLowerCase().includes(searchQuery.toLowerCase());
             
-            return matchesStatus && matchesBenefit && matchesSearch;
+            const matchesEvent = selectedEventId === 'all' || m.vipEventId === selectedEventId;
+            
+            return matchesStatus && matchesBenefit && matchesSearch && matchesEvent;
         });
-    }, [memberships, filterStatus, filterBenefit, searchQuery]);
+    }, [memberships, filterStatus, filterBenefit, searchQuery, selectedEventId]);
 
     // --- DASHBOARD DE FATURAMENTO ---
     const financialStats = useMemo(() => {
         const confirmed = memberships.filter(m => m.status === 'confirmed');
         const pending = memberships.filter(m => m.status === 'pending');
-        
-        // Mapeia preços dos eventos para cálculo
         const priceMap = vipEvents.reduce((acc, e) => ({...acc, [e.id]: e.price}), {} as Record<string, number>);
         
         const totalBilled = confirmed.reduce((acc, m) => acc + (priceMap[m.vipEventId] || 0), 0);
@@ -106,22 +107,34 @@ const AdminClubVip: React.FC = () => {
         };
     }, [memberships, vipEvents]);
 
-    // --- AÇÕES EM MASSA ---
-    const handleToggleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.checked) {
-            const validIds = filteredMembers.filter(m => m.status === 'confirmed').map(m => m.id);
-            setSelectedIds(new Set(validIds));
-        } else {
-            setSelectedIds(new Set());
-        }
-    };
-
-    const handleToggleSelectOne = (membership: VipMembership) => {
+    // --- AÇÕES DE NOTIFICAÇÃO ---
+    const handleManualNotifySingle = async (membership: VipMembership) => {
         if (membership.status !== 'confirmed') return;
-        const next = new Set(selectedIds);
-        if (next.has(membership.id)) next.delete(membership.id);
-        else next.add(membership.id);
-        setSelectedIds(next);
+        
+        const btn = document.getElementById(`notify-btn-${membership.id}`);
+        if(btn) btn.classList.add('animate-spin');
+
+        try {
+            // No banco, o ID do documento é "promoterId_vipEventId"
+            const docId = `${membership.promoterId}_${membership.vipEventId}`;
+            
+            await updateVipMembership(docId, { isBenefitActive: true });
+            await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
+            
+            const notifyActivation = httpsCallable(functions, 'notifyVipActivation');
+            const result: any = await notifyActivation({ membershipId: docId });
+
+            if (result.data?.success) {
+                alert(`Sucesso! E-mail enviado para ${membership.promoterName}`);
+            } else {
+                alert(`Aviso: Cupom ativado no painel, mas o disparo de e-mail retornou: ${result.data?.error || 'Erro desconhecido'}`);
+            }
+            await fetchData();
+        } catch (e: any) {
+            alert(`Falha técnica ao processar: ${e.message}`);
+        } finally {
+            if(btn) btn.classList.remove('animate-spin');
+        }
     };
 
     const handleBulkNotify = async () => {
@@ -134,16 +147,19 @@ const AdminClubVip: React.FC = () => {
             let successCount = 0;
 
             for (const id of Array.from(selectedIds)) {
-                await updateVipMembership(id, { isBenefitActive: true });
                 const m = memberships.find(item => item.id === id);
-                if (m) await updatePromoter(m.promoterId, { emocoesBenefitActive: true });
-                await notifyActivation({ membershipId: id });
-                successCount++;
+                if (m) {
+                    const docId = `${m.promoterId}_${m.vipEventId}`;
+                    await updateVipMembership(docId, { isBenefitActive: true });
+                    await updatePromoter(m.promoterId, { emocoesBenefitActive: true });
+                    await notifyActivation({ membershipId: docId });
+                    successCount++;
+                }
             }
 
             setSelectedIds(new Set());
             await fetchData();
-            alert(`${successCount} e-mails de cortesia enviados com sucesso!`);
+            alert(`Operação concluída! ${successCount} ativações processadas.`);
         } catch (e) {
             alert("Erro ao processar notificações em massa.");
         } finally {
@@ -151,79 +167,138 @@ const AdminClubVip: React.FC = () => {
         }
     };
 
-    const handleManualNotifySingle = async (membership: VipMembership) => {
-        if (membership.status !== 'confirmed') return;
-        setIsBulkProcessing(true);
-        try {
-            const notifyActivation = httpsCallable(functions, 'notifyVipActivation');
-            await updateVipMembership(membership.id, { isBenefitActive: true });
-            await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
-            await notifyActivation({ membershipId: membership.id });
-            alert(`E-mail enviado para ${membership.promoterName}`);
-            await fetchData();
-        } catch (e) {
-            alert("Erro ao enviar notificação.");
-        } finally {
-            setIsBulkProcessing(false);
+    // --- DOWNLOAD DE CÓDIGOS (CSV PARA IMPORTAÇÃO) ---
+    const handleDownloadCodesCSV = () => {
+        const target = selectedIds.size > 0 ? Array.from(selectedIds).map(id => memberships.find(m => m.id === id)).filter(Boolean) : filteredMembers.filter(m => m.status === 'confirmed');
+        
+        if (target.length === 0) {
+            alert("Nenhum código para exportar.");
+            return;
         }
+
+        const headers = ["Nome", "E-mail", "WhatsApp", "Evento VIP", "Cupom/Código"];
+        const rows = target.map(m => `"${m!.promoterName}","${m!.promoterEmail}","${m!.promoterWhatsapp || ''}","${m!.vipEventName}","${m!.benefitCode || ''}"`);
+        const csv = [headers.join(','), ...rows].join('\n');
+        
+        const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `cupons_clube_vip_${new Date().getTime()}.csv`;
+        link.click();
     };
 
-    // --- DOWNLOAD RELATÓRIO FINANCEIRO ---
-    const handleDownloadFinancialExcel = () => {
-        if (memberships.length === 0) return;
+    // --- DOWNLOAD RELATÓRIO FINANCEIRO (PDF) ---
+    const handleDownloadFinancialPDF = () => {
         const confirmed = memberships.filter(m => m.status === 'confirmed');
         const priceMap = vipEvents.reduce((acc, e) => ({...acc, [e.id]: e.price}), {} as Record<string, number>);
+        const now = new Date().toLocaleString('pt-BR');
 
-        let table = `
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) return;
+
+        const html = `
+            <!DOCTYPE html>
             <html>
-            <head><meta charset="UTF-8"></head>
+            <head>
+                <title>Relatório Financeiro Clube VIP</title>
+                <style>
+                    body { font-family: 'Inter', -apple-system, sans-serif; color: #1a1a1a; padding: 40px; margin: 0; background: #fff; }
+                    .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid #7e39d5; padding-bottom: 20px; margin-bottom: 30px; }
+                    .logo-area h1 { margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: -1px; }
+                    .logo-area span { color: #7e39d5; }
+                    .report-info { text-align: right; font-size: 10px; color: #666; text-transform: uppercase; font-weight: bold; }
+                    
+                    .stats-grid { display: grid; grid-template-cols: repeat(3, 1fr); gap: 20px; margin-bottom: 40px; }
+                    .stat-card { background: #f9f9fb; border: 1px solid #eee; padding: 20px; border-radius: 15px; }
+                    .stat-card label { display: block; font-size: 9px; font-weight: 800; color: #999; text-transform: uppercase; margin-bottom: 5px; }
+                    .stat-card .value { font-size: 22px; font-weight: 900; color: #1a1a1a; }
+                    .stat-card .value.green { color: #16a34a; }
+
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 10px; }
+                    th { background: #f4f4f7; padding: 12px 10px; text-align: left; text-transform: uppercase; font-weight: 800; color: #555; border-bottom: 2px solid #eee; }
+                    td { padding: 10px; border-bottom: 1px solid #eee; color: #333; }
+                    tr:nth-child(even) { background-color: #fafafa; }
+                    .footer-table { background: #7e39d5 !important; color: #fff !important; font-weight: bold; font-size: 14px; }
+                    .footer-table td { color: #fff; border: none; padding: 20px; }
+                    
+                    @media print {
+                        .no-print { display: none; }
+                        body { padding: 0; }
+                    }
+                </style>
+            </head>
             <body>
-                <table border="1">
+                <div class="header">
+                    <div class="logo-area"><h1>EQUIPE <span>CERTA</span></h1><p style="margin:0; font-size:10px; font-weight:bold; color:#7e39d5;">CONTROLE FINANCEIRO CLUBE VIP</p></div>
+                    <div class="report-info">Gerado em: ${now}<br>Status: Pagamentos Confirmados</div>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card"><label>Total Bruto</label><div class="value green">R$ ${financialStats.totalBilled.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div></div>
+                    <div class="stat-card"><label>Vendas Confirmadas</label><div class="value">${financialStats.confirmedCount}</div></div>
+                    <div class="stat-card"><label>Ticket Médio</label><div class="value">R$ ${(financialStats.totalBilled / (financialStats.confirmedCount || 1)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div></div>
+                </div>
+
+                <table>
                     <thead>
-                        <tr style="background-color: #22c55e; color: white; font-weight: bold;">
-                            <th colspan="6" style="font-size: 18px; padding: 10px;">RELATÓRIO DE FATURAMENTO - CLUBE VIP</th>
-                        </tr>
-                        <tr style="background-color: #f3f4f6; font-weight: bold;">
-                            <th>Data Pagto</th>
+                        <tr>
+                            <th>Data</th>
                             <th>Evento VIP</th>
                             <th>Cliente</th>
-                            <th>E-mail</th>
                             <th>ID Transação</th>
+                            <th>Cupom Gerado</th>
                             <th>Valor (R$)</th>
                         </tr>
                     </thead>
                     <tbody>
+                        ${confirmed.map(m => `
+                            <tr>
+                                <td>${(m.submittedAt as any)?.toDate?.().toLocaleDateString('pt-BR')}</td>
+                                <td style="font-weight:bold;">${m.vipEventName}</td>
+                                <td>${m.promoterName}</td>
+                                <td style="font-family:monospace; color:#666;">${m.paymentId || 'MANUAL'}</td>
+                                <td style="font-family:monospace; font-weight:bold; color:#7e39d5;">${m.benefitCode || '---'}</td>
+                                <td style="font-weight:bold;">${(priceMap[m.vipEventId] || 0).toFixed(2).replace('.', ',')}</td>
+                            </tr>
+                        `).join('')}
+                        <tr class="footer-table">
+                            <td colspan="5" style="text-align:right;">TOTAL ACUMULADO:</td>
+                            <td>R$ ${financialStats.totalBilled.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                
+                <p style="text-align:center; font-size:9px; color:#aaa; margin-top:50px; text-transform:uppercase; font-weight:bold; letter-spacing:2px;">
+                    Relatório gerado automaticamente pelo sistema de gestão Equipe Certa.
+                </p>
+
+                <script>
+                    window.onload = function() { window.print(); }
+                </script>
+            </body>
+            </html>
         `;
 
-        confirmed.forEach(m => {
-            const date = (m.submittedAt as any)?.toDate?.().toLocaleString('pt-BR') || 'N/A';
-            const price = priceMap[m.vipEventId] || 0;
-            table += `
-                <tr>
-                    <td>${date}</td>
-                    <td>${m.vipEventName}</td>
-                    <td>${m.promoterName}</td>
-                    <td>${m.promoterEmail}</td>
-                    <td style="font-family: monospace;">${m.paymentId || 'Manual'}</td>
-                    <td>${price.toFixed(2).replace('.', ',')}</td>
-                </tr>
-            `;
-        });
+        printWindow.document.write(html);
+        printWindow.document.close();
+    };
 
-        const total = confirmed.reduce((acc, m) => acc + (priceMap[m.vipEventId] || 0), 0);
-        table += `
-                <tr style="background-color: #f0fdf4; font-weight: bold;">
-                    <td colspan="5" style="text-align: right; padding: 10px;">TOTAL FATURADO:</td>
-                    <td style="color: #166534;">R$ ${total.toFixed(2).replace('.', ',')}</td>
-                </tr>
-            </tbody></table></body></html>
-        `;
+    const handleToggleSelectOne = (m: VipMembership) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(m.id)) newSet.delete(m.id);
+        else newSet.add(m.id);
+        setSelectedIds(newSet);
+    };
 
-        const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `financeiro_clube_vip_${new Date().getTime()}.xls`;
-        link.click();
+    const handleToggleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            const selectableIds = filteredMembers
+                .filter(m => m.status === 'confirmed')
+                .map(m => m.id);
+            setSelectedIds(new Set(selectableIds));
+        } else {
+            setSelectedIds(new Set());
+        }
     };
 
     const handleSaveEvent = async (e: React.FormEvent) => {
@@ -270,9 +345,12 @@ const AdminClubVip: React.FC = () => {
                         Gestão Clube VIP
                     </h1>
                 </div>
-                <div className="flex gap-2 w-full md:w-auto">
-                    <button onClick={handleDownloadFinancialExcel} className="flex-1 md:flex-none px-6 py-3 bg-green-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-green-500 transition-all">
-                        <ChartBarIcon className="w-4 h-4" /> Relatório Financeiro
+                <div className="flex flex-wrap gap-2 w-full md:w-auto">
+                    <button onClick={handleDownloadCodesCSV} className="flex-1 md:flex-none px-4 py-3 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-indigo-500 transition-all">
+                        <DocumentDuplicateIcon className="w-4 h-4" /> Exportar Cupons
+                    </button>
+                    <button onClick={handleDownloadFinancialPDF} className="flex-1 md:flex-none px-4 py-3 bg-white text-dark font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-gray-100 transition-all">
+                        <ChartBarIcon className="w-4 h-4" /> Baixar PDF Financeiro
                     </button>
                     {activeTab === 'events' && (
                         <button onClick={() => { setEditingEvent({ benefits: [] }); setIsModalOpen(true); }} className="flex-1 md:flex-none px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
@@ -299,9 +377,9 @@ const AdminClubVip: React.FC = () => {
                 </div>
                 <div className="bg-secondary/60 border border-white/5 p-6 rounded-[2rem] shadow-xl relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-4 opacity-10"><ClockIcon className="w-12 h-12 text-primary" /></div>
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Aguardando Envio</p>
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Aguardando Ativação</p>
                     <p className="text-3xl font-black text-white">{financialStats.waitingActivation}</p>
-                    <p className="text-[10px] text-primary font-bold mt-2 uppercase">Membros sem cortesia ativa</p>
+                    <p className="text-[10px] text-primary font-bold mt-2 uppercase">Membros com cupom pendente</p>
                 </div>
                 <div className="bg-secondary/60 border border-white/5 p-6 rounded-[2rem] shadow-xl">
                     <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Taxa de Conversão</p>
@@ -340,7 +418,7 @@ const AdminClubVip: React.FC = () => {
                             <div className="relative">
                                 <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                 <input 
-                                    type="text" placeholder="BUSCAR MEMBRO..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                    type="text" placeholder="BUSCAR NOME OU CÓDIGO..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                                     className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs font-black uppercase focus:ring-1 focus:ring-primary outline-none"
                                 />
                             </div>
@@ -363,7 +441,8 @@ const AdminClubVip: React.FC = () => {
                                             <input type="checkbox" checked={filteredMembers.length > 0 && selectedIds.size === filteredMembers.filter(m => m.status === 'confirmed').length} onChange={handleToggleSelectAll} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
                                         </th>
                                         <th className="px-6 py-5">Membro</th>
-                                        <th className="px-6 py-5">Contatos</th>
+                                        <th className="px-6 py-5">Código</th>
+                                        <th className="px-6 py-5 text-center">Contatos</th>
                                         <th className="px-6 py-5">Pagamento</th>
                                         <th className="px-6 py-5">Cortesia</th>
                                         <th className="px-6 py-5 text-right">Ações</th>
@@ -371,9 +450,9 @@ const AdminClubVip: React.FC = () => {
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {isLoading ? (
-                                        <tr><td colSpan={6} className="text-center py-20 text-gray-500 font-bold uppercase text-xs tracking-widest animate-pulse">Carregando membros...</td></tr>
+                                        <tr><td colSpan={7} className="text-center py-20 text-gray-500 font-bold uppercase text-xs tracking-widest animate-pulse">Carregando membros...</td></tr>
                                     ) : filteredMembers.length === 0 ? (
-                                        <tr><td colSpan={6} className="text-center py-20 text-gray-500 font-bold uppercase text-xs tracking-widest">Nenhum membro encontrado</td></tr>
+                                        <tr><td colSpan={7} className="text-center py-20 text-gray-500 font-bold uppercase text-xs tracking-widest">Nenhum membro encontrado</td></tr>
                                     ) : (
                                         filteredMembers.map(m => (
                                             <tr key={m.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.has(m.id) ? 'bg-primary/5' : ''}`}>
@@ -391,7 +470,14 @@ const AdminClubVip: React.FC = () => {
                                                     <p className="text-[9px] text-primary font-black uppercase tracking-widest mt-1 truncate max-w-[150px]">{m.vipEventName}</p>
                                                 </td>
                                                 <td className="px-6 py-5">
-                                                    <div className="flex gap-2">
+                                                    {m.benefitCode ? (
+                                                        <span className="px-2 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest">{m.benefitCode}</span>
+                                                    ) : (
+                                                        <span className="text-gray-600 text-[10px] font-bold">---</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-5">
+                                                    <div className="flex justify-center gap-2">
                                                         <a href={`https://wa.me/55${m.promoterWhatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="p-2 bg-green-900/30 text-green-400 rounded-lg border border-green-800/30 hover:bg-green-600 hover:text-white transition-all"><WhatsAppIcon className="w-3.5 h-3.5"/></a>
                                                         {m.promoterInstagram && (
                                                             <a href={`https://instagram.com/${m.promoterInstagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="p-2 bg-pink-900/30 text-pink-400 rounded-lg border border-pink-800/30 hover:bg-pink-600 hover:text-white transition-all"><InstagramIcon className="w-3.5 h-3.5"/></a>
@@ -418,13 +504,14 @@ const AdminClubVip: React.FC = () => {
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-5 text-right">
-                                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                    <div className="flex justify-end gap-2 opacity-100 transition-all">
                                                         {m.status === 'confirmed' && (
                                                             <button 
+                                                                id={`notify-btn-${m.id}`}
                                                                 onClick={() => handleManualNotifySingle(m)} 
                                                                 disabled={isBulkProcessing}
                                                                 className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 shadow-lg shadow-indigo-900/20"
-                                                                title="Re-enviar Notificação de Acesso"
+                                                                title="Enviar Notificação de Acesso Agora"
                                                             >
                                                                 <MegaphoneIcon className="w-4 h-4" />
                                                             </button>
