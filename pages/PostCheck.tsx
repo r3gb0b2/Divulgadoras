@@ -583,7 +583,7 @@ const PostCheck: React.FC = () => {
                                             {m.isBenefitActive ? (
                                                 <div className="p-4 bg-green-900/20 border border-green-500/30 rounded-2xl text-center">
                                                     <CheckCircleIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                                                    <p className="text-white font-black uppercase tracking-widest text-sm">CORTESIA DISPONÍVEL! 🚀</p>
+                                                    <p className="text-white font-black uppercase tracking-widest text-sm">INGRESSO PROMOCIONAL DISPONÍVEL! 🚀</p>
                                                 </div>
                                             ) : (
                                                 <div className="p-4 bg-orange-900/20 border border-orange-500/30 rounded-2xl text-center">
@@ -624,7 +624,7 @@ const PostCheck: React.FC = () => {
                                                         rel="noreferrer"
                                                         className="block w-full py-4 bg-green-600 text-white font-black rounded-2xl text-center shadow-lg shadow-green-900/20 hover:bg-green-500 transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2"
                                                     >
-                                                        <ExternalLinkIcon className="w-4 h-4" /> RESGATAR CORTESIA
+                                                        <ExternalLinkIcon className="w-4 h-4" /> RESGATAR INGRESSO PROMOCIONAL
                                                     </a>
                                                 )}
                                                 

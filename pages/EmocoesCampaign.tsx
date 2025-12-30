@@ -260,6 +260,9 @@ const EmocoesCampaign: React.FC = () => {
                             </div>
                             <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-none">ADESÃO CONFIRMADA!</h2>
                             <p className="text-gray-400 font-medium">Seu cupom de cortesia está em processamento e você receberá um e-mail assim que ele for ativado.</p>
+                            <div className="p-4 bg-green-500/10 rounded-2xl border border-green-500/30">
+                                <p className="text-green-400 font-black uppercase tracking-widest text-xs">INGRESSO PROMOCIONAL DISPONÍVEL! 🚀</p>
+                            </div>
                             <button onClick={() => navigate('/status')} className="w-full py-5 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 uppercase text-xs tracking-widest">VER MEU STATUS VIP</button>
                         </div>
                     )}

@@ -138,7 +138,7 @@ const ClubVipStatus: React.FC = () => {
                                         {m.isBenefitActive ? (
                                             <div className="p-5 bg-green-500/10 rounded-2xl border border-green-500/30 text-center">
                                                 <CheckCircleIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                                                <p className="text-green-400 font-black uppercase tracking-widest text-xs">CORTESIA DISPONÍVEL! 🚀</p>
+                                                <p className="text-green-400 font-black uppercase tracking-widest text-xs">INGRESSO PROMOCIONAL DISPONÍVEL! 🚀</p>
                                             </div>
                                         ) : (
                                             <div className="p-5 bg-orange-500/10 rounded-2xl border border-orange-500/30 text-center">

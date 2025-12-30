@@ -295,7 +295,7 @@ const ClubVipHome: React.FC = () => {
                                 <h2 className="text-4xl font-black text-white uppercase tracking-tighter leading-none">ADESÃO CONFIRMADA!</h2>
                                 <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-4">Bem-vindo ao Clube VIP</p>
                             </div>
-                            <p className="text-gray-300 font-medium px-4">Seu acesso foi processado. Você receberá um e-mail com as instruções de resgate assim que sua cortesia oficial for ativada pelo sistema.</p>
+                            <p className="text-gray-300 font-medium px-4">Seu acesso foi processado. Você receberá um e-mail com as instruções de resgate assim que sua cortesia oficial for ativado pelo sistema.</p>
                             <button onClick={() => navigate('/clubvip/status')} className="w-full py-6 bg-primary text-white font-black rounded-3xl shadow-2xl shadow-primary/40 uppercase text-xs tracking-widest transform active:scale-95">MEU STATUS VIP</button>
                         </div>
                     )}
