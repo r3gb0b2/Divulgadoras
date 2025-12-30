@@ -150,7 +150,7 @@ const EmocoesCampaign: React.FC = () => {
                 <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/20 p-10 text-center">
                     <SparklesIcon className="w-12 h-12 text-primary mx-auto mb-4" />
                     <h1 className="text-4xl font-black text-white uppercase tracking-tighter">Clube <span className="text-primary">VIP</span></h1>
-                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-[0.3em] mt-2">Benefícios e Cortesias</p>
+                    <p className="text-gray-400 font-bold uppercase text-[10px] tracking-[0.3em] mt-2">Benefícios e Ingressos Promocionais</p>
                 </div>
 
                 <div className="p-8">
@@ -191,7 +191,7 @@ const EmocoesCampaign: React.FC = () => {
                     {step === 'identify' && (
                         <form onSubmit={handleCheckEmail} className="space-y-4 text-center">
                             <h2 className="text-xl font-black text-white uppercase">Identificação</h2>
-                            <p className="text-gray-400 text-xs mb-6 font-medium">Informe seu e-mail para vincularmos sua cortesia.</p>
+                            <p className="text-gray-400 text-xs mb-6 font-medium">Informe seu e-mail para vincularmos seu ingresso promocional.</p>
                             <input 
                                 type="email" required value={email} onChange={e => setEmail(e.target.value)}
                                 className="w-full p-5 bg-dark border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold text-center"
@@ -206,7 +206,7 @@ const EmocoesCampaign: React.FC = () => {
                     {step === 'confirm_data' && (
                         <form onSubmit={handleProceedToPayment} className="space-y-4">
                             <h2 className="text-xl font-black text-white text-center uppercase mb-2">Seus Dados de Acesso</h2>
-                            <p className="text-center text-gray-400 text-[10px] mb-6 uppercase font-bold tracking-widest">Precisamos de seus contatos para liberar o cupom de cortesia.</p>
+                            <p className="text-center text-gray-400 text-[10px] mb-6 uppercase font-bold tracking-widest">Precisamos de seus contatos para liberar o cupom promocional.</p>
                             
                             <div className="relative">
                                 <UserIcon className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
@@ -245,6 +245,7 @@ const EmocoesCampaign: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
+                            <p className="text-gray-500 text-xs font-bold uppercase mt-1">Seu ingresso promocional será liberado após o Pix</p>
 
                             <div className="flex items-center justify-center gap-3 py-4 text-blue-400 font-bold animate-pulse">
                                 <RefreshIcon className="w-5 h-5 animate-spin" />
@@ -259,7 +260,7 @@ const EmocoesCampaign: React.FC = () => {
                                 <CheckCircleIcon className="w-12 h-12 text-green-500" />
                             </div>
                             <h2 className="text-3xl font-black text-white uppercase tracking-tighter leading-none">ADESÃO CONFIRMADA!</h2>
-                            <p className="text-gray-400 font-medium">Seu cupom de cortesia está em processamento e você receberá um e-mail assim que ele for ativado.</p>
+                            <p className="text-gray-400 font-medium">Seu ingresso promocional está em processamento e você receberá um e-mail assim que ele for ativado.</p>
                             <div className="p-4 bg-green-500/10 rounded-2xl border border-green-500/30">
                                 <p className="text-green-400 font-black uppercase tracking-widest text-xs">INGRESSO PROMOCIONAL DISPONÍVEL! 🚀</p>
                             </div>

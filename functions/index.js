@@ -33,6 +33,7 @@ async function sendVipEmail(email, subject, html) {
         await db.collection("mail").add({
             to: email,
             message: {
+                from: "r3gb0b@gmail.com",
                 subject: subject,
                 html: html,
             }

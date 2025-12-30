@@ -610,7 +610,7 @@ const PostCheck: React.FC = () => {
 
                                             <div className="bg-dark/50 p-5 rounded-2xl border border-white/5 space-y-4">
                                                 <div>
-                                                    <p className="text-[10px] text-gray-500 font-black uppercase mb-2 ml-1">Seu Cupom de Cortesia:</p>
+                                                    <p className="text-[10px] text-gray-500 font-black uppercase mb-2 ml-1">Seu Cupom Promocional:</p>
                                                     <div className="p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all flex items-center justify-between">
                                                         <p className="text-lg font-black text-primary font-mono">{m.isBenefitActive ? (m.benefitCode || '---') : '******'}</p>
                                                         {m.isBenefitActive && <button onClick={() => { navigator.clipboard.writeText(m.benefitCode || ''); alert("Copiado!"); }} className="p-2 text-gray-500 hover:text-white"><DocumentDuplicateIcon className="w-4 h-4"/></button>}
@@ -642,7 +642,7 @@ const PostCheck: React.FC = () => {
                                 <div className="bg-secondary p-8 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
                                     <SparklesIcon className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
                                     <h3 className="text-xl font-black text-white uppercase tracking-tight">Entre para o Clube!</h3>
-                                    <p className="text-gray-400 text-sm mt-2 mb-6">Acesse benefícios exclusivos: cortesias, experiências e sorteios de camarim.</p>
+                                    <p className="text-gray-400 text-sm mt-2 mb-6">Acesse benefícios exclusivos: ingressos promocionais, experiências e sorteios de camarim.</p>
                                     <Link to="/promocao-emocoes" className="block w-full py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-primary/20">QUERO SER MEMBRO</Link>
                                 </div>
                             )}
