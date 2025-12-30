@@ -262,7 +262,7 @@ const ClubVipHome: React.FC = () => {
                         <div className="space-y-10 text-center animate-fadeIn">
                             <div>
                                 <p className="text-white font-black text-lg uppercase tracking-widest">Aguardando Pagamento</p>
-                                <p className="text-gray-500 text-xs font-bold uppercase mt-1">Seu ingresso promocional será liberado após o Pix</p>
+                                <p className="text-gray-500 text-xs font-bold uppercase mt-1">Seu ingresso promocional</p>
                             </div>
 
                             <div className="bg-white p-6 rounded-[3rem] inline-block mx-auto shadow-2xl border-4 border-primary/20">

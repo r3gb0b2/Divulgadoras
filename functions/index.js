@@ -26,7 +26,8 @@ function generateAlphanumericCode(length) {
 }
 
 /**
- * Envia e-mail via coleção 'mail'
+ * Envia e-mail via coleção 'mail' (Trigger Email Extension)
+ * Garantindo o remetente oficial r3gb0b@gmail.com
  */
 async function sendVipEmail(email, subject, html) {
     try {
@@ -38,7 +39,7 @@ async function sendVipEmail(email, subject, html) {
                 html: html,
             }
         });
-        console.log(`[Email VIP] Fila de envio para: ${email}`);
+        console.log(`[Email VIP] Fila de envio para: ${email} via r3gb0b@gmail.com`);
         return true;
     } catch (e) {
         console.error("[Email VIP] Erro ao enfileirar:", e);
@@ -215,7 +216,7 @@ exports.notifyVipActivation = functions.region("southamerica-east1").https.onCal
             </div>`
         );
         
-        console.log(`[Ativação VIP] Notificação enviada: ${email}`);
+        console.log(`[Ativação VIP] Notificação enviada: ${email} via r3gb0b@gmail.com`);
         return { success: true };
     } catch (e) {
         console.error("[Ativação VIP] Erro:", e);

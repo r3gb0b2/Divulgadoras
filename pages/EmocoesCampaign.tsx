@@ -245,7 +245,7 @@ const EmocoesCampaign: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
-                            <p className="text-gray-500 text-xs font-bold uppercase mt-1">Seu ingresso promocional será liberado após o Pix</p>
+                            <p className="text-gray-500 text-xs font-bold uppercase mt-1">Seu ingresso promocional</p>
 
                             <div className="flex items-center justify-center gap-3 py-4 text-blue-400 font-bold animate-pulse">
                                 <RefreshIcon className="w-5 h-5 animate-spin" />
