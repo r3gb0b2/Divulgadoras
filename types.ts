@@ -37,6 +37,8 @@ export interface VipMembership {
   isBenefitActive: boolean; 
   proofUrl?: string;
   benefitCode?: string;
+  // FIX: Added paymentId property to VipMembership interface to resolve TypeScript error in AdminClubVip.tsx
+  paymentId?: string;
   submittedAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
 }

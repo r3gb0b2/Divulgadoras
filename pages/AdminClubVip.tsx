@@ -17,9 +17,9 @@ import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { 
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
-    EyeIcon, TicketIcon, RefreshIcon, ClockIcon, UserIcon,
+    TicketIcon, RefreshIcon, ClockIcon, UserIcon,
     BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon,
-    WhatsAppIcon, InstagramIcon, DownloadIcon
+    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon
 } from '../components/Icons';
 
 const AdminClubVip: React.FC = () => {
@@ -32,7 +32,8 @@ const AdminClubVip: React.FC = () => {
     const [organizations, setOrganizations] = useState<Record<string, string>>({});
     
     const [isLoading, setIsLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState<'pending' | 'confirmed' | 'rejected' | 'all'>('all');
+    const [filterStatus, setFilterStatus] = useState<'pending' | 'confirmed' | 'all'>('all');
+    const [filterBenefit, setFilterBenefit] = useState<'active' | 'waiting' | 'all'>('all');
     const [selectedEventId, setSelectedEventId] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     
@@ -68,12 +69,47 @@ const AdminClubVip: React.FC = () => {
         if (!authLoading) fetchData();
     }, [authLoading, fetchData]);
 
+    // --- FILTROS ---
+    const filteredMembers = useMemo(() => {
+        return memberships.filter(m => {
+            const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
+            const matchesBenefit = filterBenefit === 'all' || 
+                (filterBenefit === 'active' && m.isBenefitActive === true) ||
+                (filterBenefit === 'waiting' && m.isBenefitActive === false && m.status === 'confirmed');
+            
+            const matchesSearch = 
+                (m.promoterName || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                (m.promoterEmail || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (m.promoterWhatsapp || '').includes(searchQuery);
+            
+            return matchesStatus && matchesBenefit && matchesSearch;
+        });
+    }, [memberships, filterStatus, filterBenefit, searchQuery]);
+
+    // --- DASHBOARD DE FATURAMENTO ---
+    const financialStats = useMemo(() => {
+        const confirmed = memberships.filter(m => m.status === 'confirmed');
+        const pending = memberships.filter(m => m.status === 'pending');
+        
+        // Mapeia preços dos eventos para cálculo
+        const priceMap = vipEvents.reduce((acc, e) => ({...acc, [e.id]: e.price}), {} as Record<string, number>);
+        
+        const totalBilled = confirmed.reduce((acc, m) => acc + (priceMap[m.vipEventId] || 0), 0);
+        const totalPending = pending.reduce((acc, m) => acc + (priceMap[m.vipEventId] || 0), 0);
+        
+        return {
+            totalBilled,
+            totalPending,
+            confirmedCount: confirmed.length,
+            pendingCount: pending.length,
+            waitingActivation: confirmed.filter(m => !m.isBenefitActive).length
+        };
+    }, [memberships, vipEvents]);
+
+    // --- AÇÕES EM MASSA ---
     const handleToggleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.checked) {
-            // SÓ PODE SELECIONAR QUEM TEM PAGAMENTO CONFIRMADO
-            const validIds = filteredMembers
-                .filter(m => m.status === 'confirmed')
-                .map(m => m.id);
+            const validIds = filteredMembers.filter(m => m.status === 'confirmed').map(m => m.id);
             setSelectedIds(new Set(validIds));
         } else {
             setSelectedIds(new Set());
@@ -82,67 +118,133 @@ const AdminClubVip: React.FC = () => {
 
     const handleToggleSelectOne = (membership: VipMembership) => {
         if (membership.status !== 'confirmed') return;
-        
         const next = new Set(selectedIds);
         if (next.has(membership.id)) next.delete(membership.id);
         else next.add(membership.id);
         setSelectedIds(next);
     };
 
-    const handleBulkActivate = async () => {
+    const handleBulkNotify = async () => {
         if (selectedIds.size === 0) return;
-        if (!window.confirm(`Deseja ATIVAR as cortesias de ${selectedIds.size} membros? Eles receberão um e-mail com o link de resgate.`)) return;
+        if (!window.confirm(`Enviar e-mail de acesso para ${selectedIds.size} membros selecionados?`)) return;
         
         setIsBulkProcessing(true);
         try {
             const notifyActivation = httpsCallable(functions, 'notifyVipActivation');
-            
-            await Promise.all(Array.from(selectedIds).map(async (id: string) => {
-                const membership = memberships.find(m => m.id === id);
-                if (membership) {
-                    await updateVipMembership(id, { isBenefitActive: true });
-                    await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
-                    // Gatilho de e-mail de ativação
-                    await notifyActivation({ membershipId: id });
-                }
-            }));
+            let successCount = 0;
+
+            for (const id of Array.from(selectedIds)) {
+                await updateVipMembership(id, { isBenefitActive: true });
+                const m = memberships.find(item => item.id === id);
+                if (m) await updatePromoter(m.promoterId, { emocoesBenefitActive: true });
+                await notifyActivation({ membershipId: id });
+                successCount++;
+            }
+
             setSelectedIds(new Set());
             await fetchData();
-            alert("Cortesias ativadas e e-mails enviados!");
+            alert(`${successCount} e-mails de cortesia enviados com sucesso!`);
         } catch (e) {
-            alert("Erro ao processar ativação.");
+            alert("Erro ao processar notificações em massa.");
         } finally {
             setIsBulkProcessing(false);
         }
     };
 
-    const handleSaveEvent = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editingEvent?.name) return;
-        
+    const handleManualNotifySingle = async (membership: VipMembership) => {
+        if (membership.status !== 'confirmed') return;
         setIsBulkProcessing(true);
         try {
-            if (editingEvent.id) {
-                await updateVipEvent(editingEvent.id, editingEvent);
-            } else {
-                await createVipEvent({
-                    name: editingEvent.name!,
-                    price: editingEvent.price || 0,
-                    description: editingEvent.description || '',
-                    benefits: editingEvent.benefits || [],
-                    pixKey: editingEvent.pixKey || '',
-                    externalSlug: editingEvent.externalSlug || '',
-                    isActive: editingEvent.isActive ?? true
-                });
-            }
-            setIsModalOpen(false);
-            setEditingEvent(null);
+            const notifyActivation = httpsCallable(functions, 'notifyVipActivation');
+            await updateVipMembership(membership.id, { isBenefitActive: true });
+            await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
+            await notifyActivation({ membershipId: membership.id });
+            alert(`E-mail enviado para ${membership.promoterName}`);
             await fetchData();
         } catch (e) {
-            alert("Erro ao salvar evento.");
+            alert("Erro ao enviar notificação.");
         } finally {
             setIsBulkProcessing(false);
         }
+    };
+
+    // --- DOWNLOAD RELATÓRIO FINANCEIRO ---
+    const handleDownloadFinancialExcel = () => {
+        if (memberships.length === 0) return;
+        const confirmed = memberships.filter(m => m.status === 'confirmed');
+        const priceMap = vipEvents.reduce((acc, e) => ({...acc, [e.id]: e.price}), {} as Record<string, number>);
+
+        let table = `
+            <html>
+            <head><meta charset="UTF-8"></head>
+            <body>
+                <table border="1">
+                    <thead>
+                        <tr style="background-color: #22c55e; color: white; font-weight: bold;">
+                            <th colspan="6" style="font-size: 18px; padding: 10px;">RELATÓRIO DE FATURAMENTO - CLUBE VIP</th>
+                        </tr>
+                        <tr style="background-color: #f3f4f6; font-weight: bold;">
+                            <th>Data Pagto</th>
+                            <th>Evento VIP</th>
+                            <th>Cliente</th>
+                            <th>E-mail</th>
+                            <th>ID Transação</th>
+                            <th>Valor (R$)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        confirmed.forEach(m => {
+            const date = (m.submittedAt as any)?.toDate?.().toLocaleString('pt-BR') || 'N/A';
+            const price = priceMap[m.vipEventId] || 0;
+            table += `
+                <tr>
+                    <td>${date}</td>
+                    <td>${m.vipEventName}</td>
+                    <td>${m.promoterName}</td>
+                    <td>${m.promoterEmail}</td>
+                    <td style="font-family: monospace;">${m.paymentId || 'Manual'}</td>
+                    <td>${price.toFixed(2).replace('.', ',')}</td>
+                </tr>
+            `;
+        });
+
+        const total = confirmed.reduce((acc, m) => acc + (priceMap[m.vipEventId] || 0), 0);
+        table += `
+                <tr style="background-color: #f0fdf4; font-weight: bold;">
+                    <td colspan="5" style="text-align: right; padding: 10px;">TOTAL FATURADO:</td>
+                    <td style="color: #166534;">R$ ${total.toFixed(2).replace('.', ',')}</td>
+                </tr>
+            </tbody></table></body></html>
+        `;
+
+        const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `financeiro_clube_vip_${new Date().getTime()}.xls`;
+        link.click();
+    };
+
+    const handleSaveEvent = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingEvent?.name) return;
+        setIsBulkProcessing(true);
+        try {
+            if (editingEvent.id) await updateVipEvent(editingEvent.id, editingEvent);
+            else await createVipEvent({
+                name: editingEvent.name!,
+                price: editingEvent.price || 0,
+                description: editingEvent.description || '',
+                benefits: editingEvent.benefits || [],
+                pixKey: editingEvent.pixKey || '',
+                externalSlug: editingEvent.externalSlug || '',
+                isActive: editingEvent.isActive ?? true
+            });
+            setIsModalOpen(false);
+            setEditingEvent(null);
+            await fetchData();
+        } catch (e) { alert("Erro ao salvar evento."); } finally { setIsBulkProcessing(false); }
     };
 
     const handleDeleteEvent = async (id: string) => {
@@ -153,71 +255,6 @@ const AdminClubVip: React.FC = () => {
         } catch (e) { alert("Erro ao deletar."); }
     };
 
-    const handleDownloadExcel = () => {
-        if (filteredMembers.length === 0) return;
-
-        let table = `
-            <html xmlns:x="urn:schemas-microsoft-com:office:excel">
-            <head>
-                <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
-            </head>
-            <body>
-                <table border="1">
-                    <thead>
-                        <tr style="background-color: #7e39d5; color: white; font-weight: bold;">
-                            <th>Data Cadastro</th>
-                            <th>Status Pagto</th>
-                            <th>Evento VIP</th>
-                            <th>Membro</th>
-                            <th>E-mail</th>
-                            <th>WhatsApp</th>
-                            <th>Instagram</th>
-                            <th>Código Cortesia</th>
-                            <th>Ingresso Enviado?</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-
-        filteredMembers.forEach(m => {
-            const date = (m.submittedAt as any)?.toDate?.().toLocaleString('pt-BR') || 'N/A';
-            const statusPagto = m.status === 'confirmed' ? 'PAGO' : 'PENDENTE';
-            const statusCortesia = m.isBenefitActive ? 'SIM' : 'NÃO';
-            table += `
-                <tr>
-                    <td>${date}</td>
-                    <td>${statusPagto}</td>
-                    <td>${m.vipEventName}</td>
-                    <td>${m.promoterName}</td>
-                    <td>${m.promoterEmail}</td>
-                    <td>${m.promoterWhatsapp || ''}</td>
-                    <td>${m.promoterInstagram || ''}</td>
-                    <td style="font-family: monospace;">${m.benefitCode || ''}</td>
-                    <td>${statusCortesia}</td>
-                </tr>
-            `;
-        });
-
-        table += `</tbody></table></body></html>`;
-
-        const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `gestao_clube_vip_${new Date().getTime()}.xls`;
-        link.click();
-    };
-
-    const filteredMembers = useMemo(() => {
-        return memberships.filter(m => {
-            const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
-            const matchesSearch = 
-                (m.promoterName || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
-                (m.promoterEmail || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (m.promoterWhatsapp || '').includes(searchQuery);
-            return matchesStatus && matchesSearch;
-        });
-    }, [memberships, filterStatus, searchQuery]);
-
     const formatDate = (ts: any) => {
         if (!ts) return 'N/A';
         const d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -225,7 +262,7 @@ const AdminClubVip: React.FC = () => {
     };
 
     return (
-        <div className="pb-20">
+        <div className="pb-40">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
                 <div>
                     <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3 leading-none">
@@ -234,31 +271,50 @@ const AdminClubVip: React.FC = () => {
                     </h1>
                 </div>
                 <div className="flex gap-2 w-full md:w-auto">
+                    <button onClick={handleDownloadFinancialExcel} className="flex-1 md:flex-none px-6 py-3 bg-green-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-green-500 transition-all">
+                        <ChartBarIcon className="w-4 h-4" /> Relatório Financeiro
+                    </button>
                     {activeTab === 'events' && (
                         <button onClick={() => { setEditingEvent({ benefits: [] }); setIsModalOpen(true); }} className="flex-1 md:flex-none px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
                             <PlusIcon className="w-4 h-4" /> Novo Evento
                         </button>
                     )}
-                    {activeTab === 'members' && (
-                        <button onClick={handleDownloadExcel} className="flex-1 md:flex-none px-6 py-3 bg-green-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
-                            <DownloadIcon className="w-4 h-4" /> Exportar XLS
-                        </button>
-                    )}
-                    {activeTab === 'members' && selectedIds.size > 0 && (
-                        <button onClick={handleBulkActivate} disabled={isBulkProcessing} className="flex-1 md:flex-none px-6 py-3 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
-                            {isBulkProcessing ? 'PROCESSANDO...' : `LIBERAR ${selectedIds.size} INGRESSOS`}
-                        </button>
-                    )}
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
                         <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
-                    </button>
-                    <button onClick={() => navigate(-1)} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
-                        <ArrowLeftIcon className="w-5 h-5"/>
                     </button>
                 </div>
             </div>
 
-            <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 w-fit">
+            {/* DASHBOARD CARDS */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 px-4 md:px-0">
+                <div className="bg-secondary/60 border border-white/5 p-6 rounded-[2rem] shadow-xl">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Faturado (Pago)</p>
+                    <p className="text-3xl font-black text-green-400">R$ {financialStats.totalBilled.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-[10px] text-gray-600 font-bold mt-2 uppercase">{financialStats.confirmedCount} vendas confirmadas</p>
+                </div>
+                <div className="bg-secondary/60 border border-white/5 p-6 rounded-[2rem] shadow-xl">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Pendente (Iniciado)</p>
+                    <p className="text-3xl font-black text-orange-400">R$ {financialStats.totalPending.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                    <p className="text-[10px] text-gray-600 font-bold mt-2 uppercase">{financialStats.pendingCount} carrinhos abertos</p>
+                </div>
+                <div className="bg-secondary/60 border border-white/5 p-6 rounded-[2rem] shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10"><ClockIcon className="w-12 h-12 text-primary" /></div>
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Aguardando Envio</p>
+                    <p className="text-3xl font-black text-white">{financialStats.waitingActivation}</p>
+                    <p className="text-[10px] text-primary font-bold mt-2 uppercase">Membros sem cortesia ativa</p>
+                </div>
+                <div className="bg-secondary/60 border border-white/5 p-6 rounded-[2rem] shadow-xl">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Taxa de Conversão</p>
+                    <p className="text-3xl font-black text-primary">
+                        {financialStats.confirmedCount + financialStats.pendingCount > 0 
+                            ? Math.round((financialStats.confirmedCount / (financialStats.confirmedCount + financialStats.pendingCount)) * 100) 
+                            : 0}%
+                    </p>
+                    <p className="text-[10px] text-gray-600 font-bold mt-2 uppercase">Cliques vs Vendas</p>
+                </div>
+            </div>
+
+            <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 w-fit ml-4 md:ml-0">
                 <button onClick={() => setActiveTab('members')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'members' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Membros ({memberships.length})</button>
                 <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Ofertas VIP ({vipEvents.length})</button>
             </div>
@@ -266,19 +322,38 @@ const AdminClubVip: React.FC = () => {
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
                 {activeTab === 'members' ? (
                     <>
-                        <div className="flex flex-col md:flex-row gap-4">
-                            <select value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)} className="bg-dark border border-gray-700 text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest focus:ring-1 focus:ring-primary outline-none min-w-[220px]">
-                                <option value="all">Filtrar: Todos Eventos</option>
+                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                            <select value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)} className="bg-dark border border-gray-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-1 focus:ring-primary outline-none">
+                                <option value="all">TODOS EVENTOS</option>
                                 {vipEvents.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                             </select>
-                            <div className="relative flex-grow">
+                            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} className="bg-dark border border-gray-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-1 focus:ring-primary outline-none">
+                                <option value="all">STATUS: TODOS</option>
+                                <option value="confirmed">SOMENTE PAGOS</option>
+                                <option value="pending">SOMENTE PENDENTES</option>
+                            </select>
+                            <select value={filterBenefit} onChange={e => setFilterBenefit(e.target.value as any)} className="bg-dark border border-gray-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-1 focus:ring-primary outline-none">
+                                <option value="all">CORTESIA: TODAS</option>
+                                <option value="waiting">PAGO E NÃO ENVIADO</option>
+                                <option value="active">JÁ ENVIADOS</option>
+                            </select>
+                            <div className="relative">
                                 <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                 <input 
-                                    type="text" placeholder="Buscar por nome, e-mail ou whats..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                    className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
+                                    type="text" placeholder="BUSCAR MEMBRO..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                    className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs font-black uppercase focus:ring-1 focus:ring-primary outline-none"
                                 />
                             </div>
                         </div>
+
+                        {selectedIds.size > 0 && (
+                            <div className="p-4 bg-primary rounded-2xl flex justify-between items-center animate-fadeIn shadow-lg shadow-primary/20">
+                                <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} membros selecionados</p>
+                                <button onClick={handleBulkNotify} disabled={isBulkProcessing} className="px-6 py-2 bg-white text-primary font-black rounded-xl text-[10px] uppercase hover:bg-gray-100 transition-all">
+                                    {isBulkProcessing ? 'ENVIANDO...' : 'ATIVAR E NOTIFICAR TODOS'}
+                                </button>
+                            </div>
+                        )}
 
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
@@ -287,11 +362,11 @@ const AdminClubVip: React.FC = () => {
                                         <th className="px-6 py-5 w-10">
                                             <input type="checkbox" checked={filteredMembers.length > 0 && selectedIds.size === filteredMembers.filter(m => m.status === 'confirmed').length} onChange={handleToggleSelectAll} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
                                         </th>
-                                        <th className="px-6 py-5">Comprador</th>
+                                        <th className="px-6 py-5">Membro</th>
                                         <th className="px-6 py-5">Contatos</th>
-                                        <th className="px-6 py-5">Status Pagto</th>
-                                        <th className="px-6 py-5">Status Ingresso</th>
-                                        <th className="px-6 py-5 text-right">Data</th>
+                                        <th className="px-6 py-5">Pagamento</th>
+                                        <th className="px-6 py-5">Cortesia</th>
+                                        <th className="px-6 py-5 text-right">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
@@ -313,33 +388,58 @@ const AdminClubVip: React.FC = () => {
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
-                                                    <p className="text-[10px] text-gray-500 font-mono mt-1">{m.promoterEmail}</p>
+                                                    <p className="text-[9px] text-primary font-black uppercase tracking-widest mt-1 truncate max-w-[150px]">{m.vipEventName}</p>
                                                 </td>
                                                 <td className="px-6 py-5">
-                                                    <div className="flex gap-3">
-                                                        <a href={`https://wa.me/55${m.promoterWhatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="p-2 bg-green-900/30 text-green-400 rounded-lg border border-green-800/30 hover:bg-green-600 hover:text-white transition-all"><WhatsAppIcon className="w-4 h-4"/></a>
+                                                    <div className="flex gap-2">
+                                                        <a href={`https://wa.me/55${m.promoterWhatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="p-2 bg-green-900/30 text-green-400 rounded-lg border border-green-800/30 hover:bg-green-600 hover:text-white transition-all"><WhatsAppIcon className="w-3.5 h-3.5"/></a>
                                                         {m.promoterInstagram && (
-                                                            <a href={`https://instagram.com/${m.promoterInstagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="p-2 bg-pink-900/30 text-pink-400 rounded-lg border border-pink-800/30 hover:bg-pink-600 hover:text-white transition-all"><InstagramIcon className="w-4 h-4"/></a>
+                                                            <a href={`https://instagram.com/${m.promoterInstagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="p-2 bg-pink-900/30 text-pink-400 rounded-lg border border-pink-800/30 hover:bg-pink-600 hover:text-white transition-all"><InstagramIcon className="w-3.5 h-3.5"/></a>
                                                         )}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     {m.status === 'confirmed' ? (
-                                                        <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">PAGO</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest w-fit">PAGO</span>
+                                                            <span className="text-[8px] text-gray-600 mt-1 font-bold uppercase">{formatDate(m.updatedAt || m.submittedAt)}</span>
+                                                        </div>
                                                     ) : (
-                                                        <span className="px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-400 border border-orange-800 text-[8px] font-black uppercase tracking-widest">PENDENTE (NÃO FINALIZOU)</span>
+                                                        <span className="px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-400 border border-orange-800 text-[8px] font-black uppercase tracking-widest">AGUARDANDO PIX</span>
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-5">
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border w-fit ${m.isBenefitActive ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-amber-900/40 text-amber-400 border-amber-800'}`}>
-                                                            {m.isBenefitActive ? 'ENVIADO' : 'AGUARDANDO ADMIN'}
-                                                        </span>
-                                                        <p className="text-[11px] font-mono text-gray-300 font-bold select-all">{m.benefitCode || (m.status === 'confirmed' ? 'Aguardando...' : 'N/A')}</p>
-                                                    </div>
+                                                    {m.isBenefitActive ? (
+                                                        <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">ENVIADO</span>
+                                                    ) : m.status === 'confirmed' ? (
+                                                        <span className="px-2 py-0.5 rounded-full bg-amber-900/40 text-amber-400 border border-amber-800 text-[8px] font-black uppercase tracking-widest animate-pulse">PENDENTE</span>
+                                                    ) : (
+                                                        <span className="text-[8px] text-gray-700 font-black uppercase">N/A</span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-5 text-right">
-                                                    <p className="text-[10px] text-gray-500 font-bold uppercase">{formatDate(m.submittedAt)}</p>
+                                                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                                        {m.status === 'confirmed' && (
+                                                            <button 
+                                                                onClick={() => handleManualNotifySingle(m)} 
+                                                                disabled={isBulkProcessing}
+                                                                className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 shadow-lg shadow-indigo-900/20"
+                                                                title="Re-enviar Notificação de Acesso"
+                                                            >
+                                                                <MegaphoneIcon className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        <button 
+                                                            onClick={() => {
+                                                                const msg = `Olá ${m.promoterName.split(' ')[0]}! Notamos que você iniciou sua adesão ao Clube VIP para o evento ${m.vipEventName} mas ainda não finalizou o pagamento Pix. Ficou com alguma dúvida? Posso te ajudar?`;
+                                                                window.open(`https://wa.me/55${m.promoterWhatsapp?.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+                                                            }}
+                                                            className="p-2 bg-gray-700 text-gray-400 rounded-lg hover:text-white"
+                                                            title="Suporte Individual (WhatsApp)"
+                                                        >
+                                                            <WhatsAppIcon className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         ))
@@ -351,7 +451,7 @@ const AdminClubVip: React.FC = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {vipEvents.map(ev => (
-                            <div key={ev.id} className="bg-dark/40 rounded-[2rem] p-6 border border-white/5 flex flex-col group hover:border-primary/30 transition-all">
+                            <div key={ev.id} className="bg-dark/40 rounded-[2rem] p-6 border border-white/5 flex flex-col group hover:border-primary/30 transition-all shadow-lg">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className={`p-3 rounded-2xl ${ev.isActive ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
                                         <TicketIcon className="w-8 h-8" />
@@ -410,7 +510,6 @@ const AdminClubVip: React.FC = () => {
                             <div>
                                 <label className="text-[10px] font-black text-gray-500 uppercase ml-1">ID da URL STingressos (Slug)</label>
                                 <input type="text" value={editingEvent?.externalSlug || ''} onChange={e => setEditingEvent({...editingEvent!, externalSlug: e.target.value})} className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white font-mono text-sm" placeholder="Ex: festival-sunset-2024" />
-                                <p className="text-[8px] text-gray-600 mt-1 uppercase">O link será: stingingressos.com.br/eventos/<b>{editingEvent?.externalSlug || 'exemplo'}</b>?cupom=CÓDIGO</p>
                             </div>
                             <div>
                                 <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Benefícios (um por linha)</label>
@@ -419,7 +518,7 @@ const AdminClubVip: React.FC = () => {
                                     value={editingEvent?.benefits?.join('\n') || ''} 
                                     onChange={e => setEditingEvent({...editingEvent!, benefits: e.target.value.split('\n').filter(b => b.trim() !== '')})}
                                     className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white text-sm" 
-                                    placeholder="Ex: Camiseta Exclusiva&#10;Entrada Sem Fila&#10;10% de desconto no Bar"
+                                    placeholder="Ex: Camiseta Exclusiva&#10;Entrada Sem Fila"
                                 />
                             </div>
                             <div>
