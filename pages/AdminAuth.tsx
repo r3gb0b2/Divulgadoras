@@ -16,7 +16,7 @@ import CreatePost from './CreatePost';
 import PostDetails from './PostDetails';
 import AdminLists from './AdminLists';
 import GuestListAssignments from './GuestListAssignments';
-import GuestListPage from './GuestListPage'; // Importação adicionada
+import GuestListPage from './GuestListPage';
 import GuestListCheckinPage from './GuestListCheckinPage';
 import GuestListAccessPage from './GuestListAccessPage';
 import PostDashboard from './PostDashboard';
@@ -45,6 +45,7 @@ import AdminAppleTestReview from './AdminAppleTestReview';
 import AdminGlobalLists from './AdminGlobalLists';
 import AdminClubVip from './AdminClubVip';
 import RecoveryDashboard from './RecoveryDashboard';
+import VipPublicDashboard from './VipPublicDashboard';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
@@ -59,6 +60,7 @@ const AdminAuth: React.FC = () => {
     return (
         <Routes>
             <Route path="login" element={user ? <Navigate to="/admin" replace /> : <AdminLoginPage />} />
+            <Route path="vip-metrics/:token" element={<VipPublicDashboard />} />
 
             <Route index element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             
