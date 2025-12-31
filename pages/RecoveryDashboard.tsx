@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getAllPromoters, updatePromoter } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
-import { Promoter, RecoveryStatus, Organization } from '../types';
+import { getAllCampaigns } from '../services/settingsService';
+import { Promoter, RecoveryStatus, Organization, Campaign } from '../types';
 import { 
     ArrowLeftIcon, SearchIcon, WhatsAppIcon, InstagramIcon, 
     RefreshIcon, FilterIcon, ClockIcon, CheckCircleIcon, XIcon, UserIcon 
@@ -17,30 +18,33 @@ const RecoveryDashboard: React.FC = () => {
     
     const [leads, setLeads] = useState<Promoter[]>([]);
     const [organizations, setOrganizations] = useState<Record<string, string>>({});
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<RecoveryStatus | 'all'>('none');
     const [ownerFilter, setOwnerFilter] = useState<'all' | 'me' | 'none'>('all');
+    const [campaignFilter, setCampaignFilter] = useState('all');
 
-    const fetchLeads = useCallback(async () => {
+    const fetchData = useCallback(async () => {
         setIsLoading(true);
         try {
-            // Carregar todas as produtoras para o mapeamento de nomes
-            const orgs = await getOrganizations();
-            const orgMap = orgs.reduce((acc, o) => ({ ...acc, [o.id]: o.name }), {} as Record<string, string>);
-            setOrganizations(orgMap);
-
-            // Carregar divulgadoras rejeitadas
-            // Se for superadmin, busca de todas as orgs, senão apenas da selecionada
             const orgIdToFetch = adminData?.role === 'superadmin' ? 'all' : selectedOrgId;
-            
             if (!orgIdToFetch) return;
 
-            const allPromoters = await getAllPromoters({
-                organizationId: orgIdToFetch,
-                filterOrgId: orgIdToFetch,
-                status: 'all' // Filtraremos localmente por rejected
-            });
+            // Carregar dados em paralelo
+            const [orgs, allCamps, allPromoters] = await Promise.all([
+                getOrganizations(),
+                getAllCampaigns(orgIdToFetch === 'all' ? undefined : orgIdToFetch),
+                getAllPromoters({
+                    organizationId: orgIdToFetch,
+                    filterOrgId: orgIdToFetch,
+                    status: 'all'
+                })
+            ]);
+
+            const orgMap = orgs.reduce((acc, o) => ({ ...acc, [o.id]: o.name }), {} as Record<string, string>);
+            setOrganizations(orgMap);
+            setCampaigns(allCamps.sort((a, b) => a.name.localeCompare(b.name)));
 
             // Filtra apenas rejeitadas
             const rejected = allPromoters.filter(p => p.status === 'rejected' || (p.status as string) === 'rejected_editable');
@@ -54,12 +58,13 @@ const RecoveryDashboard: React.FC = () => {
     }, [adminData, selectedOrgId]);
 
     useEffect(() => {
-        fetchLeads();
-    }, [fetchLeads]);
+        fetchData();
+    }, [fetchData]);
 
     const filteredLeads = useMemo(() => {
         return leads.filter(p => {
             const matchesStatus = statusFilter === 'all' || (p.recoveryStatus || 'none') === statusFilter;
+            const matchesCampaign = campaignFilter === 'all' || p.campaignName === campaignFilter;
             const matchesSearch = 
                 p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                 p.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -70,9 +75,9 @@ const RecoveryDashboard: React.FC = () => {
                 (ownerFilter === 'me' && p.recoveryAdminEmail === adminData?.email) ||
                 (ownerFilter === 'none' && !p.recoveryAdminEmail);
 
-            return matchesStatus && matchesSearch && matchesOwner;
+            return matchesStatus && matchesSearch && matchesOwner && matchesCampaign;
         });
-    }, [leads, statusFilter, searchQuery, ownerFilter, adminData]);
+    }, [leads, statusFilter, campaignFilter, searchQuery, ownerFilter, adminData]);
 
     const handleUpdateStatus = async (promoterId: string, status: RecoveryStatus) => {
         try {
@@ -81,7 +86,6 @@ const RecoveryDashboard: React.FC = () => {
                 recoveryAdminEmail: adminData?.email,
                 recoveryUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
-            // Atualiza localmente
             setLeads(prev => prev.map(p => 
                 p.id === promoterId ? { 
                     ...p, 
@@ -99,7 +103,6 @@ const RecoveryDashboard: React.FC = () => {
         const adminName = adminData?.email.split('@')[0];
         const msg = `Olá ${firstName}! Sou o ${adminName} da equipe de gestão. 👋\n\nVi que seu perfil não pôde ser aprovado para a equipe do evento ${lead.campaignName} no momento, mas não queremos que você fique de fora! 🚀\n\nLiberei uma cortesia VIP exclusiva pra você no nosso Clube. Você ganha benefícios e o seu ingresso sai por um valor promocional. Tem interesse em saber como funciona?`;
         
-        // Atribui o admin automaticamente
         if (!lead.recoveryAdminEmail) {
             handleUpdateStatus(lead.id, 'contacted');
         }
@@ -118,7 +121,7 @@ const RecoveryDashboard: React.FC = () => {
                     <p className="text-gray-500 text-xs font-black uppercase tracking-widest mt-1">Transforme rejeições em conversões</p>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => fetchLeads()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
+                    <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
                         <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
                     </button>
                     <button onClick={() => navigate('/admin')} className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-xl text-xs font-black uppercase tracking-widest">
@@ -128,14 +131,18 @@ const RecoveryDashboard: React.FC = () => {
             </div>
 
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="md:col-span-2 relative">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div className="lg:col-span-2 relative">
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
                             type="text" placeholder="BUSCAR POR NOME OU WHATSAPP..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary"
                         />
                     </div>
+                    <select value={campaignFilter} onChange={e => setCampaignFilter(e.target.value)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-primary">
+                        <option value="all">EVENTO (TODOS)</option>
+                        {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
                     <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-primary">
                         <option value="all">STATUS (TODOS)</option>
                         <option value="none">🆕 NÃO CONTATADO</option>
@@ -158,7 +165,7 @@ const RecoveryDashboard: React.FC = () => {
                                 <th className="px-6 py-5">Origem (Evento)</th>
                                 <th className="px-6 py-5 text-center">Status Funil</th>
                                 <th className="px-6 py-5 text-center">Responsável</th>
-                                <th className="px-6 py-5 text-right">Ação</th>
+                                <th className="px-6 py-4 text-right">Ação</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
