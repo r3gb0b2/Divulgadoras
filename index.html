@@ -6,6 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Equipe Certa</title>
     
+    <script>
+      // Redirecionamento Cirúrgico para o Club VIP
+      // Isso permite que o link equipecerta.app/clubvip funcione no Instagram
+      (function() {
+        var path = window.location.pathname;
+        // Se o caminho for exatamente /clubvip e não tiver o hash
+        if (path === '/clubvip' && !window.location.hash) {
+          window.location.replace(window.location.origin + '/#/clubvip');
+        }
+      })();
+    </script>
+
     <script type="importmap">
 {
   "imports": {
