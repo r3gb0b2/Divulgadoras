@@ -104,6 +104,53 @@ const AdminClubVip: React.FC = () => {
         };
     }, [memberships, vipEvents]);
 
+    const handleDownloadXLS = () => {
+        const target = filteredMembers.filter(m => m.status === 'confirmed');
+        if (target.length === 0) return;
+
+        let table = `
+            <html xmlns:x="urn:schemas-microsoft-com:office:excel">
+            <head>
+                <meta http-equiv="content-type" content="application/vnd.ms-excel; charset=UTF-8">
+            </head>
+            <body>
+                <table border="1">
+                    <thead>
+                        <tr>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">Nome</th>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">E-mail</th>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">WhatsApp</th>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">Evento</th>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">Código</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+
+        target.forEach(m => {
+            table += `
+                <tr>
+                    <td>${m.promoterName}</td>
+                    <td>${m.promoterEmail}</td>
+                    <td>${m.promoterWhatsapp || ''}</td>
+                    <td>${m.vipEventName}</td>
+                    <td style="font-family: monospace;">${m.benefitCode || ''}</td>
+                </tr>
+            `;
+        });
+
+        table += `</tbody></table></body></html>`;
+
+        const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `cupons_vip_${new Date().getTime()}.xls`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const handleManualNotifySingle = async (membership: VipMembership) => {
         if (membership.status !== 'confirmed') return;
         
@@ -180,8 +227,11 @@ const AdminClubVip: React.FC = () => {
                     <TicketIcon className="w-8 h-8 text-primary" /> Gestão Clube VIP
                 </h1>
                 <div className="flex gap-2">
+                    <button onClick={handleDownloadXLS} className="px-4 py-3 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-indigo-500 transition-all">
+                        <DownloadIcon className="w-4 h-4" /> Baixar Excel
+                    </button>
                     {activeTab === 'events' && (
-                        <button onClick={() => { setEditingEvent({ benefits: [] }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
+                        <button onClick={() => { setEditingEvent({ benefits: [] }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
                             <PlusIcon className="w-4 h-4" /> Novo Evento
                         </button>
                     )}
@@ -208,7 +258,7 @@ const AdminClubVip: React.FC = () => {
                                 <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                 <input 
                                     type="text" placeholder="BUSCAR NOME OU CÓDIGO..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                    className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs font-black uppercase outline-none"
+                                    className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm font-black uppercase outline-none"
                                 />
                             </div>
                         </div>

@@ -53,44 +53,45 @@ async function sendSystemEmail(toEmail, subject, htmlContent) {
 exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { audience, subject, body } = data;
     try {
-        let query;
-        
-        // Modo Individual
+        let docs = [];
+
+        // Modo 1: Individual por IDs
         if (audience.type === 'individual' && audience.promoterIds) {
-            const promises = audience.promoterIds.map(async (id) => {
-                const snap = await db.collection("promoters").doc(id).get();
-                if (snap.exists) {
-                    const p = snap.data();
-                    const personalizedBody = body.replace(/{{promoterName}}/g, p.name.split(' ')[0]);
-                    return sendSystemEmail(p.email, subject, personalizedBody);
-                }
-            });
-            await Promise.all(promises);
-            return { success: true, message: `Newsletter individual enviada.` };
-        }
-
-        // Modos Coletivos
-        query = db.collection("promoters");
-        
-        // Filtro de Status (Aprovada ou Reprovada)
-        if (audience.status) {
-            query = query.where("status", "==", audience.status);
+            const promises = audience.promoterIds.map(id => db.collection("promoters").doc(id).get());
+            const snaps = await Promise.all(promises);
+            docs = snaps.filter(s => s.exists);
         } else {
-            query = query.where("status", "==", "approved"); // Padrão
+            // Modo 2: Filtros Coletivos
+            let query = db.collection("promoters");
+
+            // Filtro de Status (Approved, Rejected, etc)
+            if (audience.status) {
+                query = query.where("status", "==", audience.status);
+            } else {
+                query = query.where("status", "==", "approved");
+            }
+
+            // Filtro de Organização
+            if (audience.type === 'org') {
+                query = query.where("organizationId", "==", audience.orgId);
+            } 
+            // Filtro de Campanha Específica
+            else if (audience.type === 'campaign') {
+                query = query.where("campaignName", "==", audience.campaignName);
+            }
+
+            const snap = await query.get();
+            docs = snap.docs;
         }
 
-        if (audience.type === 'org') query = query.where("organizationId", "==", audience.orgId);
-        if (audience.type === 'campaign') query = query.where("campaignName", "==", audience.campaignName);
-
-        const snap = await query.get();
-        const promises = snap.docs.map(doc => {
+        const promises = docs.map(doc => {
             const p = doc.data();
             const personalizedBody = body.replace(/{{promoterName}}/g, p.name.split(' ')[0]);
             return sendSystemEmail(p.email, subject, personalizedBody);
         });
 
         await Promise.all(promises);
-        return { success: true, message: `Newsletter enviada para ${snap.size} pessoas.` };
+        return { success: true, message: `Newsletter enviada para ${docs.length} pessoas.` };
     } catch (e) {
         return { success: false, error: e.message };
     }
