@@ -1,306 +1,237 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
-import { findPromotersByEmail } from '../services/promoterService';
+import { getAllPromoters } from '../services/promoterService';
 import { Organization, Campaign, Promoter } from '../types';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { ArrowLeftIcon, BoldIcon, ItalicIcon, UnderlineIcon, LinkIcon, ListBulletIcon, ListNumberedIcon, CodeBracketIcon, EyeIcon, CameraIcon, FaceSmileIcon, SearchIcon, TrashIcon, UserIcon } from '../components/Icons';
+import { ArrowLeftIcon, BoldIcon, ItalicIcon, UnderlineIcon, LinkIcon, ListBulletIcon, ListNumberedIcon, CodeBracketIcon, EyeIcon, CameraIcon, FaceSmileIcon, SearchIcon, TrashIcon, UserIcon, FilterIcon, MegaphoneIcon } from '../components/Icons';
 
-// --- Local Components for the Editor ---
-
-const HtmlEditor: React.FC<{
-    value: string;
-    onChange: (value: string) => void;
-    disabled?: boolean;
-}> = ({ value, onChange, disabled }) => {
+const HtmlEditor: React.FC<{ value: string; onChange: (value: string) => void; disabled?: boolean; }> = ({ value, onChange, disabled }) => {
     const [view, setView] = useState<'visual' | 'html'>('visual');
     const editorRef = useRef<HTMLDivElement>(null);
-    const [showEmojis, setShowEmojis] = useState(false);
-    const emojis = ['😀', '😍', '👍', '🎉', '🚀', '💡', '💰', '❤️'];
-
-    useEffect(() => {
-        if (editorRef.current && value !== editorRef.current.innerHTML) {
-            editorRef.current.innerHTML = value;
-        }
-    }, [value]);
-
+    useEffect(() => { if (editorRef.current && value !== editorRef.current.innerHTML) { editorRef.current.innerHTML = value; } }, [value]);
     const handleExecCommand = (command: string, valueArg?: string) => {
         document.execCommand(command, false, valueArg);
-        if (editorRef.current) {
-            const newHtml = editorRef.current.innerHTML;
-            onChange(newHtml);
-            editorRef.current.focus();
-        }
+        if (editorRef.current) { onChange(editorRef.current.innerHTML); editorRef.current.focus(); }
     };
-
-    const handleCreateLink = () => {
-        const url = prompt("Insira a URL:", "https://");
-        if (url) handleExecCommand('createLink', url);
-    };
-    
-    const handleInsertImage = () => {
-        const url = prompt("Insira a URL da imagem:", "https://");
-        if (url) handleExecCommand('insertImage', url);
-    };
-
-    const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
-        onChange(e.currentTarget.innerHTML);
-    };
-    
-    const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        onChange(e.target.value);
-    };
-
-    const toolbarButtons = [
-        { command: 'bold', icon: BoldIcon, title: 'Negrito' },
-        { command: 'italic', icon: ItalicIcon, title: 'Itálico' },
-        { command: 'underline', icon: UnderlineIcon, title: 'Sublinhado' },
-        { command: 'insertOrderedList', icon: ListNumberedIcon, title: 'Lista Numerada' },
-        { command: 'insertUnorderedList', icon: ListBulletIcon, title: 'Lista com Marcadores' },
-        { command: 'createLink', icon: LinkIcon, title: 'Inserir Link', action: handleCreateLink },
-        { command: 'insertImage', icon: CameraIcon, title: 'Inserir Imagem', action: handleInsertImage },
-    ];
-
     return (
-        <div className="border border-gray-600 rounded-md">
-            <div className="flex items-center justify-between p-2 bg-gray-700/50 border-b border-gray-600 flex-wrap">
+        <div className="border border-gray-600 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between p-2 bg-gray-800 border-b border-gray-700 flex-wrap">
                 <div className="flex items-center gap-1">
-                    {toolbarButtons.map(btn => (
-                         <button key={btn.command} type="button" title={btn.title} onMouseDown={e => e.preventDefault()} onClick={btn.action ? btn.action : () => handleExecCommand(btn.command)} disabled={disabled || view === 'html'} className="p-2 rounded hover:bg-gray-600 disabled:opacity-50">
-                            <btn.icon className="w-5 h-5" />
-                        </button>
-                    ))}
-                     <div className="relative">
-                        <button type="button" title="Inserir Emoji" onClick={() => setShowEmojis(prev => !prev)} disabled={disabled || view === 'html'} className="p-2 rounded hover:bg-gray-600">
-                            <FaceSmileIcon className="w-5 h-5" />
-                        </button>
-                        {showEmojis && (
-                            <div className="absolute top-full left-0 mt-2 bg-gray-800 border border-gray-600 rounded-md shadow-lg p-2 flex gap-1 z-10">
-                                {emojis.map(emoji => (
-                                    <button key={emoji} type="button" onMouseDown={e => e.preventDefault()} onClick={() => { handleExecCommand('insertText', emoji); setShowEmojis(false); }} className="text-2xl p-1 rounded hover:bg-gray-700">{emoji}</button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    <button type="button" onClick={() => handleExecCommand('bold')} className="p-2 hover:bg-gray-700 rounded"><BoldIcon className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => handleExecCommand('italic')} className="p-2 hover:bg-gray-700 rounded"><ItalicIcon className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => handleExecCommand('underline')} className="p-2 hover:bg-gray-700 rounded"><UnderlineIcon className="w-4 h-4" /></button>
                 </div>
-                <button type="button" onClick={() => setView(v => v === 'visual' ? 'html' : 'visual')} className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold bg-gray-600 rounded hover:bg-gray-500">
-                    {view === 'visual' ? <CodeBracketIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
-                    <span>{view === 'visual' ? 'HTML' : 'Visual'}</span>
-                </button>
+                <button type="button" onClick={() => setView(v => v === 'visual' ? 'html' : 'visual')} className="text-[10px] font-black uppercase px-3 py-1 bg-gray-700 rounded-lg">{view === 'visual' ? 'HTML' : 'Visual'}</button>
             </div>
-            {view === 'visual' ? (
-                <div ref={editorRef} onInput={handleInput} contentEditable={!disabled} className="min-h-[24rem] p-3 bg-gray-800 text-gray-200 focus:outline-none focus:ring-2 focus:ring-primary" />
-            ) : (
-                <textarea value={value} onChange={handleTextareaChange} disabled={disabled} className="min-h-[24rem] w-full p-3 bg-gray-900 text-gray-200 font-mono text-sm" spellCheck="false" />
-            )}
-        </div>
-    );
-};
-
-const Preview: React.FC<{ html: string; subject: string }> = ({ html, subject }) => {
-    const emailTemplate = `
-        <!DOCTYPE html><html><head><style> body { font-family: sans-serif; background-color: #f4f4f4; color: #333; line-height: 1.6; margin: 0; padding: 20px; } </style></head>
-        <body><div style="max-width: 600px; margin: auto; background: white; padding: 20px; border: 1px solid #ddd; border-radius: 5px;">${html}</div></body></html>
-    `;
-    return (
-        <div className="space-y-2 sticky top-24">
-            <h3 className="text-lg font-semibold text-white">Pré-visualização</h3>
-            <div className="border border-gray-600 rounded-md overflow-hidden bg-dark">
-                <div className="p-2 bg-gray-700/50 text-xs text-gray-400">De: Equipe Certa | Assunto: {subject || '(sem assunto)'}</div>
-                <iframe srcDoc={emailTemplate} title="Email Preview" className="w-full h-[32rem] bg-gray-300" sandbox="allow-same-origin" />
-            </div>
+            {view === 'visual' ? <div ref={editorRef} onInput={(e) => onChange(e.currentTarget.innerHTML)} contentEditable={!disabled} className="min-h-[300px] p-4 bg-gray-900 text-gray-200 outline-none" /> : <textarea value={value} onChange={(e) => onChange(e.target.value)} className="min-h-[300px] w-full p-4 bg-black text-green-400 font-mono text-xs" />}
         </div>
     );
 };
 
 const NewsletterPage: React.FC = () => {
     const navigate = useNavigate();
+    const { adminData } = useAdminAuth();
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [promoters, setPromoters] = useState<Promoter[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
+    const [isFetchingPromoters, setIsFetchingPromoters] = useState(false);
 
-    const [audience, setAudience] = useState<'all' | 'org' | 'campaign' | 'individual'>('all');
+    const [audienceType, setAudienceType] = useState<'all' | 'org' | 'campaign'>('all');
     const [targetStatus, setTargetStatus] = useState<'approved' | 'rejected'>('approved');
-    
     const [selectedOrgId, setSelectedOrgId] = useState('');
-    const [selectedCampaignId, setSelectedCampaignId] = useState('');
+    const [selectedCampaignName, setSelectedCampaignName] = useState('');
     
-    const [individualEmail, setIndividualEmail] = useState('');
-    const [isSearchingIndividual, setIsSearchingIndividual] = useState(false);
-    const [individualList, setIndividualList] = useState<Promoter[]>([]);
+    const [selectionMode, setSelectionMode] = useState<'total' | 'individual'>('total');
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
     const [subject, setSubject] = useState('');
     const [body, setBody] = useState('<p>Olá {{promoterName}},</p><p><br></p><p>Escreva sua mensagem aqui...</p>');
-
     const [isSending, setIsSending] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
 
     useEffect(() => {
-        const fetchData = async () => {
+        const load = async () => {
             setIsLoadingData(true);
             try {
                 const [orgs, camps] = await Promise.all([getOrganizations(), getAllCampaigns()]);
-                setOrganizations(orgs.sort((a, b) => a.name.localeCompare(b.name)));
-                setCampaigns(camps.sort((a, b) => a.name.localeCompare(b.name)));
-            } catch (err: any) {
-                setError(err.message || 'Falha ao carregar dados.');
-            } finally {
-                setIsLoadingData(false);
-            }
+                setOrganizations(orgs.sort((a,b) => a.name.localeCompare(b.name)));
+                setCampaigns(camps);
+            } finally { setIsLoadingData(false); }
         };
-        fetchData();
+        load();
     }, []);
 
-    const searchIndividual = async () => {
-        if (!individualEmail.trim()) return;
-        setIsSearchingIndividual(true);
-        try {
-            const results = await findPromotersByEmail(individualEmail);
-            if (results.length > 0) {
-                const p = results[0];
-                if (!individualList.some(item => item.id === p.id)) {
-                    setIndividualList([...individualList, p]);
-                }
-                setIndividualEmail('');
-            } else {
-                alert("Nenhuma divulgadora encontrada com este e-mail.");
-            }
-        } catch (e) { alert("Erro na busca."); }
-        finally { setIsSearchingIndividual(false); }
+    useEffect(() => {
+        const fetchFiltered = async () => {
+            const orgId = audienceType === 'all' ? undefined : (selectedOrgId || undefined);
+            if (audienceType === 'org' && !selectedOrgId) { setPromoters([]); return; }
+            if (audienceType === 'campaign' && !selectedCampaignName) { setPromoters([]); return; }
+
+            setIsFetchingPromoters(true);
+            try {
+                const list = await getAllPromoters({
+                    organizationId: selectedOrgId || 'all',
+                    filterOrgId: selectedOrgId || 'all',
+                    status: targetStatus,
+                    selectedCampaign: audienceType === 'campaign' ? selectedCampaignName : 'all'
+                });
+                setPromoters(list.sort((a,b) => a.name.localeCompare(b.name)));
+                setSelectedIds(new Set()); 
+            } catch (e) { console.error(e); }
+            finally { setIsFetchingPromoters(false); }
+        };
+        fetchFiltered();
+    }, [audienceType, targetStatus, selectedOrgId, selectedCampaignName]);
+
+    const handleToggleSelect = (id: string) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) newSet.delete(id); else newSet.add(id);
+        setSelectedIds(newSet);
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!subject.trim() || !body.trim()) {
-            setError("Assunto e corpo da mensagem são obrigatórios.");
-            return;
-        }
+        if (!subject.trim() || !body.trim()) return alert("Preencha assunto e mensagem.");
+        
+        const finalIds = selectionMode === 'individual' ? Array.from(selectedIds) : [];
+        if (selectionMode === 'individual' && finalIds.length === 0) return alert("Selecione pelo menos uma divulgadora.");
 
-        let audienceData: any = { type: audience, status: targetStatus };
+        const audienceData = {
+            type: selectionMode === 'individual' ? 'individual' : audienceType,
+            status: targetStatus,
+            orgId: selectedOrgId,
+            campaignName: selectedCampaignName,
+            promoterIds: finalIds
+        };
 
-        if (audience === 'org' && selectedOrgId) {
-            audienceData.orgId = selectedOrgId;
-        } else if (audience === 'campaign' && selectedCampaignId) {
-            const camp = campaigns.find(c => c.id === selectedCampaignId);
-            audienceData.campaignName = camp?.name;
-            audienceData.campaignId = selectedCampaignId;
-        } else if (audience === 'individual') {
-            if (individualList.length === 0) {
-                setError("Adicione pelo menos uma divulgadora na lista individual.");
-                return;
-            }
-            audienceData.promoterIds = individualList.map(p => p.id);
-        }
+        if (!window.confirm(`Enviar e-mail para ${selectionMode === 'individual' ? finalIds.length : promoters.length} pessoas?`)) return;
 
-        if (!window.confirm(`Enviar para o público selecionado?`)) return;
-
-        setIsSending(true); setError(''); setSuccess('');
+        setIsSending(true);
         try {
             const sendNewsletter = httpsCallable(functions, 'sendNewsletter');
             const result = await sendNewsletter({ audience: audienceData, subject, body });
             const data = result.data as any;
             if (data.success) {
-                setSuccess(data.message);
+                alert(data.message);
                 setSubject('');
-                setBody('<p>Olá {{promoterName}},</p><p><br></p><p>Escreva sua mensagem aqui...</p>');
-                setIndividualList([]);
+                setBody('<p>Olá {{promoterName}},</p>');
+                setSelectedIds(new Set());
             } else throw new Error(data.message);
-        } catch (err: any) {
-            setError(`Falha ao enviar: ${err.message}`);
-        } finally { setIsSending(false); }
+        } catch (err: any) { alert(`Falha: ${err.message}`); }
+        finally { setIsSending(false); }
     };
 
     return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Enviar Newsletter</h1>
-                <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm"><ArrowLeftIcon className="w-4 h-4" /><span>Voltar</span></button>
+        <div className="max-w-6xl mx-auto pb-20">
+            <div className="flex justify-between items-center mb-8">
+                <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Newsletter</h1>
+                <button onClick={() => navigate(-1)} className="p-2 bg-gray-800 rounded-xl"><ArrowLeftIcon className="w-5 h-5"/></button>
             </div>
-            <form onSubmit={handleSubmit} className="bg-secondary shadow-lg rounded-lg p-6 space-y-6">
-                 {error && <div className="bg-red-900/50 text-red-300 p-3 rounded-md text-sm font-semibold">{error}</div>}
-                 {success && <div className="bg-green-900/50 text-green-300 p-3 rounded-md text-sm font-semibold">{success}</div>}
-                
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                        <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
-                            <legend className="px-2 font-semibold text-primary">1. Selecione o Público e Status</legend>
-                            
-                            <div className="flex bg-dark/50 p-1 rounded-xl w-fit border border-white/5 mb-4">
-                                <button type="button" onClick={() => setTargetStatus('approved')} className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${targetStatus === 'approved' ? 'bg-primary text-white' : 'text-gray-500'}`}>Aprovadas</button>
-                                <button type="button" onClick={() => setTargetStatus('rejected')} className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${targetStatus === 'rejected' ? 'bg-primary text-white' : 'text-gray-500'}`}>Reprovadas</button>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div className="lg:col-span-4 space-y-6">
+                    <div className="bg-secondary p-6 rounded-[2rem] border border-white/5 shadow-xl space-y-6">
+                        <h2 className="text-sm font-black text-primary uppercase tracking-widest flex items-center gap-2"><FilterIcon className="w-4 h-4"/> Filtros da Audiência</h2>
+                        
+                        <div className="space-y-4">
+                            <div className="flex bg-dark p-1 rounded-xl border border-white/5">
+                                <button onClick={() => setTargetStatus('approved')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${targetStatus === 'approved' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Aprovadas</button>
+                                <button onClick={() => setTargetStatus('rejected')} className={`flex-1 py-2 text-[10px] font-black uppercase rounded-lg transition-all ${targetStatus === 'rejected' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Reprovadas</button>
                             </div>
 
-                            <div className="space-y-4">
-                                <label className="flex items-center space-x-2 cursor-pointer"><input type="radio" name="audience" value="all" checked={audience === 'all'} onChange={() => setAudience('all')} /><span>Base Global (Todas as {targetStatus === 'approved' ? 'Aprovadas' : 'Reprovadas'})</span></label>
-                                
-                                <div className="flex flex-col sm:flex-row items-center gap-4">
-                                    <label className="flex-shrink-0 flex items-center space-x-2 cursor-pointer"><input type="radio" name="audience" value="org" checked={audience === 'org'} onChange={() => setAudience('org')} /><span>Por Organização:</span></label>
-                                    <select value={selectedOrgId} onChange={e => setSelectedOrgId(e.target.value)} disabled={audience !== 'org'} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 disabled:opacity-50">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Alcance</label>
+                                <select value={audienceType} onChange={e => setAudienceType(e.target.value as any)} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-sm text-white outline-none focus:ring-1 focus:ring-primary">
+                                    <option value="all">Toda a Base ({targetStatus === 'approved' ? 'Aprovadas' : 'Reprovadas'})</option>
+                                    <option value="org">Por Organização</option>
+                                    <option value="campaign">Por Evento Específico</option>
+                                </select>
+                            </div>
+
+                            {audienceType !== 'all' && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Organização</label>
+                                    <select value={selectedOrgId} onChange={e => { setSelectedOrgId(e.target.value); setSelectedCampaignName(''); }} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-sm text-white outline-none focus:ring-1 focus:ring-primary">
                                         <option value="">Selecione...</option>
                                         {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                                     </select>
                                 </div>
-                                
-                                <div className="flex flex-col sm:flex-row items-center gap-4">
-                                    <label className="flex-shrink-0 flex items-center space-x-2 cursor-pointer"><input type="radio" name="audience" value="campaign" checked={audience === 'campaign'} onChange={() => setAudience('campaign')} /><span>Por Evento:</span></label>
-                                    <select value={selectedCampaignId} onChange={e => setSelectedCampaignId(e.target.value)} disabled={audience !== 'campaign'} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 disabled:opacity-50">
+                            )}
+
+                            {audienceType === 'campaign' && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Evento</label>
+                                    <select value={selectedCampaignName} onChange={e => setSelectedCampaignName(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-sm text-white outline-none focus:ring-1 focus:ring-primary">
                                         <option value="">Selecione...</option>
-                                        {campaigns.map(c => <option key={c.id} value={c.id}>{c.name} ({c.stateAbbr})</option>)}
+                                        {campaigns.filter(c => !selectedOrgId || c.organizationId === selectedOrgId).map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
                                     </select>
                                 </div>
+                            )}
 
-                                <div className="space-y-3">
-                                    <label className="flex items-center space-x-2 cursor-pointer"><input type="radio" name="audience" value="individual" checked={audience === 'individual'} onChange={() => setAudience('individual')} /><span>Individual (Escolher uma a uma)</span></label>
-                                    {audience === 'individual' && (
-                                        <div className="pl-6 space-y-4">
-                                            <div className="flex gap-2">
-                                                <input type="email" value={individualEmail} onChange={e => setIndividualEmail(e.target.value)} placeholder="E-mail da divulgadora..." className="flex-grow bg-dark border border-gray-600 rounded-xl px-4 py-2 text-sm" />
-                                                <button type="button" onClick={searchIndividual} disabled={isSearchingIndividual} className="px-4 py-2 bg-primary text-white rounded-xl"><SearchIcon className="w-4 h-4"/></button>
-                                            </div>
-                                            <div className="space-y-2 max-h-40 overflow-y-auto">
-                                                {individualList.map(p => (
-                                                    <div key={p.id} className="flex items-center justify-between p-2 bg-white/5 rounded-lg border border-white/5">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-700">
-                                                                {p.photoUrls?.[0] ? <img src={p.photoUrls[0]} className="w-full h-full object-cover" /> : <UserIcon className="p-1"/>}
-                                                            </div>
-                                                            <span className="text-xs font-bold text-white">{p.name}</span>
-                                                        </div>
-                                                        <button type="button" onClick={() => setIndividualList(individualList.filter(item => item.id !== p.id))} className="text-red-400 hover:text-red-300"><TrashIcon className="w-4 h-4"/></button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
+                            <div className="pt-4 border-t border-white/5 space-y-4">
+                                <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Modo de Disparo</h3>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => setSelectionMode('total')} className={`py-3 rounded-xl border text-[10px] font-black uppercase transition-all ${selectionMode === 'total' ? 'bg-primary/20 border-primary text-primary' : 'bg-dark border-transparent text-gray-500'}`}>Todas ({promoters.length})</button>
+                                    <button onClick={() => setSelectionMode('individual')} className={`py-3 rounded-xl border text-[10px] font-black uppercase transition-all ${selectionMode === 'individual' ? 'bg-primary/20 border-primary text-primary' : 'bg-dark border-transparent text-gray-500'}`}>Individual ({selectedIds.size})</button>
                                 </div>
                             </div>
-                        </fieldset>
+                        </div>
 
-                        <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">
-                            <legend className="px-2 font-semibold text-primary">2. Crie a Mensagem</legend>
-                            <div>
-                                <label htmlFor="subject" className="block text-sm font-medium text-gray-300">Assunto</label>
-                                <input type="text" id="subject" value={subject} onChange={e => setSubject(e.target.value)} required className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700" />
+                        {selectionMode === 'individual' && (
+                            <div className="space-y-3">
+                                <p className="text-[9px] text-gray-400 uppercase font-black tracking-widest">Marque os nomes abaixo:</p>
+                                <div className="h-64 overflow-y-auto bg-dark/50 rounded-2xl border border-white/5 p-2 space-y-1 custom-scrollbar">
+                                    {isFetchingPromoters ? <div className="py-10 text-center animate-pulse text-primary font-black text-xs">Carregando...</div> : promoters.length === 0 ? <div className="py-10 text-center text-gray-600 text-xs">Ninguém encontrado.</div> : promoters.map(p => (
+                                        <label key={p.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer group">
+                                            <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => handleToggleSelect(p.id)} className="w-4 h-4 rounded border-gray-600 bg-black text-primary focus:ring-primary" />
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-white truncate group-hover:text-primary transition-colors">{p.name}</p>
+                                                <p className="text-[9px] text-gray-500 truncate">@{p.instagram}</p>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
-                             <div>
+                        )}
+                    </div>
+                </div>
+
+                <div className="lg:col-span-8">
+                    <div className="bg-secondary p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6">
+                        <div className="flex items-center gap-3 mb-2">
+                            <div className="p-3 bg-primary/10 rounded-2xl text-primary"><MegaphoneIcon className="w-6 h-6"/></div>
+                            <h2 className="text-xl font-black text-white uppercase tracking-tight">Conteúdo do E-mail</h2>
+                        </div>
+                        
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Assunto do E-mail</label>
+                                <input type="text" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Ex: Informações importantes para o evento..." className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:ring-2 focus:ring-primary" />
+                            </div>
+                            
+                            <div>
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1 mb-2 block">Mensagem (Use {"{{promoterName}}"} para personalizar)</label>
                                 <HtmlEditor value={body} onChange={setBody} disabled={isSending} />
                             </div>
-                        </fieldset>
-                    </div>
-                    <div><Preview html={body} subject={subject} /></div>
-                </div>
+                        </div>
 
-                <div className="flex justify-end mt-6 border-t border-gray-700 pt-4">
-                    <button type="submit" disabled={isSending || isLoadingData} className="px-10 py-4 bg-primary text-white font-black rounded-2xl hover:bg-primary-dark disabled:opacity-50 uppercase text-xs tracking-widest shadow-xl shadow-primary/20">
-                        {isSending ? 'ENVIANDO...' : 'DISPARAR AGORA'}
-                    </button>
+                        <div className="pt-6 border-t border-white/5 flex justify-end items-center gap-6">
+                             <div className="text-right">
+                                <p className="text-xs font-black text-white uppercase">Público Estimado</p>
+                                <p className="text-primary font-black text-xl">{selectionMode === 'individual' ? selectedIds.size : promoters.length} Divulgadoras</p>
+                             </div>
+                             <button onClick={handleSend} disabled={isSending || (selectionMode === 'individual' && selectedIds.size === 0)} className="px-10 py-5 bg-primary text-white font-black rounded-3xl shadow-xl shadow-primary/20 hover:bg-primary-dark transition-all uppercase text-xs tracking-[0.2em] disabled:opacity-50">
+                                {isSending ? 'ENVIANDO...' : 'DISPARAR AGORA'}
+                             </button>
+                        </div>
+                    </div>
                 </div>
-            </form>
+            </div>
         </div>
     );
 };

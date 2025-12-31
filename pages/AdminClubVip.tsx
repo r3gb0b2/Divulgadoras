@@ -92,18 +92,6 @@ const AdminClubVip: React.FC = () => {
         alert("Copiado!");
     };
 
-    const financialStats = useMemo(() => {
-        const confirmed = memberships.filter(m => m.status === 'confirmed');
-        const priceMap = vipEvents.reduce((acc, e) => ({...acc, [e.id]: e.price}), {} as Record<string, number>);
-        const totalBilled = confirmed.reduce((acc, m) => acc + (priceMap[m.vipEventId] || 0), 0);
-        
-        return {
-            totalBilled,
-            confirmedCount: confirmed.length,
-            waitingActivation: confirmed.filter(m => !m.isBenefitActive).length
-        };
-    }, [memberships, vipEvents]);
-
     const handleDownloadXLS = () => {
         const target = filteredMembers.filter(m => m.status === 'confirmed');
         if (target.length === 0) return;
@@ -323,7 +311,7 @@ const AdminClubVip: React.FC = () => {
                                                     {m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-5 text-right">
+                                            <td className="px-6 py-4 text-right">
                                                 {m.status === 'confirmed' && (
                                                     <button onClick={() => handleManualNotifySingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">
                                                         {m.isBenefitActive ? 'REENVIAR' : 'ATIVAR'}
