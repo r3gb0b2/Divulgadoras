@@ -19,7 +19,7 @@ const getBrevoApi = () => {
     return apiInstance;
 };
 
-// NOVO REMETENTE OFICIAL
+// REMETENTE OFICIAL
 const SENDER_EMAIL = "contato@equipecerta.app";
 const SENDER_NAME = "Equipe Certa";
 
@@ -42,19 +42,49 @@ async function sendSystemEmail(toEmail, subject, htmlContent) {
     }
 }
 
-// TRIGGER: Enviar e-mail assim que a divulgadora se cadastra (Recebimento)
+// FUNÇÃO DE INTELIGÊNCIA ARTIFICIAL (GEMINI)
+export const askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    try {
+        const { prompt } = data;
+        if (!prompt) {
+            throw new functions.https.HttpsError('invalid-argument', 'O prompt é obrigatório.');
+        }
+
+        // Inicialização conforme diretrizes
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        // Chamada ao modelo conforme diretrizes (gemini-3-flash-preview para tarefas de texto)
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+        });
+
+        // Acesso à propriedade .text conforme diretrizes
+        const textResponse = response.text;
+        
+        if (!textResponse) {
+            throw new Error("A IA não retornou conteúdo textual.");
+        }
+
+        return { text: textResponse };
+    } catch (e) {
+        console.error("Gemini Backend Error:", e);
+        throw new functions.https.HttpsError('internal', 'Erro ao processar IA no servidor: ' + e.message);
+    }
+});
+
+// TRIGGER: Enviar e-mail de recebimento
 export const onPromoterCreated = functions.region("southamerica-east1").firestore
     .document("promoters/{id}")
     .onCreate(async (snap, context) => {
         const p = snap.data();
-        // Não envia para cadastros de sistema ou VIP direto que já possuem fluxos próprios
         if (p.organizationId === 'club-vip-global' || p.campaignName === 'Membro Clube VIP') return;
 
         const html = `
             <div style="font-family:sans-serif; max-width:600px; padding:30px; border:1px solid #eee; border-radius:20px;">
                 <h2 style="color:#7e39d5;">Recebemos seu cadastro! 📝</h2>
                 <p>Olá <b>${p.name.split(' ')[0]}</b>, confirmamos o recebimento da sua inscrição para a equipe: <b>${p.campaignName || "Produção"}</b>.</p>
-                <p>Seu perfil agora passará por uma análise de fotos e redes sociais. Você pode acompanhar o resultado a qualquer momento no nosso site.</p>
+                <p>Seu perfil agora passará por uma análise. Você pode acompanhar o resultado no nosso site.</p>
                 <div style="margin:30px 0; text-align:center;">
                     <a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}" style="background:#7e39d5; color:#fff; padding:15px 30px; text-decoration:none; border-radius:12px; font-weight:bold; display:inline-block;">VER MEU STATUS</a>
                 </div>
@@ -65,29 +95,7 @@ export const onPromoterCreated = functions.region("southamerica-east1").firestor
         return sendSystemEmail(p.email, "Cadastro Recebido: " + (p.campaignName || "Equipe"), html);
     });
 
-// FUNÇÃO DE INTELIGÊNCIA ARTIFICIAL (GEMINI)
-export const askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    try {
-        const { prompt } = data;
-        if (!prompt) throw new functions.https.HttpsError('invalid-argument', 'Prompt não fornecido.');
-
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: prompt,
-        });
-
-        const textResponse = response.text;
-        if (!textResponse) throw new Error("A IA retornou uma resposta vazia.");
-
-        return { text: textResponse };
-    } catch (e) {
-        console.error("Gemini Error:", e);
-        throw new functions.https.HttpsError('internal', 'Erro ao processar IA: ' + e.message);
-    }
-});
-
-// Notificação de Boas-vindas ao ser aprovada (Status: Aprovada)
+// Notificação de Aprovação
 export const notifyApprovalBulk = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterIds } = data;
     try {
@@ -99,12 +107,11 @@ export const notifyApprovalBulk = functions.region("southamerica-east1").https.o
             const html = `
                 <div style="font-family:sans-serif; max-width:600px; padding:30px; border:1px solid #eee; border-radius:20px;">
                     <h2 style="color:#7e39d5;">Seu cadastro foi Aprovado! 🎉</h2>
-                    <p>Olá <b>${p.name.split(' ')[0]}</b>, temos o prazer de informar que seu perfil foi aprovado para a equipe do evento: <b>${p.campaignName || "Produção"}</b>.</p>
-                    <p>Agora você já pode acessar seu portal para visualizar suas tarefas, baixar artes e enviar seus prints.</p>
+                    <p>Olá <b>${p.name.split(' ')[0]}</b>, seu perfil foi aprovado para a equipe do evento: <b>${p.campaignName || "Produção"}</b>.</p>
+                    <p>Acesse seu portal para visualizar tarefas e enviar seus prints.</p>
                     <div style="margin:30px 0; text-align:center;">
                         <a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}" style="background:#7e39d5; color:#fff; padding:15px 30px; text-decoration:none; border-radius:12px; font-weight:bold; display:inline-block;">ACESSAR MEU PORTAL</a>
                     </div>
-                    <p style="font-size:12px; color:#666;">Se o botão não funcionar, copie e cole o link: <br> https://divulgadoras.vercel.app/#/status?email=${p.email}</p>
                     <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
                     <p style="font-size:11px; color:#999;">Equipe Certa - Gestão Profissional de Eventos</p>
                 </div>`;
