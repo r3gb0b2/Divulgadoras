@@ -88,6 +88,7 @@ const AdminClubVip: React.FC = () => {
     }, [memberships, filterStatus, filterBenefit, searchQuery, selectedEventId]);
 
     const handleCopy = (text: string) => {
+        if (!text) return;
         navigator.clipboard.writeText(text);
         alert("Copiado!");
     };
@@ -285,6 +286,7 @@ const AdminClubVip: React.FC = () => {
                                             }} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary" />
                                         </th>
                                         <th className="px-6 py-5">Membro</th>
+                                        <th className="px-6 py-5 text-center">Código</th>
                                         <th className="px-6 py-5 text-center">Ativação</th>
                                         <th className="px-6 py-5 text-center">Status Pgto</th>
                                         <th className="px-6 py-5 text-right">Ação</th>
@@ -308,6 +310,17 @@ const AdminClubVip: React.FC = () => {
                                             <td className="px-6 py-5">
                                                 <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
                                                 <p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p>
+                                            </td>
+                                            <td className="px-6 py-5 text-center">
+                                                {m.benefitCode ? (
+                                                    <span 
+                                                        onClick={() => handleCopy(m.benefitCode || '')}
+                                                        className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10 transition-colors"
+                                                        title="Clique para copiar"
+                                                    >
+                                                        {m.benefitCode}
+                                                    </span>
+                                                ) : <span className="text-gray-600 text-[10px] font-bold">---</span>}
                                             </td>
                                             <td className="px-6 py-5 text-center">
                                                 {m.isBenefitActive ? (
