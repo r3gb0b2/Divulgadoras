@@ -303,9 +303,13 @@ const StatusCheck: React.FC = () => {
                                                     <div className="bg-dark/60 p-4 rounded-2xl border border-white/5 space-y-3">
                                                         <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center">Seu Cupom de Benefício</p>
                                                         {p.emocoesBenefitActive ? (
-                                                            <div className="p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all">
-                                                                <p className="text-lg font-black text-primary font-mono">{p.emocoesBenefitCode || '---'}</p>
-                                                                <p className="text-[8px] text-gray-400 uppercase mt-1">Aplique no site STingressos</p>
+                                                            <div 
+                                                                onClick={() => { navigator.clipboard.writeText(p.emocoesBenefitCode || ''); alert("Código copiado!"); }}
+                                                                className="p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all cursor-pointer hover:bg-black/60 transition-colors group/code"
+                                                                title="Clique para copiar"
+                                                            >
+                                                                <p className="text-lg font-black text-primary font-mono group-hover/code:scale-105 transition-transform">{p.emocoesBenefitCode || '---'}</p>
+                                                                <p className="text-[8px] text-gray-400 uppercase mt-1">Clique acima para copiar</p>
                                                             </div>
                                                         ) : (
                                                             <div className="p-4 bg-amber-900/10 rounded-xl border border-amber-500/20 text-center">

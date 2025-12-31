@@ -150,18 +150,20 @@ const ClubVipStatus: React.FC = () => {
 
                                         <div className="bg-dark/60 p-6 rounded-3xl border border-white/5 space-y-4">
                                             <div>
-                                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center mb-2">Seu Código de Cortesia</p>
-                                                <div className="p-4 bg-black/40 rounded-2xl border border-primary/20 text-center select-all flex items-center justify-between">
-                                                    <p className="text-2xl font-black text-primary font-mono">{m.isBenefitActive ? (m.benefitCode || '---') : '******'}</p>
+                                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center mb-2">Seu Código Promocional</p>
+                                                <div 
+                                                    onClick={() => m.isBenefitActive && m.benefitCode && (navigator.clipboard.writeText(m.benefitCode), alert("Código copiado!"))}
+                                                    className={`p-4 bg-black/40 rounded-2xl border border-primary/20 text-center select-all flex items-center justify-between transition-all group/code ${m.isBenefitActive ? 'cursor-pointer hover:bg-black/60' : ''}`}
+                                                    title={m.isBenefitActive ? "Clique para copiar" : ""}
+                                                >
+                                                    <p className="text-2xl font-black text-primary font-mono group-hover/code:scale-105 transition-transform">{m.isBenefitActive ? (m.benefitCode || '---') : '******'}</p>
                                                     {m.isBenefitActive && (
-                                                        <button 
-                                                            onClick={() => { navigator.clipboard.writeText(m.benefitCode || ''); alert("Copiado!"); }} 
-                                                            className="p-2 text-gray-600 hover:text-white"
-                                                        >
+                                                        <div className="p-2 text-gray-600 hover:text-white">
                                                             <DocumentDuplicateIcon className="w-5 h-5"/>
-                                                        </button>
+                                                        </div>
                                                     )}
                                                 </div>
+                                                {m.isBenefitActive && <p className="text-[8px] text-gray-500 uppercase font-black text-center mt-2 tracking-widest">Clique no código acima para copiar</p>}
                                             </div>
 
                                             {m.isBenefitActive && directLink && (

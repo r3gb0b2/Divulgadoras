@@ -208,7 +208,7 @@ const PostCard: React.FC<{
                   Você precisa entrar no grupo oficial desta produtora (e aceitar os termos de uso) para que as tarefas sejam liberadas automaticamente no seu portal.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="flex-1 flex items-center justify-center gap-2 py-3 bg-yellow-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-yellow-500 transition-colors">ACEITAR REGRAS</Link>
+                  <Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="flex-1 flex items-center justify-center gap-2 py-3 bg-yellow-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest hover:yellow-500 transition-colors">ACEITAR REGRAS</Link>
                   <button onClick={onRefresh} className="flex-1 py-3 bg-gray-800 text-gray-300 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-gray-700 transition-colors border border-gray-700">JÁ ACEITEI, ATUALIZAR</button>
                 </div>
             </div>
@@ -611,10 +611,15 @@ const PostCheck: React.FC = () => {
                                             <div className="bg-dark/50 p-5 rounded-2xl border border-white/5 space-y-4">
                                                 <div>
                                                     <p className="text-[10px] text-gray-500 font-black uppercase mb-2 ml-1">Seu Cupom Promocional:</p>
-                                                    <div className="p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all flex items-center justify-between">
+                                                    <div 
+                                                        onClick={() => m.isBenefitActive && m.benefitCode && (navigator.clipboard.writeText(m.benefitCode), alert("Código copiado!"))}
+                                                        className={`p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all flex items-center justify-between transition-all ${m.isBenefitActive ? 'cursor-pointer hover:bg-black/60' : ''}`}
+                                                        title={m.isBenefitActive ? "Clique para copiar" : ""}
+                                                    >
                                                         <p className="text-lg font-black text-primary font-mono">{m.isBenefitActive ? (m.benefitCode || '---') : '******'}</p>
-                                                        {m.isBenefitActive && <button onClick={() => { navigator.clipboard.writeText(m.benefitCode || ''); alert("Copiado!"); }} className="p-2 text-gray-500 hover:text-white"><DocumentDuplicateIcon className="w-4 h-4"/></button>}
+                                                        {m.isBenefitActive && <div className="p-2 text-gray-500 hover:text-white"><DocumentDuplicateIcon className="w-4 h-4"/></div>}
                                                     </div>
+                                                    {m.isBenefitActive && <p className="text-[8px] text-gray-500 uppercase font-black text-center mt-2 tracking-widest">Clique no código acima para copiar</p>}
                                                 </div>
 
                                                 {m.isBenefitActive && directLink && (
@@ -643,7 +648,7 @@ const PostCheck: React.FC = () => {
                                     <SparklesIcon className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
                                     <h3 className="text-xl font-black text-white uppercase tracking-tight">Entre para o Clube!</h3>
                                     <p className="text-gray-400 text-sm mt-2 mb-6">Acesse benefícios exclusivos: ingressos promocionais, experiências e sorteios de camarim.</p>
-                                    <Link to="/promocao-emocoes" className="block w-full py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-primary/20">QUERO SER MEMBRO</Link>
+                                    <Link to="/clubvip" className="block w-full py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-primary/20">QUERO SER MEMBRO</Link>
                                 </div>
                             )}
                         </div>
@@ -653,7 +658,7 @@ const PostCheck: React.FC = () => {
 
             {justificationAssignment && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-6" onClick={() => setJustificationAssignment(null)}>
-                    <div className="bg-secondary w-full max-w-md p-8 rounded-3xl border border-gray-700 shadow-2xl" onClick={e => e.stopPropagation()}>
+                    <div className="bg-secondary w-full max-md p-8 rounded-3xl border border-gray-700 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Justificar</h3>
                         <p className="text-gray-400 text-sm mb-6 leading-relaxed">Por que você não poderá realizar esta postagem?</p>
                         

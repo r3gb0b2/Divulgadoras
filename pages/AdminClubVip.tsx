@@ -334,7 +334,13 @@ const AdminClubVip: React.FC = () => {
                                                 </td>
                                                 <td className="px-6 py-5 text-center">
                                                     {m.benefitCode ? (
-                                                        <span className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest">{m.benefitCode}</span>
+                                                        <span 
+                                                            onClick={() => { navigator.clipboard.writeText(m.benefitCode || ''); alert("Código copiado!"); }}
+                                                            className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10 transition-colors"
+                                                            title="Clique para copiar"
+                                                        >
+                                                            {m.benefitCode}
+                                                        </span>
                                                     ) : (
                                                         <span className="text-gray-600 text-[10px] font-bold">AGUARDANDO...</span>
                                                     )}
