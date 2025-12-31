@@ -18,6 +18,7 @@ const getBrevoApi = () => {
     return apiInstance;
 };
 
+// NOVO REMETENTE OFICIAL
 const SENDER_EMAIL = "contato@equipecerta.app";
 const SENDER_NAME = "Equipe Certa";
 
@@ -40,31 +41,55 @@ async function sendSystemEmail(toEmail, subject, htmlContent) {
     }
 }
 
+// Notificação de Boas-vindas ao ser aprovada (O "Cadastro" nos eventos)
+exports.notifyApprovalBulk = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { promoterIds } = data;
+    try {
+        const promises = promoterIds.map(async (id) => {
+            const snap = await db.collection("promoters").doc(id).get();
+            if (!snap.exists) return;
+            const p = snap.data();
+            
+            const html = `
+                <div style="font-family:sans-serif; max-width:600px; padding:30px; border:1px solid #eee; border-radius:20px;">
+                    <h2 style="color:#7e39d5;">Seu cadastro foi Aprovado! 🎉</h2>
+                    <p>Olá <b>${p.name.split(' ')[0]}</b>, temos o prazer de informar que seu perfil foi aprovado para a equipe do evento: <b>${p.campaignName || "Produção"}</b>.</p>
+                    <p>Agora você já pode acessar seu portal para visualizar suas tarefas, baixar artes e enviar seus prints.</p>
+                    <div style="margin:30px 0; text-align:center;">
+                        <a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}" style="background:#7e39d5; color:#fff; padding:15px 30px; text-decoration:none; border-radius:12px; font-weight:bold; display:inline-block;">ACESSAR MEU PORTAL</a>
+                    </div>
+                    <p style="font-size:12px; color:#666;">Se o botão não funcionar, copie e cole o link: <br> https://divulgadoras.vercel.app/#/status?email=${p.email}</p>
+                    <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
+                    <p style="font-size:11px; color:#999;">Equipe Certa - Gestão Profissional de Eventos</p>
+                </div>`;
+            
+            return sendSystemEmail(p.email, `🎉 Cadastro Aprovado: ${p.campaignName || "Equipe"}`, html);
+        });
+
+        await Promise.all(promises);
+        return { success: true };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
 exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { audience, subject, body } = data;
     try {
         let docs = [];
-
         if (audience.type === 'individual' && audience.promoterIds && audience.promoterIds.length > 0) {
             const promises = audience.promoterIds.map(id => db.collection("promoters").doc(id).get());
             const snaps = await Promise.all(promises);
             docs = snaps.filter(s => s.exists);
         } else {
             let query = db.collection("promoters");
-
-            if (audience.status) {
-                query = query.where("status", "==", audience.status);
-            } else {
-                query = query.where("status", "==", "approved");
-            }
-
-            if (audience.type === 'org') {
-                query = query.where("organizationId", "==", audience.orgId);
-            } else if (audience.type === 'campaign') {
+            if (audience.status) query = query.where("status", "==", audience.status);
+            else query = query.where("status", "==", "approved");
+            if (audience.type === 'org') query = query.where("organizationId", "==", audience.orgId);
+            else if (audience.type === 'campaign') {
                 query = query.where("campaignName", "==", audience.campaignName);
                 if (audience.orgId) query = query.where("organizationId", "==", audience.orgId);
             }
-
             const snap = await query.get();
             docs = snap.docs;
         }
@@ -77,9 +102,7 @@ exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(asy
 
         await Promise.all(promises);
         return { success: true, message: `E-mail enviado para ${docs.length} pessoas.` };
-    } catch (e) {
-        return { success: false, error: e.message };
-    }
+    } catch (e) { return { success: false, error: e.message }; }
 });
 
 exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
