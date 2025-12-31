@@ -46,30 +46,38 @@ async function sendSystemEmail(toEmail, subject, htmlContent) {
 export const askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     try {
         const { prompt } = data;
+        const apiKey = process.env.API_KEY;
+
         if (!prompt) {
             throw new functions.https.HttpsError('invalid-argument', 'O prompt é obrigatório.');
         }
 
-        // Inicialização conforme diretrizes
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        if (!apiKey) {
+            console.error("ERRO CRÍTICO: Variável de ambiente API_KEY não encontrada no servidor.");
+            throw new functions.https.HttpsError('failed-precondition', 'A chave de IA não foi configurada no servidor. Use "firebase functions:secrets:set API_KEY"');
+        }
+
+        // Inicialização com a chave validada
+        const ai = new GoogleGenAI({ apiKey });
         
-        // Chamada ao modelo conforme diretrizes (gemini-3-flash-preview para tarefas de texto)
+        // Chamada ao modelo gemini-3-flash-preview conforme diretrizes
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: prompt,
         });
 
-        // Acesso à propriedade .text conforme diretrizes
+        // Acesso à propriedade .text (propriedade, não método)
         const textResponse = response.text;
         
         if (!textResponse) {
-            throw new Error("A IA não retornou conteúdo textual.");
+            throw new Error("A IA não retornou conteúdo válido.");
         }
 
         return { text: textResponse };
     } catch (e) {
         console.error("Gemini Backend Error:", e);
-        throw new functions.https.HttpsError('internal', 'Erro ao processar IA no servidor: ' + e.message);
+        // Retorna o erro detalhado para ajudar no debug
+        throw new functions.https.HttpsError('internal', e.message || 'Erro ao processar IA');
     }
 });
 
