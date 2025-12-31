@@ -226,15 +226,18 @@ const StatusCheck: React.FC = () => {
         }, {} as Record<string, Promoter[]>);
     }, [promoters]);
 
-    // Lógica para diferenciar usuários puramente VIP de membros da equipe
     const isOnlyVip = useMemo(() => {
-        // É apenas VIP se todos os registros pertencerem à organização global do clube
         return promoters.length > 0 && promoters.every(p => p.organizationId === 'club-vip-global');
     }, [promoters]);
 
     const hasAnyApprovedJob = useMemo(() => {
         return promoters.some(p => p.status === 'approved' && p.organizationId !== 'club-vip-global');
     }, [promoters]);
+
+    const handleCopy = (text: string) => {
+        navigator.clipboard.writeText(text);
+        alert("Código copiado!");
+    };
 
     return (
         <div className="max-w-xl mx-auto py-6 px-4">
@@ -301,19 +304,19 @@ const StatusCheck: React.FC = () => {
                                                         <p className="text-green-400 font-black uppercase tracking-widest text-xs">Acesso VIP Ativado!</p>
                                                     </div>
                                                     <div className="bg-dark/60 p-4 rounded-2xl border border-white/5 space-y-3">
-                                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center">Seu Cupom de Benefício</p>
+                                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center">Seu Ingresso Promocional</p>
                                                         {p.emocoesBenefitActive ? (
                                                             <div 
-                                                                onClick={() => { navigator.clipboard.writeText(p.emocoesBenefitCode || ''); alert("Código copiado!"); }}
-                                                                className="p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all cursor-pointer hover:bg-black/60 transition-colors group/code"
+                                                                onClick={() => handleCopy(p.emocoesBenefitCode || '')}
+                                                                className="p-3 bg-black/40 rounded-xl border border-primary/20 text-center cursor-pointer hover:bg-black/60 transition-colors group/code"
                                                                 title="Clique para copiar"
                                                             >
                                                                 <p className="text-lg font-black text-primary font-mono group-hover/code:scale-105 transition-transform">{p.emocoesBenefitCode || '---'}</p>
-                                                                <p className="text-[8px] text-gray-400 uppercase mt-1">Clique acima para copiar</p>
+                                                                <p className="text-[8px] text-gray-400 uppercase mt-1">Clique para copiar</p>
                                                             </div>
                                                         ) : (
                                                             <div className="p-4 bg-amber-900/10 rounded-xl border border-amber-500/20 text-center">
-                                                                <p className="text-amber-400 font-black text-[10px] uppercase">CUPOM EM VALIDAÇÃO</p>
+                                                                <p className="text-amber-400 font-black text-[10px] uppercase">LIBERAÇÃO EM ANDAMENTO</p>
                                                                 <p className="text-gray-500 text-[8px] mt-1">Aguarde a ativação pelo administrador.</p>
                                                             </div>
                                                         )}
@@ -341,17 +344,10 @@ const StatusCheck: React.FC = () => {
                                 );
                             })}
 
-                            {/* Oculta o botão do portal se for APENAS cliente VIP */}
                             {!isOnlyVip && hasAnyApprovedJob && (
                                 <button onClick={() => navigate('/posts')} className="w-full py-5 bg-white text-dark font-black rounded-3xl shadow-xl hover:bg-gray-100 transition-all uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-2">
                                     ACESSAR MEU PORTAL <ArrowLeftIcon className="w-4 h-4 rotate-180" />
                                 </button>
-                            )}
-                            
-                            {isOnlyVip && (
-                                <div className="p-6 text-center text-gray-500 font-medium italic text-sm">
-                                    Dúvidas sobre o seu acesso VIP? <br/>Entre em contato pelo suporte.
-                                </div>
                             )}
                         </div>
                     ) : (

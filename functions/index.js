@@ -22,7 +22,7 @@ const getBrevoApi = () => {
     return apiInstance;
 };
 
-// REMETENTE ÚNICO E VERIFICADO
+// REMETENTE ÚNICO E VERIFICADO PARA TODO O SISTEMA
 const SENDER_EMAIL = "contato@equipecerta.app";
 const SENDER_NAME = "Equipe Certa";
 
@@ -49,7 +49,30 @@ async function sendSystemEmail(toEmail, subject, htmlContent) {
     }
 }
 
-// --- 1. NOTIFICAÇÃO DE NOVA PUBLICAÇÃO (POST) ---
+// --- 1. NEWSLETTER (CAMPANHAS EM MASSA) ---
+exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { audience, subject, body } = data;
+    // Lógica simplificada de busca de e-mails para garantir o uso do remetente correto
+    try {
+        let query = db.collection("promoters").where("status", "==", "approved");
+        if (audience.type === 'org') query = query.where("organizationId", "==", audience.orgId);
+        if (audience.type === 'campaign') query = query.where("campaignName", "==", audience.campaignName);
+
+        const snap = await query.get();
+        const promises = snap.docs.map(doc => {
+            const p = doc.data();
+            const personalizedBody = body.replace(/{{promoterName}}/g, p.name.split(' ')[0]);
+            return sendSystemEmail(p.email, subject, personalizedBody);
+        });
+
+        await Promise.all(promises);
+        return { success: true, message: `Newsletter enviada para ${snap.size} pessoas.` };
+    } catch (e) {
+        return { success: false, error: e.message };
+    }
+});
+
+// --- 2. NOTIFICAÇÃO DE NOVA PUBLICAÇÃO (POST) ---
 exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { postId } = data;
     try {
@@ -78,13 +101,13 @@ exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(as
         });
 
         await Promise.all(promises);
-        return { success: true, message: `Disparo concluído para ${assignmentsSnap.size} divulgadoras.` };
+        return { success: true, message: `Notificações enviadas.` };
     } catch (e) {
         return { success: false, error: e.message };
     }
 });
 
-// --- 2. BOAS-VINDAS VIP (Gatilho ao criar cadastro) ---
+// --- 3. BOAS-VINDAS VIP ---
 exports.onVipMembershipCreated = functions.region("southamerica-east1").firestore
     .document("vipMemberships/{id}")
     .onCreate(async (snap, context) => {
@@ -93,20 +116,15 @@ exports.onVipMembershipCreated = functions.region("southamerica-east1").firestor
             <div style="font-family:sans-serif; max-width:600px; padding:30px; border:1px solid #7e39d5; border-radius:20px;">
                 <h2 style="color:#7e39d5;">Recebemos seu cadastro! 🎉</h2>
                 <p>Olá <b>${m.promoterName}</b>,</p>
-                <p>Sua solicitação para o <b>${m.vipEventName}</b> foi registrada com sucesso.</p>
-                <p><b>O que acontece agora?</b></p>
-                <ul>
-                    <li>Se você já pagou o Pix, nosso sistema validará em instantes.</li>
-                    <li>Assim que validado, você receberá um novo e-mail com seu <b>Ingresso Promocional</b>.</li>
-                </ul>
-                <p>Você também pode acompanhar o status em tempo real no nosso site.</p>
+                <p>Sua solicitação para o <b>${m.vipEventName}</b> foi registrada.</p>
+                <p>Assim que validado, você receberá um novo e-mail com seu <b>Ingresso Promocional</b>.</p>
                 <div style="margin-top:30px; border-top:1px solid #eee; pt:20px; font-size:11px; color:#999;">Equipe Certa App</div>
             </div>
         `;
         return sendSystemEmail(m.promoterEmail, `✅ Recebemos seu cadastro: ${m.vipEventName}`, html);
     });
 
-// --- 3. ATIVAÇÃO VIP (Liberar código) ---
+// --- 4. ATIVAÇÃO VIP ---
 exports.notifyVipActivation = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { membershipId } = data;
     try {
@@ -129,7 +147,7 @@ exports.notifyVipActivation = functions.region("southamerica-east1").https.onCal
                     <span style="font-size:10px; color:#999; display:block; margin-bottom:5px;">SEU CÓDIGO:</span>
                     <b style="font-size:28px; color:#7e39d5; font-family:monospace;">${code}</b>
                 </div>
-                <a href="${resgateLink}" style="display:block; background:#7e39d5; color:#fff; text-align:center; padding:18px; text-decoration:none; border-radius:12px; font-weight:bold;">RESGATAR INGRESSO AGORA</a>
+                <a href="${resgateLink}" style="display:block; background:#7e39d5; color:#fff; text-align:center; padding:18px; text-decoration:none; border-radius:12px; font-weight:bold;">RESGATAR AGORA</a>
                 <p style="font-size:12px; color:#666; margin-top:20px;">*Este código é pessoal e dá direito a 1 ingresso promocional no setor selecionado.</p>
             </div>
         `;
@@ -138,9 +156,4 @@ exports.notifyVipActivation = functions.region("southamerica-east1").https.onCal
     } catch (e) {
         return { success: false, error: e.message };
     }
-});
-
-// TESTE DE SISTEMA
-exports.sendTestEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    return { success: await sendSystemEmail(SENDER_EMAIL, "Teste de Conexão Brevo", "<h1>Funcionando!</h1>") };
 });

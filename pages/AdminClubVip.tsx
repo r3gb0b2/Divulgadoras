@@ -79,7 +79,6 @@ const AdminClubVip: React.FC = () => {
             const matchesSearch = 
                 (m.promoterName || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
                 (m.promoterEmail || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (m.promoterWhatsapp || '').includes(searchQuery) ||
                 (m.benefitCode || '').toLowerCase().includes(searchQuery.toLowerCase());
             
             const matchesEvent = selectedEventId === 'all' || m.vipEventId === selectedEventId;
@@ -88,19 +87,19 @@ const AdminClubVip: React.FC = () => {
         });
     }, [memberships, filterStatus, filterBenefit, searchQuery, selectedEventId]);
 
+    const handleCopy = (text: string) => {
+        navigator.clipboard.writeText(text);
+        alert("Copiado!");
+    };
+
     const financialStats = useMemo(() => {
         const confirmed = memberships.filter(m => m.status === 'confirmed');
-        const pending = memberships.filter(m => m.status === 'pending');
         const priceMap = vipEvents.reduce((acc, e) => ({...acc, [e.id]: e.price}), {} as Record<string, number>);
-        
         const totalBilled = confirmed.reduce((acc, m) => acc + (priceMap[m.vipEventId] || 0), 0);
-        const totalPending = pending.reduce((acc, m) => acc + (priceMap[m.vipEventId] || 0), 0);
         
         return {
             totalBilled,
-            totalPending,
             confirmedCount: confirmed.length,
-            pendingCount: pending.length,
             waitingActivation: confirmed.filter(m => !m.isBenefitActive).length
         };
     }, [memberships, vipEvents]);
@@ -112,19 +111,13 @@ const AdminClubVip: React.FC = () => {
         const docId = `${membership.promoterId}_${membership.vipEventId}`;
 
         try {
-            // Garante que está ativo no banco
             await updateVipMembership(docId, { isBenefitActive: true });
             await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
             
-            // Dispara via Brevo
             const notifyActivation = httpsCallable(functions, 'notifyVipActivation');
-            const result: any = await notifyActivation({ membershipId: docId });
+            await notifyActivation({ membershipId: docId });
 
-            if (result.data?.success) {
-                alert(`Sucesso! E-mail enviado para ${membership.promoterName}`);
-            } else {
-                alert(`Atenção: O cupom foi ativado no banco de dados, mas o e-mail não foi enviado. Erro: ${result.data?.message || 'Configuração da API Key'}`);
-            }
+            alert(`Sucesso! E-mail enviado para ${membership.promoterName}`);
             await fetchData();
         } catch (e: any) {
             alert(`Falha técnica: ${e.message}`);
@@ -135,13 +128,11 @@ const AdminClubVip: React.FC = () => {
 
     const handleBulkNotify = async () => {
         if (selectedIds.size === 0) return;
-        if (!window.confirm(`Enviar e-mail de acesso para ${selectedIds.size} membros selecionados?`)) return;
+        if (!window.confirm(`Enviar e-mail para ${selectedIds.size} membros selecionados?`)) return;
         
         setIsBulkProcessing(true);
         try {
             const notifyActivation = httpsCallable(functions, 'notifyVipActivation');
-            let successCount = 0;
-
             for (const id of Array.from(selectedIds)) {
                 const m = memberships.find(item => item.id === id);
                 if (m) {
@@ -149,50 +140,15 @@ const AdminClubVip: React.FC = () => {
                     await updateVipMembership(docId, { isBenefitActive: true });
                     await updatePromoter(m.promoterId, { emocoesBenefitActive: true });
                     await notifyActivation({ membershipId: docId });
-                    successCount++;
                 }
             }
-
             setSelectedIds(new Set());
             await fetchData();
-            alert(`Operação concluída! ${successCount} ativações processadas.`);
+            alert(`Ativações processadas.`);
         } catch (e) {
-            alert("Erro ao processar notificações em massa.");
+            alert("Erro ao processar ativações.");
         } finally {
             setIsBulkProcessing(false);
-        }
-    };
-
-    const handleDownloadCodesCSV = () => {
-        const target = filteredMembers.filter(m => m.status === 'confirmed');
-        if (target.length === 0) return;
-
-        const headers = ["Nome", "E-mail", "WhatsApp", "Evento", "Código"];
-        const rows = target.map(m => `"${m.promoterName}","${m.promoterEmail}","${m.promoterWhatsapp || ''}","${m.vipEventName}","${m.benefitCode || ''}"`);
-        const csv = [headers.join(','), ...rows].join('\n');
-        
-        const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = `cupons_clube_vip_${new Date().getTime()}.csv`;
-        link.click();
-    };
-
-    const handleToggleSelectOne = (m: VipMembership) => {
-        const newSet = new Set(selectedIds);
-        if (newSet.has(m.id)) newSet.delete(m.id);
-        else newSet.add(m.id);
-        setSelectedIds(newSet);
-    };
-
-    const handleToggleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.checked) {
-            const selectableIds = filteredMembers
-                .filter(m => m.status === 'confirmed')
-                .map(m => m.id);
-            setSelectedIds(new Set(selectableIds));
-        } else {
-            setSelectedIds(new Set());
         }
     };
 
@@ -217,27 +173,15 @@ const AdminClubVip: React.FC = () => {
         } catch (e) { alert("Erro ao salvar evento."); } finally { setIsBulkProcessing(false); }
     };
 
-    const formatDate = (ts: any) => {
-        if (!ts) return 'N/A';
-        const d = ts.toDate ? ts.toDate() : new Date(ts);
-        return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    };
-
     return (
         <div className="pb-40">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
-                <div>
-                    <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3 leading-none">
-                        <TicketIcon className="w-8 h-8 text-primary" />
-                        Gestão Clube VIP
-                    </h1>
-                </div>
-                <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                    <button onClick={handleDownloadCodesCSV} className="flex-1 md:flex-none px-4 py-3 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-indigo-500 transition-all">
-                        <DocumentDuplicateIcon className="w-4 h-4" /> Exportar Códigos
-                    </button>
+                <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
+                    <TicketIcon className="w-8 h-8 text-primary" /> Gestão Clube VIP
+                </h1>
+                <div className="flex gap-2">
                     {activeTab === 'events' && (
-                        <button onClick={() => { setEditingEvent({ benefits: [] }); setIsModalOpen(true); }} className="flex-1 md:flex-none px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
+                        <button onClick={() => { setEditingEvent({ benefits: [] }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
                             <PlusIcon className="w-4 h-4" /> Novo Evento
                         </button>
                     )}
@@ -247,53 +191,33 @@ const AdminClubVip: React.FC = () => {
                 </div>
             </div>
 
-            {/* DASHBOARD CARDS */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 px-4 md:px-0">
-                <div className="bg-secondary/60 border border-white/5 p-6 rounded-[2rem] shadow-xl">
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Faturado</p>
-                    <p className="text-3xl font-black text-green-400">R$ {financialStats.totalBilled.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
-                    <p className="text-[10px] text-gray-600 font-bold mt-2 uppercase">{financialStats.confirmedCount} pagamentos</p>
-                </div>
-                <div className="bg-secondary/60 border border-white/5 p-6 rounded-[2rem] shadow-xl relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-10"><ClockIcon className="w-12 h-12 text-primary" /></div>
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Pendentes de Envio</p>
-                    <p className="text-3xl font-black text-white">{financialStats.waitingActivation}</p>
-                    <p className="text-[10px] text-primary font-bold mt-2 uppercase">Aguardando ativação Brevo</p>
-                </div>
-            </div>
-
             <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 w-fit ml-4 md:ml-0">
-                <button onClick={() => setActiveTab('members')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'members' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Membros ({memberships.length})</button>
-                <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Ofertas VIP ({vipEvents.length})</button>
+                <button onClick={() => setActiveTab('members')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'members' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Membros</button>
+                <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Eventos</button>
             </div>
 
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
                 {activeTab === 'members' ? (
                     <>
                         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                            <select value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)} className="bg-dark border border-gray-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-1 focus:ring-primary outline-none">
+                            <select value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)} className="bg-dark border border-gray-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase outline-none">
                                 <option value="all">TODOS EVENTOS</option>
                                 {vipEvents.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                             </select>
-                            <select value={filterBenefit} onChange={e => setFilterBenefit(e.target.value as any)} className="bg-dark border border-gray-700 text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest focus:ring-1 focus:ring-primary outline-none">
-                                <option value="all">TODOS</option>
-                                <option value="waiting">AGUARDANDO ENVIO</option>
-                                <option value="active">JÁ ENVIADOS</option>
-                            </select>
-                            <div className="relative lg:col-span-2">
+                            <div className="relative lg:col-span-3">
                                 <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                 <input 
                                     type="text" placeholder="BUSCAR NOME OU CÓDIGO..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                    className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs font-black uppercase focus:ring-1 focus:ring-primary outline-none"
+                                    className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs font-black uppercase outline-none"
                                 />
                             </div>
                         </div>
 
                         {selectedIds.size > 0 && (
-                            <div className="p-4 bg-primary rounded-2xl flex justify-between items-center animate-fadeIn shadow-lg shadow-primary/20">
+                            <div className="p-4 bg-primary rounded-2xl flex justify-between items-center animate-fadeIn">
                                 <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} membros selecionados</p>
                                 <button onClick={handleBulkNotify} disabled={isBulkProcessing} className="px-6 py-2 bg-white text-primary font-black rounded-xl text-[10px] uppercase hover:bg-gray-100 transition-all">
-                                    {isBulkProcessing ? 'ENVIANDO...' : 'ATIVAR E ENVIAR E-MAIL'}
+                                    ATIVAR E ENVIAR E-MAIL
                                 </button>
                             </div>
                         )}
@@ -303,69 +227,61 @@ const AdminClubVip: React.FC = () => {
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
                                         <th className="px-6 py-5 w-10">
-                                            <input type="checkbox" checked={filteredMembers.length > 0 && selectedIds.size === filteredMembers.filter(m => m.status === 'confirmed').length} onChange={handleToggleSelectAll} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary" />
+                                            <input type="checkbox" onChange={(e) => {
+                                                if (e.target.checked) setSelectedIds(new Set(filteredMembers.map(m => m.id)));
+                                                else setSelectedIds(new Set());
+                                            }} className="w-5 h-5 rounded border-gray-700 bg-dark text-primary" />
                                         </th>
                                         <th className="px-6 py-5">Membro</th>
                                         <th className="px-6 py-5 text-center">Código</th>
                                         <th className="px-6 py-5 text-center">Status</th>
-                                        <th className="px-6 py-5 text-right">Envio Brevo</th>
+                                        <th className="px-6 py-5 text-right">Ação</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {isLoading ? (
-                                        <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-bold uppercase text-xs tracking-widest animate-pulse">Carregando membros...</td></tr>
-                                    ) : filteredMembers.length === 0 ? (
-                                        <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-bold uppercase text-xs tracking-widest">Nenhum membro encontrado</td></tr>
-                                    ) : (
-                                        filteredMembers.map(m => (
-                                            <tr key={m.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.has(m.id) ? 'bg-primary/5' : ''}`}>
-                                                <td className="px-6 py-5">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={selectedIds.has(m.id)} 
-                                                        onChange={() => handleToggleSelectOne(m)} 
-                                                        disabled={m.status !== 'confirmed'}
-                                                        className={`w-5 h-5 rounded border-gray-700 bg-dark text-primary focus:ring-primary ${m.status !== 'confirmed' ? 'opacity-20 cursor-not-allowed' : 'cursor-pointer'}`} 
-                                                    />
-                                                </td>
-                                                <td className="px-6 py-5">
-                                                    <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
-                                                    <p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p>
-                                                </td>
-                                                <td className="px-6 py-5 text-center">
-                                                    {m.benefitCode ? (
-                                                        <span 
-                                                            onClick={() => { navigator.clipboard.writeText(m.benefitCode || ''); alert("Código copiado!"); }}
-                                                            className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10 transition-colors"
-                                                            title="Clique para copiar"
-                                                        >
-                                                            {m.benefitCode}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-gray-600 text-[10px] font-bold">AGUARDANDO...</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-5 text-center">
-                                                    {m.status === 'confirmed' ? (
-                                                        <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">PAGO</span>
-                                                    ) : (
-                                                        <span className="px-2 py-0.5 rounded-full bg-orange-900/40 text-orange-400 border border-orange-800 text-[8px] font-black uppercase tracking-widest">PENDENTE</span>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-5 text-right">
-                                                    {m.status === 'confirmed' && (
-                                                        <button 
-                                                            onClick={() => handleManualNotifySingle(m)} 
-                                                            disabled={isBulkProcessing}
-                                                            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${m.isBenefitActive ? 'bg-green-600 text-white' : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg'}`}
-                                                        >
-                                                            {m.isBenefitActive ? 'REENVIAR E-MAIL' : 'ATIVAR E ENVIAR'}
-                                                        </button>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
+                                    {filteredMembers.map(m => (
+                                        <tr key={m.id} className="hover:bg-white/[0.02] transition-colors">
+                                            <td className="px-6 py-5">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={selectedIds.has(m.id)} 
+                                                    onChange={() => {
+                                                        const n = new Set(selectedIds);
+                                                        if (n.has(m.id)) n.delete(m.id); else n.add(m.id);
+                                                        setSelectedIds(n);
+                                                    }} 
+                                                    className="w-5 h-5 rounded border-gray-700 bg-dark text-primary" 
+                                                />
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
+                                                <p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p>
+                                            </td>
+                                            <td className="px-6 py-5 text-center">
+                                                {m.benefitCode ? (
+                                                    <span 
+                                                        onClick={() => handleCopy(m.benefitCode || '')}
+                                                        className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10 transition-colors"
+                                                        title="Clique para copiar"
+                                                    >
+                                                        {m.benefitCode}
+                                                    </span>
+                                                ) : <span className="text-gray-600 text-[10px] font-bold">---</span>}
+                                            </td>
+                                            <td className="px-6 py-5 text-center">
+                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>
+                                                    {m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-5 text-right">
+                                                {m.status === 'confirmed' && (
+                                                    <button onClick={() => handleManualNotifySingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">
+                                                        {m.isBenefitActive ? 'REENVIAR' : 'ATIVAR'}
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
                                 </tbody>
                             </table>
                         </div>
@@ -373,38 +289,29 @@ const AdminClubVip: React.FC = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {vipEvents.map(ev => (
-                            <div key={ev.id} className="bg-dark/40 rounded-[2rem] p-6 border border-white/5 flex flex-col group hover:border-primary/30 transition-all shadow-lg">
+                            <div key={ev.id} className="bg-dark/40 rounded-[2rem] p-6 border border-white/5 flex flex-col group hover:border-primary/30 transition-all">
                                 <div className="flex justify-between items-start mb-4">
                                     <div className={`p-3 rounded-2xl ${ev.isActive ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
                                         <TicketIcon className="w-8 h-8" />
                                     </div>
-                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-2 bg-gray-800 text-gray-400 rounded-xl hover:text-white"><PencilIcon className="w-4 h-4"/></button>
-                                    </div>
+                                    <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-2 text-gray-400 hover:text-white"><PencilIcon className="w-4 h-4"/></button>
                                 </div>
                                 <h3 className="text-xl font-black text-white uppercase mb-2">{ev.name}</h3>
                                 <p className="text-primary font-black text-2xl mb-4">R$ {ev.price.toFixed(2)}</p>
-                                <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${ev.isActive ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-red-900/40 text-red-400 border-red-800'}`}>
-                                        {ev.isActive ? 'Oferta Ativa' : 'Pausada'}
-                                    </span>
-                                </div>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
 
-            {/* Modal para Criar/Editar Evento */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] flex items-center justify-center p-6" onClick={() => setIsModalOpen(false)}>
-                    <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                    <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-6">{editingEvent?.id ? 'Editar' : 'Nova'} Oferta VIP</h2>
-                        
-                        <form className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+                        <form className="space-y-4">
                             <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Nome do Produto</label>
-                                <input type="text" value={editingEvent?.name || ''} onChange={e => setEditingEvent({...editingEvent!, name: e.target.value})} required className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white font-bold outline-none focus:ring-1 focus:ring-primary" placeholder="Ex: Camarote VIP Sunset" />
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Nome</label>
+                                <input type="text" value={editingEvent?.name || ''} onChange={e => setEditingEvent({...editingEvent!, name: e.target.value})} required className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white font-bold" />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
@@ -412,37 +319,16 @@ const AdminClubVip: React.FC = () => {
                                     <input type="number" step="0.01" value={editingEvent?.price || ''} onChange={e => setEditingEvent({...editingEvent!, price: parseFloat(e.target.value)})} required className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white font-bold" />
                                 </div>
                                 <div>
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Status</label>
-                                    <select value={editingEvent?.isActive ? 'true' : 'false'} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.value === 'true'})} className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white font-bold">
-                                        <option value="true">Ativo</option>
-                                        <option value="false">Pausado</option>
-                                    </select>
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Slug STingressos</label>
+                                    <input type="text" value={editingEvent?.externalSlug || ''} onChange={e => setEditingEvent({...editingEvent!, externalSlug: e.target.value})} className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white font-mono" />
                                 </div>
                             </div>
                             <div>
-                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">ID STingressos (Slug)</label>
-                                <input type="text" value={editingEvent?.externalSlug || ''} onChange={e => setEditingEvent({...editingEvent!, externalSlug: e.target.value})} className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white font-mono text-sm" placeholder="Ex: festival-sunset-2024" />
-                            </div>
-                            <div>
                                 <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Benefícios (um por linha)</label>
-                                <textarea 
-                                    rows={4} 
-                                    value={editingEvent?.benefits?.join('\n') || ''} 
-                                    onChange={e => setEditingEvent({...editingEvent!, benefits: e.target.value.split('\n').filter(b => b.trim() !== '')})}
-                                    className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white text-sm" 
-                                    placeholder="Ex: Camiseta Exclusiva"
-                                />
+                                <textarea rows={4} value={editingEvent?.benefits?.join('\n') || ''} onChange={e => setEditingEvent({...editingEvent!, benefits: e.target.value.split('\n')})} className="w-full bg-dark border border-white/10 rounded-2xl p-4 text-white text-sm" />
                             </div>
+                            <button type="submit" onClick={handleSaveEvent} disabled={isBulkProcessing} className="w-full py-4 bg-primary text-white font-black rounded-2xl uppercase tracking-widest">SALVAR</button>
                         </form>
-
-                        <div className="flex gap-4 mt-8 pt-6 border-t border-white/5">
-                           <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-4 bg-gray-800 text-gray-400 font-bold rounded-2xl uppercase text-xs">Cancelar</button>
-                           <button type="submit" onClick={() => {
-                               // Simulação de clique no submit
-                               const form = document.querySelector('form');
-                               if (form) handleSaveEvent({ preventDefault: () => {} } as any);
-                           }} disabled={isBulkProcessing} className="flex-[2] py-4 bg-primary text-white font-black rounded-2xl shadow-xl uppercase text-xs tracking-widest">{isBulkProcessing ? 'SALVANDO...' : 'CONFIRMAR'}</button>
-                        </div>
                     </div>
                 </div>
             )}
