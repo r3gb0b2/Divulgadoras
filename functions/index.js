@@ -1,8 +1,8 @@
 
-const admin = require("firebase-admin");
-const functions = require("firebase-functions");
-const SibApiV3Sdk = require("@getbrevo/brevo");
-const { GoogleGenAI } = require("@google/genai");
+import admin from "firebase-admin";
+import functions from "firebase-functions";
+import SibApiV3Sdk from "@getbrevo/brevo";
+import { GoogleGenAI } from "@google/genai";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -42,16 +42,36 @@ async function sendSystemEmail(toEmail, subject, htmlContent) {
     }
 }
 
+// TRIGGER: Enviar e-mail assim que a divulgadora se cadastra (Recebimento)
+export const onPromoterCreated = functions.region("southamerica-east1").firestore
+    .document("promoters/{id}")
+    .onCreate(async (snap, context) => {
+        const p = snap.data();
+        // Não envia para cadastros de sistema ou VIP direto que já possuem fluxos próprios
+        if (p.organizationId === 'club-vip-global' || p.campaignName === 'Membro Clube VIP') return;
+
+        const html = `
+            <div style="font-family:sans-serif; max-width:600px; padding:30px; border:1px solid #eee; border-radius:20px;">
+                <h2 style="color:#7e39d5;">Recebemos seu cadastro! 📝</h2>
+                <p>Olá <b>${p.name.split(' ')[0]}</b>, confirmamos o recebimento da sua inscrição para a equipe: <b>${p.campaignName || "Produção"}</b>.</p>
+                <p>Seu perfil agora passará por uma análise de fotos e redes sociais. Você pode acompanhar o resultado a qualquer momento no nosso site.</p>
+                <div style="margin:30px 0; text-align:center;">
+                    <a href="https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}" style="background:#7e39d5; color:#fff; padding:15px 30px; text-decoration:none; border-radius:12px; font-weight:bold; display:inline-block;">VER MEU STATUS</a>
+                </div>
+                <hr style="border:0; border-top:1px solid #eee; margin:20px 0;">
+                <p style="font-size:11px; color:#999;">Equipe Certa - Gestão Profissional de Eventos</p>
+            </div>`;
+        
+        return sendSystemEmail(p.email, "Cadastro Recebido: " + (p.campaignName || "Equipe"), html);
+    });
+
 // FUNÇÃO DE INTELIGÊNCIA ARTIFICIAL (GEMINI)
-exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+export const askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     try {
         const { prompt } = data;
         if (!prompt) throw new functions.https.HttpsError('invalid-argument', 'Prompt não fornecido.');
 
-        // Inicializa o cliente com a chave de ambiente
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        
-        // Gera o conteúdo usando o modelo flash para rapidez e eficiência em texto
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: prompt,
@@ -67,8 +87,8 @@ exports.askGemini = functions.region("southamerica-east1").https.onCall(async (d
     }
 });
 
-// Notificação de Boas-vindas ao ser aprovada (O "Cadastro" nos eventos)
-exports.notifyApprovalBulk = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+// Notificação de Boas-vindas ao ser aprovada (Status: Aprovada)
+export const notifyApprovalBulk = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterIds } = data;
     try {
         const promises = promoterIds.map(async (id) => {
@@ -99,7 +119,7 @@ exports.notifyApprovalBulk = functions.region("southamerica-east1").https.onCall
     }
 });
 
-exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+export const sendNewsletter = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { audience, subject, body } = data;
     try {
         let docs = [];
@@ -131,7 +151,7 @@ exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(asy
     } catch (e) { return { success: false, error: e.message }; }
 });
 
-exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+export const notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { postId } = data;
     try {
         const postSnap = await db.collection("posts").doc(postId).get();
@@ -153,7 +173,7 @@ exports.notifyPostEmail = functions.region("southamerica-east1").https.onCall(as
     } catch (e) { return { success: false, error: e.message }; }
 });
 
-exports.notifyVipActivation = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+export const notifyVipActivation = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { membershipId } = data;
     try {
         const snap = await db.collection("vipMemberships").doc(membershipId).get();
