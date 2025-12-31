@@ -2,6 +2,7 @@
 const admin = require("firebase-admin");
 const functions = require("firebase-functions");
 const SibApiV3Sdk = require("@getbrevo/brevo");
+const { GoogleGenAI } = require("@google/genai");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -40,6 +41,31 @@ async function sendSystemEmail(toEmail, subject, htmlContent) {
         return false;
     }
 }
+
+// FUNÇÃO DE INTELIGÊNCIA ARTIFICIAL (GEMINI)
+exports.askGemini = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    try {
+        const { prompt } = data;
+        if (!prompt) throw new functions.https.HttpsError('invalid-argument', 'Prompt não fornecido.');
+
+        // Inicializa o cliente com a chave de ambiente
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        
+        // Gera o conteúdo usando o modelo flash para rapidez e eficiência em texto
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+        });
+
+        const textResponse = response.text;
+        if (!textResponse) throw new Error("A IA retornou uma resposta vazia.");
+
+        return { text: textResponse };
+    } catch (e) {
+        console.error("Gemini Error:", e);
+        throw new functions.https.HttpsError('internal', 'Erro ao processar IA: ' + e.message);
+    }
+});
 
 // Notificação de Boas-vindas ao ser aprovada (O "Cadastro" nos eventos)
 exports.notifyApprovalBulk = functions.region("southamerica-east1").https.onCall(async (data, context) => {
