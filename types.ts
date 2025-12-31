@@ -13,6 +13,14 @@ export type PlanId = 'basic' | 'professional';
 
 export type RecoveryStatus = 'none' | 'contacted' | 'purchased' | 'no_response';
 
+export interface RecoveryTemplate {
+  id: string;
+  title: string;
+  text: string;
+  organizationId: string;
+  createdAt: Timestamp | FieldValue;
+}
+
 export interface VipEvent {
   id: string;
   name: string;
@@ -79,7 +87,6 @@ export interface Promoter {
   emocoesStatus?: 'none' | 'pending' | 'confirmed' | 'rejected';
   emocoesBenefitCode?: string;
   emocoesBenefitActive?: boolean;
-  // Novos campos para Recuperação de Vendas
   recoveryStatus?: RecoveryStatus;
   recoveryAdminEmail?: string;
   recoveryUpdatedAt?: Timestamp | FieldValue;

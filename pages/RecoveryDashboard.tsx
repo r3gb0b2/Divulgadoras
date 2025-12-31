@@ -5,10 +5,11 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getAllPromoters, updatePromoter } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
-import { Promoter, RecoveryStatus, Organization, Campaign } from '../types';
+import { getRecoveryTemplates, saveRecoveryTemplate, deleteRecoveryTemplate } from '../services/recoveryService';
+import { Promoter, RecoveryStatus, Organization, Campaign, RecoveryTemplate } from '../types';
 import { 
     ArrowLeftIcon, SearchIcon, WhatsAppIcon, InstagramIcon, 
-    RefreshIcon, FilterIcon, ClockIcon, CheckCircleIcon, XIcon, UserIcon 
+    RefreshIcon, FilterIcon, ClockIcon, CheckCircleIcon, XIcon, UserIcon, PencilIcon, TrashIcon, PlusIcon, DocumentDuplicateIcon 
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
 
@@ -19,11 +20,19 @@ const RecoveryDashboard: React.FC = () => {
     const [leads, setLeads] = useState<Promoter[]>([]);
     const [organizations, setOrganizations] = useState<Record<string, string>>({});
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [templates, setTemplates] = useState<RecoveryTemplate[]>([]);
+    
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState<RecoveryStatus | 'all'>('none');
     const [ownerFilter, setOwnerFilter] = useState<'all' | 'me' | 'none'>('all');
     const [campaignFilter, setCampaignFilter] = useState('all');
+
+    // Modais
+    const [isManageTemplatesOpen, setIsManageTemplatesOpen] = useState(false);
+    const [isSelectTemplateOpen, setIsSelectTemplateOpen] = useState(false);
+    const [editingTemplate, setEditingTemplate] = useState<Partial<RecoveryTemplate> | null>(null);
+    const [selectedLead, setSelectedLead] = useState<Promoter | null>(null);
 
     const fetchData = useCallback(async () => {
         setIsLoading(true);
@@ -31,22 +40,22 @@ const RecoveryDashboard: React.FC = () => {
             const orgIdToFetch = adminData?.role === 'superadmin' ? 'all' : selectedOrgId;
             if (!orgIdToFetch) return;
 
-            // Carregar dados em paralelo
-            const [orgs, allCamps, allPromoters] = await Promise.all([
+            const [orgs, allCamps, allPromoters, allTemplates] = await Promise.all([
                 getOrganizations(),
                 getAllCampaigns(orgIdToFetch === 'all' ? undefined : orgIdToFetch),
                 getAllPromoters({
                     organizationId: orgIdToFetch,
                     filterOrgId: orgIdToFetch,
                     status: 'all'
-                })
+                }),
+                getRecoveryTemplates(selectedOrgId || 'global')
             ]);
 
             const orgMap = orgs.reduce((acc, o) => ({ ...acc, [o.id]: o.name }), {} as Record<string, string>);
             setOrganizations(orgMap);
             setCampaigns(allCamps.sort((a, b) => a.name.localeCompare(b.name)));
+            setTemplates(allTemplates);
 
-            // Filtra apenas rejeitadas
             const rejected = allPromoters.filter(p => p.status === 'rejected' || (p.status as string) === 'rejected_editable');
             setLeads(rejected);
 
@@ -98,17 +107,54 @@ const RecoveryDashboard: React.FC = () => {
         }
     };
 
-    const handleStartWhatsApp = (lead: Promoter) => {
-        const firstName = lead.name.split(' ')[0];
-        const adminName = adminData?.email.split('@')[0];
-        const msg = `Olá ${firstName}! Sou o ${adminName} da equipe de gestão. 👋\n\nVi que seu perfil não pôde ser aprovado para a equipe do evento ${lead.campaignName} no momento, mas não queremos que você fique de fora! 🚀\n\nLiberei uma cortesia VIP exclusiva pra você no nosso Clube. Você ganha benefícios e o seu ingresso sai por um valor promocional. Tem interesse em saber como funciona?`;
-        
-        if (!lead.recoveryAdminEmail) {
-            handleUpdateStatus(lead.id, 'contacted');
+    const handleStartRecovery = (lead: Promoter) => {
+        setSelectedLead(lead);
+        if (templates.length === 0) {
+            // Se não houver modelos, usa o padrão antigo
+            const firstName = lead.name.split(' ')[0];
+            const adminName = adminData?.email.split('@')[0];
+            const msg = `Olá ${firstName}! Sou o ${adminName} da equipe de gestão. 👋\n\nVi que seu perfil não pôde ser aprovado para a equipe do evento ${lead.campaignName} no momento, mas não queremos que você fique de fora! 🚀\n\nLiberei uma cortesia VIP exclusiva pra você no nosso Clube. Você ganha benefícios e o seu ingresso sai por um valor promocional. Tem interesse em saber como funciona?`;
+            
+            if (!lead.recoveryAdminEmail) handleUpdateStatus(lead.id, 'contacted');
+            window.open(`https://wa.me/55${lead.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+        } else {
+            setIsSelectTemplateOpen(true);
         }
+    };
+
+    const handleSendTemplate = (template: RecoveryTemplate) => {
+        if (!selectedLead) return;
         
-        const url = `https://wa.me/55${lead.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
-        window.open(url, '_blank');
+        const firstName = selectedLead.name.split(' ')[0];
+        const adminName = adminData?.email.split('@')[0] || 'Gestor';
+        
+        const msg = template.text
+            .replace(/{{nome}}/g, firstName)
+            .replace(/{{admin}}/g, adminName)
+            .replace(/{{evento}}/g, selectedLead.campaignName || 'evento');
+
+        if (!selectedLead.recoveryAdminEmail) handleUpdateStatus(selectedLead.id, 'contacted');
+        
+        window.open(`https://wa.me/55${selectedLead.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+        setIsSelectTemplateOpen(false);
+    };
+
+    const handleSaveTemplateAction = async () => {
+        if (!editingTemplate?.title || !editingTemplate?.text || !selectedOrgId) return;
+        try {
+            await saveRecoveryTemplate(selectedOrgId, editingTemplate);
+            setEditingTemplate(null);
+            const allTemplates = await getRecoveryTemplates(selectedOrgId);
+            setTemplates(allTemplates);
+        } catch (e) { alert("Erro ao salvar."); }
+    };
+
+    const handleDeleteTemplateAction = async (id: string) => {
+        if (!window.confirm("Excluir este modelo?")) return;
+        try {
+            await deleteRecoveryTemplate(id);
+            setTemplates(prev => prev.filter(t => t.id !== id));
+        } catch (e) { alert("Erro ao excluir."); }
     };
 
     return (
@@ -121,6 +167,9 @@ const RecoveryDashboard: React.FC = () => {
                     <p className="text-gray-500 text-xs font-black uppercase tracking-widest mt-1">Transforme rejeições em conversões</p>
                 </div>
                 <div className="flex gap-2">
+                    <button onClick={() => setIsManageTemplatesOpen(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all flex items-center gap-2">
+                        <DocumentDuplicateIcon className="w-4 h-4" /> Modelos de Resposta
+                    </button>
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
                         <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
                     </button>
@@ -206,7 +255,7 @@ const RecoveryDashboard: React.FC = () => {
                                     </td>
                                     <td className="px-6 py-5 text-right">
                                         <button 
-                                            onClick={() => handleStartWhatsApp(p)}
+                                            onClick={() => handleStartRecovery(p)}
                                             className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-green-500 shadow-lg shadow-green-900/20 active:scale-95 transition-all"
                                         >
                                             <WhatsAppIcon className="w-4 h-4" /> INICIAR
@@ -218,6 +267,80 @@ const RecoveryDashboard: React.FC = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Modal: Gerenciar Modelos */}
+            {isManageTemplatesOpen && (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-6" onClick={() => setIsManageTemplatesOpen(false)}>
+                    <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10 shadow-2xl flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Modelos de Mensagem</h2>
+                            <button onClick={() => setIsManageTemplatesOpen(false)} className="p-2 text-gray-500 hover:text-white"><XIcon className="w-6 h-6"/></button>
+                        </div>
+
+                        <div className="flex-grow overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                            {editingTemplate ? (
+                                <div className="bg-dark/50 p-6 rounded-3xl border border-primary/30 space-y-4 animate-fadeIn">
+                                    <input type="text" placeholder="Título do Modelo (ex: Boas vindas VIP)" value={editingTemplate.title || ''} onChange={e => setEditingTemplate({...editingTemplate, title: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                    <textarea rows={6} placeholder="Mensagem... Use {{nome}}, {{admin}} e {{evento}}" value={editingTemplate.text || ''} onChange={e => setEditingTemplate({...editingTemplate, text: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white text-sm" />
+                                    <div className="flex gap-2">
+                                        <button onClick={handleSaveTemplateAction} className="flex-1 py-3 bg-primary text-white font-black rounded-xl uppercase text-xs">Salvar Modelo</button>
+                                        <button onClick={() => setEditingTemplate(null)} className="px-6 py-3 bg-gray-700 text-white font-black rounded-xl uppercase text-xs">Cancelar</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <button onClick={() => setEditingTemplate({})} className="w-full py-4 border-2 border-dashed border-gray-700 rounded-3xl text-gray-500 font-black uppercase text-xs hover:border-primary hover:text-primary transition-all flex items-center justify-center gap-2">
+                                        <PlusIcon className="w-4 h-4" /> Novo Modelo de Resposta
+                                    </button>
+                                    {templates.map(t => (
+                                        <div key={t.id} className="bg-dark/40 p-5 rounded-2xl border border-white/5 flex justify-between items-start group">
+                                            <div className="min-w-0">
+                                                <h3 className="text-white font-black uppercase text-xs mb-1">{t.title}</h3>
+                                                <p className="text-gray-500 text-[11px] line-clamp-2 italic">"{t.text}"</p>
+                                            </div>
+                                            <div className="flex gap-1 ml-4">
+                                                <button onClick={() => setEditingTemplate(t)} className="p-2 text-gray-500 hover:text-white"><PencilIcon className="w-4 h-4"/></button>
+                                                <button onClick={() => handleDeleteTemplateAction(t.id)} className="p-2 text-gray-500 hover:text-red-500"><TrashIcon className="w-4 h-4"/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal: Selecionar Modelo para Envio */}
+            {isSelectTemplateOpen && selectedLead && (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-6" onClick={() => setIsSelectTemplateOpen(false)}>
+                    <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-xl font-black text-white uppercase tracking-tighter mb-2">Enviar Mensagem</h2>
+                        <p className="text-gray-500 text-xs font-black uppercase mb-6 tracking-widest">Para: {selectedLead.name.split(' ')[0]}</p>
+
+                        <div className="space-y-3">
+                            {templates.map(t => (
+                                <button 
+                                    key={t.id} 
+                                    onClick={() => handleSendTemplate(t)}
+                                    className="w-full bg-dark/60 p-5 rounded-2xl border border-white/5 hover:border-green-500/50 text-left transition-all group flex justify-between items-center"
+                                >
+                                    <div className="min-w-0">
+                                        <p className="text-white font-black uppercase text-xs group-hover:text-green-400 transition-colors">{t.title}</p>
+                                        <p className="text-gray-500 text-[10px] truncate mt-1">{t.text.substring(0, 60)}...</p>
+                                    </div>
+                                    <WhatsAppIcon className="w-5 h-5 text-gray-700 group-hover:text-green-500" />
+                                </button>
+                            ))}
+                            {templates.length === 0 && (
+                                <p className="text-center text-gray-500 py-4 text-xs font-bold uppercase">Nenhum modelo cadastrado.</p>
+                            )}
+                        </div>
+                        
+                        <button onClick={() => setIsSelectTemplateOpen(false)} className="w-full mt-6 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
