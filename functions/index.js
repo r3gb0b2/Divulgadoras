@@ -97,7 +97,7 @@ exports.onVipMembershipCreated = functions.region("southamerica-east1").firestor
                 <p><b>O que acontece agora?</b></p>
                 <ul>
                     <li>Se você já pagou o Pix, nosso sistema validará em instantes.</li>
-                    <li>Assim que validado, você receberá um novo e-mail com seu <b>Código de Cortesia</b>.</li>
+                    <li>Assim que validado, você receberá um novo e-mail com seu <b>Ingresso Promocional</b>.</li>
                 </ul>
                 <p>Você também pode acompanhar o status em tempo real no nosso site.</p>
                 <div style="margin-top:30px; border-top:1px solid #eee; pt:20px; font-size:11px; color:#999;">Equipe Certa App</div>
@@ -122,7 +122,7 @@ exports.notifyVipActivation = functions.region("southamerica-east1").https.onCal
 
         const html = `
             <div style="font-family:sans-serif; max-width:600px; padding:40px; border:2px solid #7e39d5; border-radius:20px;">
-                <h2 style="color:#7e39d5; text-align:center;">Sua Cortesia Está Liberada! 🎟️</h2>
+                <h2 style="color:#7e39d5; text-align:center;">Seu Ingresso Promocional Está Liberado! 🎟️</h2>
                 <p>Olá <b>${m.promoterName}</b>,</p>
                 <p>Seu acesso VIP para o evento <b>${m.vipEventName}</b> foi confirmado!</p>
                 <div style="background:#f9f9f9; padding:20px; text-align:center; border-radius:15px; margin:20px 0;">
@@ -130,11 +130,11 @@ exports.notifyVipActivation = functions.region("southamerica-east1").https.onCal
                     <b style="font-size:28px; color:#7e39d5; font-family:monospace;">${code}</b>
                 </div>
                 <a href="${resgateLink}" style="display:block; background:#7e39d5; color:#fff; text-align:center; padding:18px; text-decoration:none; border-radius:12px; font-weight:bold;">RESGATAR INGRESSO AGORA</a>
-                <p style="font-size:12px; color:#666; margin-top:20px;">*Este código é pessoal e dá direito a 1 ingresso de cortesia no setor selecionado.</p>
+                <p style="font-size:12px; color:#666; margin-top:20px;">*Este código é pessoal e dá direito a 1 ingresso promocional no setor selecionado.</p>
             </div>
         `;
 
-        return { success: await sendSystemEmail(m.promoterEmail, `🎟️ Cortesia Liberada: ${m.vipEventName}`, html) };
+        return { success: await sendSystemEmail(m.promoterEmail, `🎟️ Ingresso Promocional Liberado: ${m.vipEventName}`, html) };
     } catch (e) {
         return { success: false, error: e.message };
     }
