@@ -11,6 +11,8 @@ export type AdminRole = 'superadmin' | 'admin' | 'approver' | 'viewer' | 'poster
 export type OrganizationStatus = 'active' | 'trial' | 'deactivated' | 'hidden';
 export type PlanId = 'basic' | 'professional';
 
+export type RecoveryStatus = 'none' | 'contacted' | 'purchased' | 'no_response';
+
 export interface VipEvent {
   id: string;
   name: string;
@@ -19,7 +21,7 @@ export interface VipEvent {
   description: string;
   benefits: string[];
   pixKey: string;
-  externalSlug: string; // Ex: teste-rafael
+  externalSlug: string; 
   createdAt: Timestamp | FieldValue;
 }
 
@@ -37,7 +39,6 @@ export interface VipMembership {
   isBenefitActive: boolean; 
   proofUrl?: string;
   benefitCode?: string;
-  // FIX: Added paymentId property to VipMembership interface to resolve TypeScript error in AdminClubVip.tsx
   paymentId?: string;
   submittedAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
@@ -78,6 +79,10 @@ export interface Promoter {
   emocoesStatus?: 'none' | 'pending' | 'confirmed' | 'rejected';
   emocoesBenefitCode?: string;
   emocoesBenefitActive?: boolean;
+  // Novos campos para Recuperação de Vendas
+  recoveryStatus?: RecoveryStatus;
+  recoveryAdminEmail?: string;
+  recoveryUpdatedAt?: Timestamp | FieldValue;
 }
 
 export interface Campaign {

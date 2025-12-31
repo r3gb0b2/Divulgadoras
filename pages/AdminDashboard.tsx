@@ -2,7 +2,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
-import { UsersIcon, MapPinIcon, ClipboardDocumentListIcon, MegaphoneIcon, ChartBarIcon, ClockIcon, TicketIcon, LogoutIcon, HeartIcon, CogIcon, SearchIcon, FaceIdIcon, EnvelopeIcon } from '../components/Icons';
+import { UsersIcon, MapPinIcon, ClipboardDocumentListIcon, MegaphoneIcon, ChartBarIcon, ClockIcon, TicketIcon, LogoutIcon, HeartIcon, CogIcon, SearchIcon, FaceIdIcon, EnvelopeIcon, WhatsAppIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const AdminDashboard: React.FC = () => {
@@ -45,6 +45,16 @@ const AdminDashboard: React.FC = () => {
                         </div>
                         <p className="mt-4 text-gray-400 text-sm group-hover:text-purple-100 line-clamp-2">Aprovar cadastros, ver fotos e gerenciar histórico das divulgadoras.</p>
                         <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
+                    </Link>
+
+                    <Link to="/admin/recovery" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-green-600 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
+                        <div className="flex items-center">
+                            <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                <WhatsAppIcon className="w-8 h-8" />
+                            </div>
+                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Recuperação</h2>
+                        </div>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Aborde pessoas rejeitadas na equipe e tente fazer vendas manuais via WhatsApp.</p>
                     </Link>
 
                     <Link to="/admin/posts" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-primary transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">

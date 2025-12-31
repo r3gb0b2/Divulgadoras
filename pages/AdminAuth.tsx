@@ -44,6 +44,7 @@ import AdminLoginPage from './AdminLoginPage';
 import AdminAppleTestReview from './AdminAppleTestReview';
 import AdminGlobalLists from './AdminGlobalLists';
 import AdminClubVip from './AdminClubVip';
+import RecoveryDashboard from './RecoveryDashboard';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
@@ -113,6 +114,7 @@ const AdminAuth: React.FC = () => {
             <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
             
             <Route path="club-vip" element={<ProtectedRoute><AdminClubVip /></ProtectedRoute>} />
+            <Route path="recovery" element={<ProtectedRoute><RecoveryDashboard /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>

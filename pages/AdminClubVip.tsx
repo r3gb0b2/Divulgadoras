@@ -10,10 +10,10 @@ import {
     updateVipEvent, 
     deleteVipEvent 
 } from '../services/vipService';
-import { updatePromoter } from '../services/promoterService';
+import { updatePromoter, getAllPromoters } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
-import { VipMembership, VipEvent, Organization } from '../types';
-import { functions } from '../firebase/config';
+import { VipMembership, VipEvent, Organization, Promoter, RecoveryStatus } from '../types';
+import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { 
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
@@ -21,19 +21,22 @@ import {
     BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon,
     WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon
 } from '../components/Icons';
+import firebase from 'firebase/compat/app';
 
 const AdminClubVip: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, loading: authLoading } = useAdminAuth();
     
-    const [activeTab, setActiveTab] = useState<'members' | 'events'>('members');
+    const [activeTab, setActiveTab] = useState<'members' | 'events' | 'recovery'>('members');
     const [memberships, setMemberships] = useState<VipMembership[]>([]);
     const [vipEvents, setVipEvents] = useState<VipEvent[]>([]);
+    const [recoveryLeads, setRecoveryLeads] = useState<Promoter[]>([]);
     const [organizations, setOrganizations] = useState<Record<string, string>>({});
     
     const [isLoading, setIsLoading] = useState(true);
     const [filterStatus, setFilterStatus] = useState<'pending' | 'confirmed' | 'all'>('all');
     const [filterBenefit, setFilterBenefit] = useState<'active' | 'waiting' | 'all'>('all');
+    const [filterRecovery, setFilterRecovery] = useState<RecoveryStatus | 'all'>('all');
     const [selectedEventId, setSelectedEventId] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     
@@ -58,6 +61,16 @@ const AdminClubVip: React.FC = () => {
             setOrganizations(orgMap);
             setVipEvents(eventsData);
             setMemberships(membersData);
+
+            // Carregar Leads para Recuperação (Pessoas rejeitadas em qualquer org)
+            const rejectedPromoters = await getAllPromoters({
+                organizationId: 'all', // Superadmin vê tudo
+                filterOrgId: 'all',
+                status: 'all' // Filtraremos localmente para incluir rejected e rejected_editable
+            });
+            
+            setRecoveryLeads(rejectedPromoters.filter(p => p.status === 'rejected' || (p.status as string) === 'rejected_editable'));
+            
         } catch (e) {
             console.error("Erro ao carregar dados VIP:", e);
         } finally {
@@ -87,14 +100,54 @@ const AdminClubVip: React.FC = () => {
         });
     }, [memberships, filterStatus, filterBenefit, searchQuery, selectedEventId]);
 
+    const filteredRecovery = useMemo(() => {
+        return recoveryLeads.filter(p => {
+            const matchesRecovery = filterRecovery === 'all' || (p.recoveryStatus || 'none') === filterRecovery;
+            const matchesSearch = 
+                (p.name || '').toLowerCase().includes(searchQuery.toLowerCase()) || 
+                (p.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (p.whatsapp || '').includes(searchQuery);
+            
+            return matchesRecovery && matchesSearch;
+        });
+    }, [recoveryLeads, filterRecovery, searchQuery]);
+
     const handleCopy = (text: string) => {
         if (!text) return;
         navigator.clipboard.writeText(text);
         alert("Copiado!");
     };
 
+    const handleUpdateRecovery = async (promoterId: string, status: RecoveryStatus) => {
+        try {
+            await updatePromoter(promoterId, {
+                recoveryStatus: status,
+                recoveryAdminEmail: adminData?.email,
+                recoveryUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            // Atualiza localmente
+            setRecoveryLeads(prev => prev.map(p => 
+                p.id === promoterId ? { ...p, recoveryStatus: status, recoveryAdminEmail: adminData?.email } : p
+            ));
+        } catch (e) {
+            alert("Erro ao atualizar status de recuperação.");
+        }
+    };
+
+    const handleWhatsAppRecovery = (promoter: Promoter) => {
+        const firstName = promoter.name.split(' ')[0];
+        const adminName = adminData?.email.split('@')[0];
+        const msg = `Olá ${firstName}! Tudo bem? Sou o ${adminName} da Equipe Certa. Vi que seu cadastro para a equipe do evento ${promoter.campaignName} não pôde ser aprovado no momento, mas não queremos que você fique de fora! 🚀\n\nLiberei uma condição VIP exclusiva pra você no nosso Clube. Você ganha benefícios e o seu ingresso sai por um valor promocional. Tem interesse em saber como funciona?`;
+        
+        // Atribui o admin automaticamente ao clicar
+        handleUpdateRecovery(promoter.id, 'contacted');
+        
+        const url = `https://wa.me/55${promoter.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
+        window.open(url, '_blank');
+    };
+
     const handleDownloadXLS = () => {
-        const target = filteredMembers;
+        const target = activeTab === 'members' ? filteredMembers : filteredRecovery as any[];
         if (target.length === 0) return;
 
         let table = `
@@ -109,27 +162,45 @@ const AdminClubVip: React.FC = () => {
                             <th style="background-color: #f0f0f0; font-weight: bold;">Nome</th>
                             <th style="background-color: #f0f0f0; font-weight: bold;">E-mail</th>
                             <th style="background-color: #f0f0f0; font-weight: bold;">WhatsApp</th>
-                            <th style="background-color: #f0f0f0; font-weight: bold;">Evento</th>
-                            <th style="background-color: #f0f0f0; font-weight: bold;">Código</th>
-                            <th style="background-color: #f0f0f0; font-weight: bold;">Status Pagto</th>
-                            <th style="background-color: #f0f0f0; font-weight: bold;">Ativado</th>
+                            <th style="background-color: #f0f0f0; font-weight: bold;">Evento/Origem</th>
+                            ${activeTab === 'members' ? `
+                                <th style="background-color: #f0f0f0; font-weight: bold;">Código</th>
+                                <th style="background-color: #f0f0f0; font-weight: bold;">Status Pagto</th>
+                                <th style="background-color: #f0f0f0; font-weight: bold;">Ativado</th>
+                            ` : `
+                                <th style="background-color: #f0f0f0; font-weight: bold;">Status Recuperação</th>
+                                <th style="background-color: #f0f0f0; font-weight: bold;">Admin Responsável</th>
+                            `}
                         </tr>
                     </thead>
                     <tbody>
         `;
 
         target.forEach(m => {
-            table += `
-                <tr>
-                    <td>${m.promoterName}</td>
-                    <td>${m.promoterEmail}</td>
-                    <td>${m.promoterWhatsapp || ''}</td>
-                    <td>${m.vipEventName}</td>
-                    <td style="font-family: monospace;">${m.benefitCode || ''}</td>
-                    <td>${m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}</td>
-                    <td>${m.isBenefitActive ? 'SIM' : 'NÃO'}</td>
-                </tr>
-            `;
+            if (activeTab === 'members') {
+                table += `
+                    <tr>
+                        <td>${m.promoterName}</td>
+                        <td>${m.promoterEmail}</td>
+                        <td>${m.promoterWhatsapp || ''}</td>
+                        <td>${m.vipEventName}</td>
+                        <td style="font-family: monospace;">${m.benefitCode || ''}</td>
+                        <td>${m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}</td>
+                        <td>${m.isBenefitActive ? 'SIM' : 'NÃO'}</td>
+                    </tr>
+                `;
+            } else {
+                table += `
+                    <tr>
+                        <td>${m.name}</td>
+                        <td>${m.email}</td>
+                        <td>${m.whatsapp}</td>
+                        <td>${m.campaignName}</td>
+                        <td>${m.recoveryStatus || 'none'}</td>
+                        <td>${m.recoveryAdminEmail || '-'}</td>
+                    </tr>
+                `;
+            }
         });
 
         table += `</tbody></table></body></html>`;
@@ -138,7 +209,7 @@ const AdminClubVip: React.FC = () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.setAttribute("href", url);
-        link.setAttribute("download", `clube_vip_export_${new Date().getTime()}.xls`);
+        link.setAttribute("download", `clube_vip_${activeTab}_${new Date().getTime()}.xls`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -234,13 +305,14 @@ const AdminClubVip: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 w-fit ml-4 md:ml-0">
-                <button onClick={() => setActiveTab('members')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'members' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Membros</button>
-                <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Eventos</button>
+            <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 w-fit ml-4 md:ml-0 overflow-x-auto max-w-full">
+                <button onClick={() => setActiveTab('members')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'members' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Membros</button>
+                <button onClick={() => setActiveTab('recovery')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'recovery' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Recuperação de Carrinho</button>
+                <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Eventos</button>
             </div>
 
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
-                {activeTab === 'members' ? (
+                {activeTab === 'members' && (
                     <>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             <select value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase outline-none focus:border-primary">
@@ -347,7 +419,81 @@ const AdminClubVip: React.FC = () => {
                             </table>
                         </div>
                     </>
-                ) : (
+                )}
+
+                {activeTab === 'recovery' && (
+                    <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <select value={filterRecovery} onChange={e => setFilterRecovery(e.target.value as any)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase outline-none focus:border-primary">
+                                <option value="all">STATUS RECUPERAÇÃO (TODOS)</option>
+                                <option value="none">NÃO CONTATADO</option>
+                                <option value="contacted">JÁ CONTATADO</option>
+                                <option value="purchased">COMPROU</option>
+                                <option value="no_response">NÃO RESPONDEU</option>
+                            </select>
+                            <div className="relative lg:col-span-2">
+                                <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                                <input 
+                                    type="text" placeholder="BUSCAR POR NOME OU WHATSAPP..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                    className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-xl text-white text-[10px] font-black uppercase outline-none focus:border-primary"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
+                                        <th className="px-6 py-5">Potencial Cliente</th>
+                                        <th className="px-6 py-5">Origem (Evento Rejeitado)</th>
+                                        <th className="px-6 py-5 text-center">Status Recuperação</th>
+                                        <th className="px-6 py-5 text-center">Responsável</th>
+                                        <th className="px-6 py-5 text-right">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {filteredRecovery.map(p => (
+                                        <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
+                                            <td className="px-6 py-5">
+                                                <p className="text-sm font-black text-white uppercase truncate">{p.name}</p>
+                                                <p className="text-[9px] text-gray-500 font-mono mt-1">{p.whatsapp}</p>
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <p className="text-xs text-red-400 font-bold uppercase">{p.campaignName}</p>
+                                                <p className="text-[9px] text-gray-600 font-black uppercase">{organizations[p.organizationId]}</p>
+                                            </td>
+                                            <td className="px-6 py-5 text-center">
+                                                <div className="flex flex-wrap justify-center gap-1">
+                                                    <button onClick={() => handleUpdateRecovery(p.id, 'none')} className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${(!p.recoveryStatus || p.recoveryStatus === 'none') ? 'bg-gray-700 text-white' : 'bg-transparent text-gray-600 border-gray-800'}`}>Limpar</button>
+                                                    <button onClick={() => handleUpdateRecovery(p.id, 'contacted')} className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${p.recoveryStatus === 'contacted' ? 'bg-blue-600 text-white' : 'bg-transparent text-gray-600 border-gray-800'}`}>Contato</button>
+                                                    <button onClick={() => handleUpdateRecovery(p.id, 'no_response')} className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${p.recoveryStatus === 'no_response' ? 'bg-orange-600 text-white' : 'bg-transparent text-gray-600 border-gray-800'}`}>Vácuo</button>
+                                                    <button onClick={() => handleUpdateRecovery(p.id, 'purchased')} className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${p.recoveryStatus === 'purchased' ? 'bg-green-600 text-white' : 'bg-transparent text-gray-600 border-gray-800'}`}>VENDA!</button>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5 text-center">
+                                                {p.recoveryAdminEmail ? (
+                                                    <p className="text-[10px] text-primary font-black uppercase">{p.recoveryAdminEmail.split('@')[0]}</p>
+                                                ) : (
+                                                    <span className="text-gray-700 text-[10px] font-bold">Livre</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-5 text-right">
+                                                <button 
+                                                    onClick={() => handleWhatsAppRecovery(p)}
+                                                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-green-500 shadow-lg shadow-green-900/20"
+                                                >
+                                                    <WhatsAppIcon className="w-4 h-4" /> INICIAR
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </>
+                )}
+
+                {activeTab === 'events' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {vipEvents.map(ev => (
                             <div key={ev.id} className="bg-dark/40 rounded-[2rem] p-6 border border-white/5 flex flex-col group hover:border-primary/30 transition-all">
