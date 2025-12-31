@@ -52,9 +52,33 @@ async function sendSystemEmail(toEmail, subject, htmlContent) {
 // --- 1. NEWSLETTER (CAMPANHAS EM MASSA) ---
 exports.sendNewsletter = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { audience, subject, body } = data;
-    // Lógica simplificada de busca de e-mails para garantir o uso do remetente correto
     try {
-        let query = db.collection("promoters").where("status", "==", "approved");
+        let query;
+        
+        // Modo Individual
+        if (audience.type === 'individual' && audience.promoterIds) {
+            const promises = audience.promoterIds.map(async (id) => {
+                const snap = await db.collection("promoters").doc(id).get();
+                if (snap.exists) {
+                    const p = snap.data();
+                    const personalizedBody = body.replace(/{{promoterName}}/g, p.name.split(' ')[0]);
+                    return sendSystemEmail(p.email, subject, personalizedBody);
+                }
+            });
+            await Promise.all(promises);
+            return { success: true, message: `Newsletter individual enviada.` };
+        }
+
+        // Modos Coletivos
+        query = db.collection("promoters");
+        
+        // Filtro de Status (Aprovada ou Reprovada)
+        if (audience.status) {
+            query = query.where("status", "==", audience.status);
+        } else {
+            query = query.where("status", "==", "approved"); // Padrão
+        }
+
         if (audience.type === 'org') query = query.where("organizationId", "==", audience.orgId);
         if (audience.type === 'campaign') query = query.where("campaignName", "==", audience.campaignName);
 
