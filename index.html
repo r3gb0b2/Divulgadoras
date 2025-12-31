@@ -8,12 +8,12 @@
     
     <script>
       // Redirecionamento Cirúrgico para o Club VIP
-      // Isso permite que o link equipecerta.app/clubvip funcione no Instagram
+      // Isso permite que o link equipecerta.app/clubvip (limpo) funcione no Instagram
       (function() {
         var path = window.location.pathname;
-        // Se o caminho for exatamente /clubvip e não tiver o hash
-        if (path === '/clubvip' && !window.location.hash) {
-          window.location.replace(window.location.origin + '/#/clubvip');
+        // Se o caminho for /clubvip ou /clubvip/ e não houver hash
+        if ((path === '/clubvip' || path === '/clubvip/') && !window.location.hash) {
+          window.location.replace('/#/clubvip');
         }
       })();
     </script>
