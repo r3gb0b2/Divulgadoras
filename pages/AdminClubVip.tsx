@@ -126,14 +126,19 @@ const AdminClubVip: React.FC = () => {
 
     // FUNÇÕES DE DOWNLOAD EXCEL
     const handleDownloadXLSX = (mode: 'codes' | 'full') => {
-        if (filteredMembers.length === 0) return alert("Nenhum dado para exportar.");
+        const listToExport = selectedIds.size > 0 
+            ? filteredMembers.filter(m => selectedIds.has(m.id))
+            : filteredMembers;
+
+        if (listToExport.length === 0) return alert("Nenhum dado para exportar.");
         
-        const data = filteredMembers.map(m => {
+        const data = listToExport.map(m => {
             if (mode === 'codes') {
+                // A ordem das chaves define a ordem das colunas (A, B, C...)
                 return {
+                    'CÓDIGO VIP': m.benefitCode || 'PENDENTE',
                     'NOME': m.promoterName,
                     'E-MAIL': m.promoterEmail,
-                    'CÓDIGO VIP': m.benefitCode || 'Pendente',
                     'EVENTO': m.vipEventName
                 };
             }
