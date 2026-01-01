@@ -130,7 +130,6 @@ const AdminClubVip: React.FC = () => {
         
         let table = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table border="1"><thead><tr><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Evento</th><th>Código VIP</th><th>Status Pgto</th></tr></thead><tbody>`;
         target.forEach(m => { 
-            // Inclusão da coluna Código VIP na linha
             table += `<tr><td>${m.promoterName || m.name}</td><td>${m.promoterEmail || m.email}</td><td>${m.promoterWhatsapp || m.whatsapp}</td><td>${m.vipEventName || m.campaignName}</td><td>${m.benefitCode || '---'}</td><td>${m.status || '---'}</td></tr>`; 
         });
         table += `</tbody></table></body></html>`;
@@ -139,6 +138,34 @@ const AdminClubVip: React.FC = () => {
         const link = document.createElement("a");
         link.setAttribute("href", url);
         link.setAttribute("download", `clube_vip_${activeTab}.xls`);
+        link.click();
+    };
+
+    const handleDownloadOnlyCodes = () => {
+        if (activeTab !== 'members') return;
+        
+        const target = selectedIds.size > 0 
+            ? filteredMembers.filter(m => selectedIds.has(m.id)) 
+            : filteredMembers;
+            
+        const codes = target.map(m => m.benefitCode).filter(Boolean);
+            
+        if (codes.length === 0) {
+            alert("Nenhum código encontrado para exportação.");
+            return;
+        }
+        
+        let table = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table border="1"><tbody>`;
+        codes.forEach(code => { 
+            table += `<tr><td>${code}</td></tr>`; 
+        });
+        table += `</tbody></table></body></html>`;
+        
+        const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `apenas_codigos_vip.xls`);
         link.click();
     };
 
@@ -191,12 +218,17 @@ const AdminClubVip: React.FC = () => {
                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
                     <TicketIcon className="w-8 h-8 text-primary" /> Gestão Clube VIP
                 </h1>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <button onClick={handleCopyReportLink} className="px-4 py-3 bg-dark border border-white/10 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-white/5 transition-all">
                         <ExternalLinkIcon className="w-4 h-4 text-primary" /> Link de Relatório
                     </button>
+                    {activeTab === 'members' && (
+                        <button onClick={handleDownloadOnlyCodes} className="px-4 py-3 bg-gray-700 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-gray-600 transition-all">
+                            <DocumentDuplicateIcon className="w-4 h-4" /> Apenas Códigos
+                        </button>
+                    )}
                     <button onClick={handleDownloadXLS} className="px-4 py-3 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-indigo-500 transition-all">
-                        <DownloadIcon className="w-4 h-4" /> Exportar {selectedIds.size > 0 ? `(${selectedIds.size})` : ''} XLS
+                        <DownloadIcon className="w-4 h-4" /> Tudo (.xls)
                     </button>
                     {activeTab === 'events' && (
                         <button onClick={() => { setEditingEvent({ benefits: [] }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
@@ -293,9 +325,8 @@ const AdminClubVip: React.FC = () => {
                         </div>
                     </>
                 )}
-                {/* Outras abas (recovery, events) seguem o padrão original */}
+                {/* Outras abas permanecem */}
             </div>
-            {/* Modal de Evento */}
         </div>
     );
 };
