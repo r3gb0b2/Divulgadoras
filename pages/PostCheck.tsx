@@ -47,29 +47,6 @@ const isHistoryAssignment = (assignment: PostAssignment): boolean => {
     return false;
 };
 
-const CountdownTimer: React.FC<{ targetDate: any, prefix?: string }> = ({ targetDate, prefix = '' }) => {
-    const [timeLeft, setTimeLeft] = useState('');
-    const [isExpired, setIsExpired] = useState(false);
-    useEffect(() => {
-        const target = toDateSafe(targetDate);
-        if (!target) return;
-        const updateTimer = () => {
-            const now = new Date();
-            const difference = target.getTime() - now.getTime();
-            if (difference > 0) {
-                const hours = Math.floor((difference / (1000 * 60 * 60)) % 24);
-                const minutes = Math.floor((difference / 1000 / 60) % 60);
-                setTimeLeft(`${hours.toString().padStart(2, '0')}h ${minutes.toString().padStart(2, '0')}m`);
-                setIsExpired(false);
-            } else { setTimeLeft('Encerrado'); setIsExpired(true); }
-        };
-        updateTimer(); const timer = setInterval(updateTimer, 60000);
-        return () => clearInterval(timer);
-    }, [targetDate]);
-    if (!timeLeft) return null;
-    return <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${isExpired ? 'bg-red-900/30 text-red-400' : 'bg-primary/20 text-primary'}`}><ClockIcon className="h-3 w-3" /><span>{prefix}{timeLeft}</span></div>;
-};
-
 const PostCard: React.FC<{ 
     assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, 
     promoter: Promoter,
@@ -79,7 +56,6 @@ const PostCard: React.FC<{
 }> = ({ assignment, promoter, onConfirm, onJustify, onRefresh }) => {
     const navigate = useNavigate();
     const [isConfirming, setIsConfirming] = useState(false);
-    const [isSchedulingReminder, setIsSchedulingReminder] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
     const [timeLeftForProof, setTimeLeftForProof] = useState('');
@@ -151,27 +127,16 @@ const PostCard: React.FC<{
         catch (err: any) { alert(err.message); } finally { setIsConfirming(false); }
     };
 
-    const handleScheduleReminder = async () => {
-        if (isSchedulingReminder || assignment.reminderScheduled) return;
-        setIsSchedulingReminder(true);
-        try {
-            await scheduleProofPushReminder(assignment, promoter);
-            await onRefresh();
-            alert("Lembrete agendado!");
-        } catch (err: any) {
-            alert(err.message);
-        } finally {
-            setIsSchedulingReminder(false);
-        }
-    };
-
     const handleDownloadLink1 = async () => {
         if (!assignment.post.mediaUrl) return;
         setIsDownloading(true);
         try {
-            const storageRef = storage.ref(assignment.post.mediaUrl);
-            const url = await storageRef.getDownloadURL();
-            window.open(url, '_blank');
+            let finalUrl = assignment.post.mediaUrl;
+            if (!finalUrl.startsWith('http')) {
+                const storageRef = storage.ref(assignment.post.mediaUrl);
+                finalUrl = await storageRef.getDownloadURL();
+            }
+            window.open(finalUrl, '_blank');
         } catch (e) {
             alert("Erro ao baixar arquivo.");
         } finally {
@@ -184,17 +149,16 @@ const PostCard: React.FC<{
         window.open(assignment.post.googleDriveUrl, '_blank');
     };
 
-    const handleLinkAction = () => {
+    const handleOpenPostLink = () => {
         if (!assignment.post.postLink) return;
-        // Se for post de texto, abre o link (geralmente whatsapp do gestor ou grupo)
-        // Se for imagem/video, copia o link (geralmente link do post para botar no instagram)
-        if (assignment.post.type === 'text') {
-            window.open(assignment.post.postLink, '_blank');
-        } else {
-            navigator.clipboard.writeText(assignment.post.postLink);
-            setLinkCopied(true);
-            setTimeout(() => setLinkCopied(false), 2000);
-        }
+        window.open(assignment.post.postLink, '_blank');
+    };
+
+    const handleCopyPostLink = () => {
+        if (!assignment.post.postLink) return;
+        navigator.clipboard.writeText(assignment.post.postLink);
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
     };
 
     if (!assignment.promoterHasJoinedGroup) {
@@ -233,7 +197,6 @@ const PostCard: React.FC<{
             <div className="p-5 space-y-4">
                 <div className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 text-sm text-gray-300 whitespace-pre-wrap italic">{assignment.post.instructions}</div>
                 
-                {/* ÁREA DE MÍDIA E LINKS */}
                 <div className="space-y-3">
                     {assignment.post.type !== 'text' && (
                         <div className="rounded-2xl overflow-hidden border border-gray-700">
@@ -242,20 +205,30 @@ const PostCard: React.FC<{
                     )}
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* LINK 1: MÍDIA */}
                         {assignment.post.mediaUrl && (
                             <button onClick={handleDownloadLink1} disabled={isDownloading} className="flex items-center justify-center gap-2 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold transition-all">
-                                <DownloadIcon className="w-4 h-4" /> LINK 1 (MÍDIA)
+                                <DownloadIcon className="w-4 h-4" /> BAIXAR MÍDIA
                             </button>
                         )}
+                        
+                        {/* LINK 2: DRIVE / EXTERNO */}
                         {assignment.post.googleDriveUrl && (
                             <button onClick={handleDownloadLink2} className="flex items-center justify-center gap-2 py-3 bg-indigo-900/40 border border-indigo-700/50 hover:bg-indigo-900/60 text-indigo-300 rounded-xl text-xs font-bold transition-all">
-                                <DownloadIcon className="w-4 h-4" /> LINK 2 (DRIVE)
+                                <ExternalLinkIcon className="w-4 h-4" /> LINK DRIVE
                             </button>
                         )}
+
+                        {/* BOTÕES DO POST LINK */}
                         {assignment.post.postLink && (
-                            <button onClick={handleLinkAction} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all border ${linkCopied ? 'bg-green-600 text-white border-green-500' : 'bg-blue-900/40 border-blue-700/50 text-blue-300 hover:bg-blue-900/60'}`}>
-                                <DocumentDuplicateIcon className="w-4 h-4" /> {linkCopied ? 'COPIADO!' : 'COPIAR LINK POST'}
-                            </button>
+                            <>
+                                <button onClick={handleOpenPostLink} className="flex items-center justify-center gap-2 py-3 bg-blue-900/40 border border-blue-700/50 hover:bg-blue-900/60 text-blue-300 rounded-xl text-xs font-bold transition-all">
+                                    <ExternalLinkIcon className="w-4 h-4" /> ABRIR POST
+                                </button>
+                                <button onClick={handleCopyPostLink} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all border ${linkCopied ? 'bg-green-600 text-white border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'bg-orange-900/40 border-orange-700/50 text-orange-300 hover:bg-orange-900/60'}`}>
+                                    <DocumentDuplicateIcon className="w-4 h-4" /> {linkCopied ? 'COPIADO!' : 'COPIAR LINK POST'}
+                                </button>
+                            </>
                         )}
                     </div>
                 </div>
@@ -413,8 +386,8 @@ const PostCheck: React.FC = () => {
 
                                     <div className="space-y-6">
                                         {m.isBenefitActive ? (
-                                            <div className="p-4 bg-green-900/20 border border-green-500/30 rounded-2xl text-center">
-                                                <p className="text-white font-black uppercase text-sm">INGRESSO PROMOCIONAL DISPONÍVEL! 🚀</p>
+                                            <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-2xl text-center">
+                                                <p className="text-green-400 font-black uppercase text-sm">INGRESSO PROMOCIONAL DISPONÍVEL! 🚀</p>
                                             </div>
                                         ) : (
                                             <div className="p-4 bg-orange-900/20 border border-orange-500/30 rounded-2xl text-center">
@@ -424,7 +397,7 @@ const PostCheck: React.FC = () => {
                                         
                                         <div className="bg-dark/50 p-5 rounded-2xl border border-white/5 space-y-4">
                                             <div>
-                                                <p className="text-[10px] text-gray-500 font-black uppercase mb-2 ml-1">Seu Código:</p>
+                                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">Seu Código:</p>
                                                 <div 
                                                     onClick={() => m.isBenefitActive && m.benefitCode && handleCopy(m.benefitCode)}
                                                     className={`p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all flex items-center justify-between transition-all ${m.isBenefitActive ? 'cursor-pointer hover:bg-black/60' : ''}`}
