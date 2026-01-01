@@ -1,6 +1,6 @@
 
 import firebase from 'firebase/compat/app';
-import { firestore, storage } from '../firebase/config';
+import { firestore, storage, functions } from '../firebase/config';
 import { VipEvent, VipMembership } from '../types';
 
 const COLLECTION_EVENTS = 'vipEvents';
@@ -85,4 +85,18 @@ export const updateVipMembership = async (id: string, data: Partial<VipMembershi
         ...data,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+};
+
+/**
+ * Dispara e-mail de recuperação com novo Pix
+ */
+export const sendVipRecoveryEmail = async (membershipId: string): Promise<void> => {
+    try {
+        const func = functions.httpsCallable('sendVipRecoveryEmail');
+        const res = await func({ membershipId });
+        const data = res.data as any;
+        if (!data.success) throw new Error(data.error || "Erro desconhecido.");
+    } catch (e: any) {
+        throw new Error(e.message || "Erro ao disparar e-mail de recuperação.");
+    }
 };

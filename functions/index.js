@@ -122,6 +122,79 @@ export const notifyApprovalBulk = functions.region("southamerica-east1").https.o
 });
 
 /**
+ * Recuperação de Vendas VIP via E-mail
+ * Gera novo pagamento Pix e envia por e-mail
+ */
+export const sendVipRecoveryEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { membershipId } = data;
+    try {
+        const snap = await db.collection("vipMemberships").doc(membershipId).get();
+        if (!snap.exists) throw new Error("Adesão não encontrada.");
+        
+        const m = snap.data();
+        if (m.status === 'confirmed') throw new Error("Esta adesão já está paga.");
+
+        const eventSnap = await db.collection("vipEvents").doc(m.vipEventId).get();
+        if (!eventSnap.exists) throw new Error("Evento VIP não encontrado.");
+        const ev = eventSnap.data();
+
+        // 1. Re-gera o Pix no Mercado Pago (reutilizando a lógica de criação)
+        const createPix = httpsCallable(functions, 'createVipPixPayment');
+        const pixRes = await createPix({
+            vipEventId: m.vipEventId,
+            promoterId: m.promoterId,
+            email: m.promoterEmail,
+            name: m.promoterName,
+            whatsapp: m.promoterWhatsapp || "",
+            instagram: m.promoterInstagram || "",
+            amount: ev.price
+        });
+
+        const pixData = pixRes.data;
+
+        // 2. Monta o E-mail de Recuperação
+        const html = `
+            <div style="font-family:sans-serif; max-width:600px; margin:0 auto; padding:40px; border:1px solid #e2e8f0; border-radius:24px; text-align:center; background-color:#ffffff;">
+                <h1 style="color:#7e39d5; font-size:24px; margin-bottom:10px;">Não perca seu acesso VIP! 🎟️</h1>
+                <p style="color:#64748b; font-size:16px; line-height:1.6;">Olá <b>${m.promoterName.split(' ')[0]}</b>, vimos que você iniciou sua adesão ao <b>${ev.name}</b> mas não concluiu o pagamento.</p>
+                <p style="color:#64748b; font-size:16px; margin-bottom:30px;">Geramos um novo código Pix exclusivo para você garantir seus benefícios agora:</p>
+                
+                <div style="background-color:#f8fafc; padding:30px; border-radius:20px; margin-bottom:30px;">
+                    <img src="data:image/jpeg;base64,${pixData.qr_code_base64}" style="width:200px; height:200px; margin-bottom:20px;" alt="QR Code Pix">
+                    <p style="font-size:10px; color:#94a3b8; text-transform:uppercase; font-weight:bold; margin-bottom:10px;">Código Copia e Cola:</p>
+                    <div style="background:#ffffff; border:1px solid #e2e8f0; padding:12px; border-radius:8px; font-family:monospace; font-size:11px; word-break:break-all; color:#1e293b;">
+                        ${pixData.qr_code}
+                    </div>
+                </div>
+
+                <p style="color:#64748b; font-size:14px; margin-bottom:30px;">Após o pagamento, seu acesso será liberado <b>automaticamente</b> em nosso sistema.</p>
+                
+                <div style="text-align:center;">
+                    <a href="https://divulgadoras.vercel.app/#/clubvip/status?email=${encodeURIComponent(m.promoterEmail)}" style="background-color:#7e39d5; color:#ffffff; padding:16px 32px; text-decoration:none; border-radius:12px; font-weight:bold; display:inline-block; font-size:14px;">VER MEU STATUS VIP</a>
+                </div>
+                
+                <hr style="border:0; border-top:1px solid #f1f5f9; margin:40px 0;">
+                <p style="font-size:11px; color:#94a3b8;">Equipe Certa - Gestão Oficial de Equipes e Benefícios</p>
+            </div>`;
+
+        const emailSent = await sendSystemEmail(m.promoterEmail, `🎟️ Complete seu acesso VIP: ${ev.name}`, html);
+
+        if (emailSent) {
+            await snap.ref.update({
+                lastRecoverySentAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            return { success: true, message: "E-mail de recuperação enviado com sucesso!" };
+        } else {
+            throw new Error("Falha ao disparar e-mail.");
+        }
+
+    } catch (e) {
+        console.error("Erro na recuperação VIP:", e);
+        return { success: false, error: e.message };
+    }
+});
+
+/**
  * Função de Newsletter Otimizada para Grande Escala
  * Suporta envios de 2.000+ e-mails usando processamento em lotes (chunks)
  */

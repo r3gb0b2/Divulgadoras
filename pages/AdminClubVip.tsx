@@ -8,7 +8,8 @@ import {
     getAllVipEvents, 
     createVipEvent, 
     updateVipEvent, 
-    deleteVipEvent 
+    deleteVipEvent,
+    sendVipRecoveryEmail
 } from '../services/vipService';
 import { updatePromoter, getAllPromoters } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
@@ -19,7 +20,7 @@ import {
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
     TicketIcon, RefreshIcon, ClockIcon, UserIcon,
     BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon,
-    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon
+    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
 
@@ -48,6 +49,7 @@ const AdminClubVip: React.FC = () => {
     
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+    const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Partial<VipEvent> | null>(null);
 
@@ -193,6 +195,20 @@ const AdminClubVip: React.FC = () => {
         } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
     };
 
+    const handleRecoveryEmail = async (m: VipMembership) => {
+        if (!window.confirm(`Enviar e-mail de recuperação para ${m.promoterName}? Será gerado um novo Pix Mercado Pago.`)) return;
+        setIsProcessingId(m.id);
+        try {
+            await sendVipRecoveryEmail(m.id);
+            alert("E-mail enviado com sucesso!");
+            fetchData();
+        } catch (e: any) {
+            alert("Erro: " + e.message);
+        } finally {
+            setIsProcessingId(null);
+        }
+    };
+
     const handleBulkNotify = async () => {
         if (selectedIds.size === 0) return;
         const toProcess = filteredMembers.filter(m => selectedIds.has(m.id) && m.status === 'confirmed');
@@ -329,7 +345,20 @@ const AdminClubVip: React.FC = () => {
                                             <td className="px-6 py-5 text-center">{m.benefitCode ? <span onClick={() => handleCopy(m.benefitCode || '')} className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10">{m.benefitCode}</span> : <span className="text-gray-600 text-[10px] font-bold">---</span>}</td>
                                             <td className="px-6 py-5 text-center">{m.isBenefitActive ? <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">ATIVADO</span> : <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 border border-gray-700 text-[8px] font-black uppercase tracking-widest">AGUARDANDO</span>}</td>
                                             <td className="px-6 py-5 text-center"><span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>{m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}</span></td>
-                                            <td className="px-6 py-5 text-right">{m.status === 'confirmed' && <button onClick={() => handleManualNotifySingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">{m.isBenefitActive ? 'REENVIAR' : 'ATIVAR'}</button>}</td>
+                                            <td className="px-6 py-5 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    {m.status === 'pending' && (
+                                                        <button 
+                                                            onClick={() => handleRecoveryEmail(m)} 
+                                                            disabled={isProcessingId === m.id}
+                                                            className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-blue-500 flex items-center gap-2"
+                                                        >
+                                                            {isProcessingId === m.id ? <RefreshIcon className="w-3 h-3 animate-spin"/> : <MailIcon className="w-3 h-3" />} RECUPERAR
+                                                        </button>
+                                                    )}
+                                                    {m.status === 'confirmed' && <button onClick={() => handleManualNotifySingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">{m.isBenefitActive ? 'REENVIAR' : 'ATIVAR'}</button>}
+                                                </div>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
