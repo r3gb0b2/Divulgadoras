@@ -128,9 +128,10 @@ const AdminClubVip: React.FC = () => {
             
         if (target.length === 0) return;
         
-        let table = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table border="1"><thead><tr><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Evento</th><th>Status Pgto</th></tr></thead><tbody>`;
+        let table = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table border="1"><thead><tr><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Evento</th><th>Código VIP</th><th>Status Pgto</th></tr></thead><tbody>`;
         target.forEach(m => { 
-            table += `<tr><td>${m.promoterName || m.name}</td><td>${m.promoterEmail || m.email}</td><td>${m.promoterWhatsapp || m.whatsapp}</td><td>${m.vipEventName || m.campaignName}</td><td>${m.status || '---'}</td></tr>`; 
+            // Inclusão da coluna Código VIP na linha
+            table += `<tr><td>${m.promoterName || m.name}</td><td>${m.promoterEmail || m.email}</td><td>${m.promoterWhatsapp || m.whatsapp}</td><td>${m.vipEventName || m.campaignName}</td><td>${m.benefitCode || '---'}</td><td>${m.status || '---'}</td></tr>`; 
         });
         table += `</tbody></table></body></html>`;
         const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
@@ -292,8 +293,9 @@ const AdminClubVip: React.FC = () => {
                         </div>
                     </>
                 )}
-                {/* Outras abas permanecem com o mesmo funcionamento */}
+                {/* Outras abas (recovery, events) seguem o padrão original */}
             </div>
+            {/* Modal de Evento */}
         </div>
     );
 };
