@@ -53,30 +53,17 @@ export const askGemini = functions.region("southamerica-east1").https.onCall(asy
         }
 
         if (!apiKey) {
-            console.error("ERRO CRÍTICO: Variável de ambiente API_KEY não encontrada no servidor.");
-            throw new functions.https.HttpsError('failed-precondition', 'A chave de IA não foi configurada no servidor. Use "firebase functions:secrets:set API_KEY"');
+            throw new functions.https.HttpsError('failed-precondition', 'A chave de IA não foi configurada.');
         }
 
-        // Inicialização com a chave validada
         const ai = new GoogleGenAI({ apiKey });
-        
-        // Chamada ao modelo gemini-3-flash-preview conforme diretrizes
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
             contents: prompt,
         });
 
-        // Acesso à propriedade .text (propriedade, não método)
-        const textResponse = response.text;
-        
-        if (!textResponse) {
-            throw new Error("A IA não retornou conteúdo válido.");
-        }
-
-        return { text: textResponse };
+        return { text: response.text };
     } catch (e) {
-        console.error("Gemini Backend Error:", e);
-        // Retorna o erro detalhado para ajudar no debug
         throw new functions.https.HttpsError('internal', e.message || 'Erro ao processar IA');
     }
 });
@@ -134,37 +121,84 @@ export const notifyApprovalBulk = functions.region("southamerica-east1").https.o
     }
 });
 
-export const sendNewsletter = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { audience, subject, body } = data;
-    try {
-        let docs = [];
-        if (audience.type === 'individual' && audience.promoterIds && audience.promoterIds.length > 0) {
-            const promises = audience.promoterIds.map(id => db.collection("promoters").doc(id).get());
-            const snaps = await Promise.all(promises);
-            docs = snaps.filter(s => s.exists);
-        } else {
-            let query = db.collection("promoters");
-            if (audience.status) query = query.where("status", "==", audience.status);
-            else query = query.where("status", "==", "approved");
-            if (audience.type === 'org') query = query.where("organizationId", "==", audience.orgId);
-            else if (audience.type === 'campaign') {
-                query = query.where("campaignName", "==", audience.campaignName);
-                if (audience.orgId) query = query.where("organizationId", "==", audience.orgId);
+/**
+ * Função de Newsletter Otimizada para Grande Escala
+ * Suporta envios de 2.000+ e-mails usando processamento em lotes (chunks)
+ */
+export const sendNewsletter = functions
+    .runWith({ 
+        timeoutSeconds: 540, // Aumentado para 9 minutos
+        memory: '1GB'        // Aumentado para lidar com grandes listas em memória
+    })
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        const { audience, subject, body } = data;
+        
+        try {
+            let docs = [];
+            
+            // 1. Busca dos destinatários
+            if (audience.type === 'individual' && audience.promoterIds && audience.promoterIds.length > 0) {
+                const promises = audience.promoterIds.map(id => db.collection("promoters").doc(id).get());
+                const snaps = await Promise.all(promises);
+                docs = snaps.filter(s => s.exists).map(s => ({ id: s.id, ...s.data() }));
+            } else {
+                let query = db.collection("promoters");
+                
+                if (audience.status) {
+                    query = query.where("status", "==", audience.status);
+                } else {
+                    query = query.where("status", "==", "approved");
+                }
+
+                if (audience.type === 'org' && audience.orgId) {
+                    query = query.where("organizationId", "==", audience.orgId);
+                } else if (audience.type === 'campaign' && audience.campaignName) {
+                    query = query.where("campaignName", "==", audience.campaignName);
+                    if (audience.orgId) query = query.where("organizationId", "==", audience.orgId);
+                }
+                
+                const snap = await query.get();
+                docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             }
-            const snap = await query.get();
-            docs = snap.docs;
+
+            if (docs.length === 0) {
+                return { success: false, message: "Nenhum destinatário encontrado." };
+            }
+
+            // 2. Processamento em Lotes (Chunks) para evitar gargalos na API do Brevo e Rate Limiting
+            const chunkSize = 50; // Grupos de 50 e-mails por vez
+            let sentCount = 0;
+            let failureCount = 0;
+
+            for (let i = 0; i < docs.length; i += chunkSize) {
+                const chunk = docs.slice(i, i + chunkSize);
+                
+                // Processa o lote atual em paralelo
+                const results = await Promise.all(chunk.map(async (p) => {
+                    const personalizedBody = body.replace(/{{promoterName}}/g, p.name.split(' ')[0]);
+                    return sendSystemEmail(p.email, subject, personalizedBody);
+                }));
+
+                sentCount += results.filter(r => r === true).length;
+                failureCount += results.filter(r => r === false).length;
+
+                // Pequena pausa opcional entre lotes para estabilidade (200ms)
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                console.log(`[Newsletter Progress] Lote ${i/chunkSize + 1} enviado. Total acumulado: ${sentCount}`);
+            }
+
+            return { 
+                success: true, 
+                message: `Envio concluído. Sucesso: ${sentCount}, Falhas: ${failureCount}. Total: ${docs.length}` 
+            };
+
+        } catch (e) { 
+            console.error("Erro fatal na função de newsletter:", e);
+            return { success: false, error: e.message }; 
         }
-
-        const promises = docs.map(doc => {
-            const p = doc.data();
-            const personalizedBody = body.replace(/{{promoterName}}/g, p.name.split(' ')[0]);
-            return sendSystemEmail(p.email, subject, personalizedBody);
-        });
-
-        await Promise.all(promises);
-        return { success: true, message: `E-mail enviado para ${docs.length} pessoas.` };
-    } catch (e) { return { success: false, error: e.message }; }
-});
+    });
 
 export const notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { postId } = data;

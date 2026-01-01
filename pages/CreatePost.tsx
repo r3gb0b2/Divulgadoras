@@ -292,6 +292,7 @@ const CreatePost: React.FC = () => {
     const [googleDriveUrl, setGoogleDriveUrl] = useState('');
     const [instructions, setInstructions] = useState('');
     const [postLink, setPostLink] = useState('');
+    const [copyLink, setCopyLink] = useState('');
     const [isActive, setIsActive] = useState(true);
     const [expiresAt, setExpiresAt] = useState('');
     const [autoAssign, setAutoAssign] = useState(false);
@@ -311,6 +312,7 @@ const CreatePost: React.FC = () => {
     const [error, setError] = useState('');
     const [isInstructionsModalOpen, setIsInstructionsModalOpen] = useState(false);
     const [isLinksModalOpen, setIsLinksModalOpen] = useState(false);
+    const [linkTargetField, setLinkTargetField] = useState<'postLink' | 'copyLink'>('postLink');
     
     useEffect(() => {
         if (isScheduling && scheduleDate && scheduleTime) {
@@ -361,6 +363,7 @@ const CreatePost: React.FC = () => {
                         }
                         setInstructions(postData.instructions || '');
                         setPostLink(postData.postLink || '');
+                        setCopyLink(postData.copyLink || '');
                         setIsActive(postData.isActive);
                         setExpiresAt(timestampToInputDate(postData.expiresAt));
                         setAutoAssign(postData.autoAssignToNewPromoters || false);
@@ -392,6 +395,7 @@ const CreatePost: React.FC = () => {
                         setGoogleDriveUrl(postToDuplicate.googleDriveUrl || '');
                         setInstructions(postToDuplicate.instructions || '');
                         setPostLink(postToDuplicate.postLink || '');
+                        setCopyLink(postToDuplicate.copyLink || '');
                         setOwnerOnly(postToDuplicate.ownerOnly || false);
                         if (postToDuplicate.mediaUrl) {
                              setOriginalMediaPath(postToDuplicate.mediaUrl);
@@ -493,6 +497,7 @@ const CreatePost: React.FC = () => {
                     textContent: (postType !== 'text' && textContent) ? textContent : undefined, 
                     instructions,
                     postLink: postLink.trim() || undefined,
+                    copyLink: copyLink.trim() || undefined,
                     isActive,
                     expiresAt: expiryTimestamp ? firebase.firestore.Timestamp.fromDate(expiryTimestamp) : null,
                     autoAssignToNewPromoters: autoAssign,
@@ -593,6 +598,14 @@ const CreatePost: React.FC = () => {
         }
     };
 
+    const handleSelectLinkTemplate = (url: string) => {
+        if (linkTargetField === 'postLink') {
+            setPostLink(url);
+        } else {
+            setCopyLink(url);
+        }
+    };
+
     return (
         <div>
             {/* Modal Components */}
@@ -670,14 +683,37 @@ const CreatePost: React.FC = () => {
                             <select onChange={e => setInstructions(e.target.value)} className="mt-2 w-full px-3 py-1 text-sm border border-gray-600 rounded-md bg-gray-700"><option value="">Usar um modelo de instrução...</option>{instructionTemplates.map(t => <option key={t.id} value={t.text}>{t.text.substring(0, 50)}...</option>)}</select>
                         </div>
                         
-                        <div>
-                            <div className="flex justify-between items-center mb-1">
-                                <label className="block text-sm font-medium text-gray-300">Link da Postagem</label>
-                                <button type="button" onClick={() => setIsLinksModalOpen(true)} className="text-xs text-primary hover:underline">Gerenciar Modelos</button>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-sm font-medium text-gray-300">Link de Interação (Abrir)</label>
+                                    <button type="button" onClick={() => { setLinkTargetField('postLink'); setIsLinksModalOpen(true); }} className="text-[10px] text-primary hover:underline">Modelos</button>
+                                </div>
+                                <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Ex: link do instagram para curtir" value={postLink} onChange={e => setPostLink(e.target.value)} />
                             </div>
-                            <InputWithIcon Icon={LinkIcon} type="url" name="postLink" placeholder="Link da Postagem (Ex: instagram)" value={postLink} onChange={e => setPostLink(e.target.value)} />
-                            <select onChange={e => setPostLink(e.target.value)} className="mt-2 w-full px-3 py-1 text-sm border border-gray-600 rounded-md bg-gray-700"><option value="">Usar um modelo de link...</option>{linkTemplates.map(t => <option key={t.id} value={t.url}>{t.name}</option>)}</select>
+                            <div>
+                                <div className="flex justify-between items-center mb-1">
+                                    <label className="block text-sm font-medium text-gray-300">Link para Copiar (CTA)</label>
+                                    <button type="button" onClick={() => { setLinkTargetField('copyLink'); setIsLinksModalOpen(true); }} className="text-[10px] text-primary hover:underline">Modelos</button>
+                                </div>
+                                <InputWithIcon Icon={LinkIcon} type="url" name="copyLink" placeholder="Ex: link para botar na legenda" value={copyLink} onChange={e => setCopyLink(e.target.value)} />
+                            </div>
                         </div>
+
+                        {linkTemplates.length > 0 && (
+                            <div className="mt-2 p-3 bg-dark/30 rounded-lg border border-gray-600">
+                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Usar Modelos de Links:</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {linkTemplates.map(t => (
+                                        <div key={t.id} className="flex bg-gray-700 rounded-md overflow-hidden border border-gray-600">
+                                            <span className="px-2 py-1 text-[9px] font-bold text-gray-300 bg-gray-800 border-r border-gray-600">{t.name}</span>
+                                            <button type="button" onClick={() => setPostLink(t.url)} className="px-2 py-1 text-[9px] font-black text-blue-400 hover:bg-blue-900/30">ABRIR</button>
+                                            <button type="button" onClick={() => setCopyLink(t.url)} className="px-2 py-1 text-[9px] font-black text-orange-400 border-l border-gray-600 hover:bg-orange-900/30">COPIAR</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </fieldset>
 
                     <fieldset className="p-4 border border-gray-700 rounded-lg space-y-4">

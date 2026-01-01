@@ -13,6 +13,17 @@ export type PlanId = 'basic' | 'professional';
 
 export type RecoveryStatus = 'none' | 'contacted' | 'purchased' | 'no_response';
 
+export interface NewsletterLog {
+  id: string;
+  subject: string;
+  body: string;
+  sentAt: Timestamp | FieldValue;
+  targetCount: number;
+  targetDescription: string;
+  createdByEmail: string;
+  organizationId?: string;
+}
+
 export interface RecoveryTemplate {
   id: string;
   title: string;
@@ -196,6 +207,7 @@ export interface ScheduledPostData {
   textContent?: string;
   instructions: string;
   postLink?: string;
+  copyLink?: string;
   mediaUrl?: string;
   googleDriveUrl?: string;
   isActive: boolean;
@@ -256,6 +268,7 @@ export interface Post {
   textContent?: string;
   instructions: string;
   postLink?: string;
+  copyLink?: string;
   mediaUrl?: string;
   googleDriveUrl?: string;
   isActive: boolean;

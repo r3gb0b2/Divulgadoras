@@ -155,8 +155,9 @@ const PostCard: React.FC<{
     };
 
     const handleCopyPostLink = () => {
-        if (!assignment.post.postLink) return;
-        navigator.clipboard.writeText(assignment.post.postLink);
+        const linkToCopy = assignment.post.copyLink || assignment.post.postLink;
+        if (!linkToCopy) return;
+        navigator.clipboard.writeText(linkToCopy);
         setLinkCopied(true);
         setTimeout(() => setLinkCopied(false), 2000);
     };
@@ -205,29 +206,32 @@ const PostCard: React.FC<{
                     )}
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* BOTÕES DE DOWNLOAD (Sempre aparecem se houver o link) */}
+                        {/* LINK 1: MÍDIA */}
                         {assignment.post.mediaUrl && (
                             <button onClick={handleDownloadLink1} disabled={isDownloading} className="flex items-center justify-center gap-2 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold transition-all">
                                 <DownloadIcon className="w-4 h-4" /> BAIXAR MÍDIA
                             </button>
                         )}
                         
+                        {/* LINK 2: DRIVE / EXTERNO */}
                         {assignment.post.googleDriveUrl && (
                             <button onClick={handleDownloadLink2} className="flex items-center justify-center gap-2 py-3 bg-indigo-900/40 border border-indigo-700/50 hover:bg-indigo-900/60 text-indigo-300 rounded-xl text-xs font-bold transition-all">
                                 <ExternalLinkIcon className="w-4 h-4" /> LINK DRIVE
                             </button>
                         )}
 
-                        {/* BOTÕES DE INTERAÇÃO (Somente se for post de INTERAÇÃO/TEXTO) */}
-                        {assignment.post.type === 'text' && assignment.post.postLink && (
-                            <>
-                                <button onClick={handleOpenPostLink} className="flex items-center justify-center gap-2 py-3 bg-blue-900/40 border border-blue-700/50 hover:bg-blue-900/60 text-blue-300 rounded-xl text-xs font-bold transition-all">
-                                    <ExternalLinkIcon className="w-4 h-4" /> ABRIR POST
-                                </button>
-                                <button onClick={handleCopyPostLink} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all border ${linkCopied ? 'bg-green-600 text-white border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'bg-orange-900/40 border-orange-700/50 text-orange-300 hover:bg-orange-900/60'}`}>
-                                    <DocumentDuplicateIcon className="w-4 h-4" /> {linkCopied ? 'COPIADO!' : 'COPIAR LINK POST'}
-                                </button>
-                            </>
+                        {/* BOTÕES DE INTERAÇÃO (Somente se houver postLink) */}
+                        {assignment.post.postLink && (
+                            <button onClick={handleOpenPostLink} className="flex items-center justify-center gap-2 py-3 bg-blue-900/40 border border-blue-700/50 hover:bg-blue-900/60 text-blue-300 rounded-xl text-xs font-bold transition-all">
+                                <ExternalLinkIcon className="w-4 h-4" /> ABRIR PARA INTERAÇÃO
+                            </button>
+                        )}
+
+                        {/* BOTÃO DE COPIAR LINK (Somente se houver copyLink ou postLink como fallback) */}
+                        {(assignment.post.copyLink || assignment.post.postLink) && (
+                            <button onClick={handleCopyPostLink} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all border ${linkCopied ? 'bg-green-600 text-white border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'bg-orange-900/40 border-orange-700/50 text-orange-300 hover:bg-orange-900/60'}`}>
+                                <DocumentDuplicateIcon className="w-4 h-4" /> {linkCopied ? 'COPIADO!' : 'COPIAR PARA POSTAGEM'}
+                            </button>
                         )}
                     </div>
                 </div>

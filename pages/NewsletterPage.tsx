@@ -5,10 +5,16 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { getAllPromoters } from '../services/promoterService';
-import { Organization, Campaign, Promoter } from '../types';
-import { functions } from '../firebase/config';
+import { Organization, Campaign, Promoter, NewsletterLog } from '../types';
+import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { ArrowLeftIcon, BoldIcon, ItalicIcon, UnderlineIcon, LinkIcon, ListBulletIcon, ListNumberedIcon, CodeBracketIcon, EyeIcon, CameraIcon, FaceSmileIcon, SearchIcon, TrashIcon, UserIcon, FilterIcon, MegaphoneIcon } from '../components/Icons';
+import { 
+    ArrowLeftIcon, BoldIcon, ItalicIcon, UnderlineIcon, LinkIcon, 
+    ListBulletIcon, ListNumberedIcon, CodeBracketIcon, EyeIcon, 
+    CameraIcon, FaceSmileIcon, SearchIcon, TrashIcon, UserIcon, 
+    FilterIcon, MegaphoneIcon, ClockIcon, RefreshIcon 
+} from '../components/Icons';
+import firebase from 'firebase/compat/app';
 
 const HtmlEditor: React.FC<{ value: string; onChange: (value: string) => void; disabled?: boolean; }> = ({ value, onChange, disabled }) => {
     const [view, setView] = useState<'visual' | 'html'>('visual');
@@ -19,16 +25,16 @@ const HtmlEditor: React.FC<{ value: string; onChange: (value: string) => void; d
         if (editorRef.current) { onChange(editorRef.current.innerHTML); editorRef.current.focus(); }
     };
     return (
-        <div className="border border-gray-600 rounded-xl overflow-hidden">
+        <div className="border border-gray-600 rounded-xl overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between p-2 bg-gray-800 border-b border-gray-700 flex-wrap">
                 <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => handleExecCommand('bold')} className="p-2 hover:bg-gray-700 rounded text-white"><BoldIcon className="w-4 h-4" /></button>
-                    <button type="button" onClick={() => handleExecCommand('italic')} className="p-2 hover:bg-gray-700 rounded text-white"><ItalicIcon className="w-4 h-4" /></button>
-                    <button type="button" onClick={() => handleExecCommand('underline')} className="p-2 hover:bg-gray-700 rounded text-white"><UnderlineIcon className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => handleExecCommand('bold')} className="p-2 hover:bg-gray-700 rounded text-white transition-colors"><BoldIcon className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => handleExecCommand('italic')} className="p-2 hover:bg-gray-700 rounded text-white transition-colors"><ItalicIcon className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => handleExecCommand('underline')} className="p-2 hover:bg-gray-700 rounded text-white transition-colors"><UnderlineIcon className="w-4 h-4" /></button>
                 </div>
-                <button type="button" onClick={() => setView(v => v === 'visual' ? 'html' : 'visual')} className="text-[10px] font-black uppercase px-3 py-1 bg-gray-700 rounded-lg text-white">{view === 'visual' ? 'HTML' : 'Visual'}</button>
+                <button type="button" onClick={() => setView(v => v === 'visual' ? 'html' : 'visual')} className="text-[10px] font-black uppercase px-3 py-1 bg-gray-700 rounded-lg text-white hover:bg-gray-600 transition-all">{view === 'visual' ? 'VER CÓDIGO HTML' : 'VOLTAR PARA VISUAL'}</button>
             </div>
-            {view === 'visual' ? <div ref={editorRef} onInput={(e) => onChange(e.currentTarget.innerHTML)} contentEditable={!disabled} className="min-h-[300px] p-4 bg-gray-900 text-gray-200 outline-none" /> : <textarea value={value} onChange={(e) => onChange(e.target.value)} className="min-h-[300px] w-full p-4 bg-black text-green-400 font-mono text-xs" />}
+            {view === 'visual' ? <div ref={editorRef} onInput={(e) => onChange(e.currentTarget.innerHTML)} contentEditable={!disabled} className="min-h-[400px] p-6 bg-gray-900 text-gray-200 outline-none leading-relaxed" /> : <textarea value={value} onChange={(e) => onChange(e.target.value)} className="min-h-[400px] w-full p-4 bg-black text-green-400 font-mono text-xs outline-none" />}
         </div>
     );
 };
@@ -39,6 +45,7 @@ const NewsletterPage: React.FC = () => {
     const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [promoters, setPromoters] = useState<Promoter[]>([]);
+    const [logs, setLogs] = useState<NewsletterLog[]>([]);
     const [isLoadingData, setIsLoadingData] = useState(true);
     const [isFetchingPromoters, setIsFetchingPromoters] = useState(false);
 
@@ -54,6 +61,13 @@ const NewsletterPage: React.FC = () => {
     const [body, setBody] = useState('<p>Olá {{promoterName}},</p><p><br></p><p>Escreva sua mensagem aqui...</p>');
     const [isSending, setIsSending] = useState(false);
 
+    const fetchLogs = async () => {
+        try {
+            const snap = await firestore.collection('newsletterLogs').orderBy('sentAt', 'desc').limit(10).get();
+            setLogs(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewsletterLog)));
+        } catch (e) { console.error("Erro ao carregar histórico:", e); }
+    };
+
     useEffect(() => {
         const load = async () => {
             setIsLoadingData(true);
@@ -61,6 +75,7 @@ const NewsletterPage: React.FC = () => {
                 const [orgs, camps] = await Promise.all([getOrganizations(), getAllCampaigns()]);
                 setOrganizations(orgs.sort((a,b) => a.name.localeCompare(b.name)));
                 setCampaigns(camps);
+                await fetchLogs();
             } finally { setIsLoadingData(false); }
         };
         load();
@@ -93,12 +108,21 @@ const NewsletterPage: React.FC = () => {
         setSelectedIds(newSet);
     };
 
+    const handleReuse = (log: NewsletterLog) => {
+        if (!window.confirm("Deseja carregar este conteúdo no editor? O texto atual será perdido.")) return;
+        setSubject(log.subject);
+        setBody(log.body);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const handleSend = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!subject.trim() || !body.trim()) return alert("Preencha assunto e mensagem.");
         
         const finalIds = selectionMode === 'individual' ? Array.from(selectedIds) : [];
-        if (selectionMode === 'individual' && finalIds.length === 0) return alert("Selecione pelo menos uma divulgadora.");
+        const count = selectionMode === 'individual' ? finalIds.length : promoters.length;
+        
+        if (selectionMode === 'individual' && count === 0) return alert("Selecione pelo menos uma divulgadora.");
 
         const audienceData = {
             type: selectionMode === 'individual' ? 'individual' : audienceType,
@@ -108,31 +132,44 @@ const NewsletterPage: React.FC = () => {
             promoterIds: finalIds
         };
 
-        if (!window.confirm(`Enviar e-mail para ${selectionMode === 'individual' ? finalIds.length : promoters.length} pessoas?`)) return;
+        if (!window.confirm(`Enviar e-mail para ${count} pessoas?`)) return;
 
         setIsSending(true);
         try {
             const sendNewsletter = httpsCallable(functions, 'sendNewsletter');
             const result = await sendNewsletter({ audience: audienceData, subject, body });
             const data = result.data as any;
+            
             if (data.success) {
+                // SALVA NO HISTÓRICO
+                await firestore.collection('newsletterLogs').add({
+                    subject,
+                    body,
+                    sentAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    targetCount: count,
+                    targetDescription: audienceType === 'all' ? 'Toda Base' : (selectedCampaignName || organizations.find(o=>o.id===selectedOrgId)?.name || 'Segmentado'),
+                    createdByEmail: adminData?.email || 'Admin'
+                });
+
                 alert(data.message);
                 setSubject('');
                 setBody('<p>Olá {{promoterName}},</p>');
                 setSelectedIds(new Set());
+                fetchLogs();
             } else throw new Error(data.message);
         } catch (err: any) { alert(`Falha: ${err.message}`); }
         finally { setIsSending(false); }
     };
 
     return (
-        <div className="max-w-6xl mx-auto pb-20">
-            <div className="flex justify-between items-center mb-8">
+        <div className="max-w-7xl mx-auto pb-20">
+            <div className="flex justify-between items-center mb-8 px-4 md:px-0">
                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Newsletter Global</h1>
                 <button onClick={() => navigate(-1)} className="p-2 bg-gray-800 text-white rounded-xl hover:bg-gray-700 transition-colors"><ArrowLeftIcon className="w-5 h-5"/></button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* SIDEBAR: FILTROS E HISTÓRICO */}
                 <div className="lg:col-span-4 space-y-6">
                     <div className="bg-secondary p-6 rounded-[2.5rem] border border-white/5 shadow-xl space-y-6">
                         <h2 className="text-sm font-black text-primary uppercase tracking-widest flex items-center gap-2"><FilterIcon className="w-4 h-4"/> Audiência e Filtros</h2>
@@ -184,7 +221,7 @@ const NewsletterPage: React.FC = () => {
                         {selectionMode === 'individual' && (
                             <div className="space-y-3 animate-fadeIn">
                                 <p className="text-[9px] text-gray-400 uppercase font-black tracking-widest px-1">Marque quem deve receber:</p>
-                                <div className="h-64 overflow-y-auto bg-dark/50 rounded-2xl border border-white/5 p-2 space-y-1 custom-scrollbar shadow-inner">
+                                <div className="h-48 overflow-y-auto bg-dark/50 rounded-2xl border border-white/5 p-2 space-y-1 custom-scrollbar shadow-inner">
                                     {isFetchingPromoters ? <div className="py-10 text-center animate-pulse text-primary font-black text-[10px] uppercase">Buscando perfis...</div> : promoters.length === 0 ? <div className="py-10 text-center text-gray-600 text-xs">Nenhum resultado.</div> : promoters.map(p => (
                                         <label key={p.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white/5 cursor-pointer group transition-all">
                                             <input type="checkbox" checked={selectedIds.has(p.id)} onChange={() => handleToggleSelect(p.id)} className="w-4 h-4 rounded border-gray-600 bg-black text-primary focus:ring-primary" />
@@ -198,8 +235,36 @@ const NewsletterPage: React.FC = () => {
                             </div>
                         )}
                     </div>
+
+                    {/* HISTÓRICO DE ENVIOS */}
+                    <div className="bg-secondary p-6 rounded-[2.5rem] border border-white/5 shadow-xl space-y-6">
+                        <h2 className="text-sm font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2"><ClockIcon className="w-4 h-4"/> Enviados Recentemente</h2>
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1 custom-scrollbar">
+                            {logs.length === 0 ? (
+                                <p className="text-center py-10 text-gray-600 text-[10px] font-bold uppercase">Nenhum envio registrado.</p>
+                            ) : logs.map(log => (
+                                <div key={log.id} className="bg-dark/40 p-4 rounded-2xl border border-white/5 space-y-3 hover:border-white/10 transition-all group">
+                                    <div className="flex justify-between items-start">
+                                        <div className="min-w-0 flex-grow">
+                                            <p className="text-white font-bold text-xs truncate uppercase tracking-tight">{log.subject}</p>
+                                            <p className="text-[8px] text-gray-500 font-black uppercase tracking-widest mt-1">
+                                                {log.targetCount} destinatários • {log.targetDescription}
+                                            </p>
+                                        </div>
+                                        <button onClick={() => handleReuse(log)} className="p-2 bg-indigo-900/20 text-indigo-400 rounded-lg hover:bg-indigo-600 hover:text-white transition-all">
+                                            <RefreshIcon className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                    <p className="text-[8px] text-gray-600 font-bold uppercase text-right">
+                                        {log.sentAt ? (log.sentAt as any).toDate().toLocaleDateString('pt-BR') : 'N/A'}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
+                {/* EDITOR CENTRAL */}
                 <div className="lg:col-span-8">
                     <div className="bg-secondary p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-6">
                         <div className="flex items-center gap-3 mb-2">
