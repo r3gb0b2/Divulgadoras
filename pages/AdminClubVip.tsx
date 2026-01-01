@@ -156,6 +156,55 @@ const AdminClubVip: React.FC = () => {
         } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
     };
 
+    // FUNÇÃO DE RECUPERAÇÃO EM MASSA
+    const handleBulkRecovery = async () => {
+        const toProcess = recoveryMembers.filter(m => selectedIds.has(m.id));
+        if (toProcess.length === 0) return alert("Selecione leads de carrinho abandonado.");
+        
+        if (!window.confirm(`Enviar e-mail de recuperação para ${toProcess.length} leads selecionados? Será gerado um novo Pix Mercado Pago para cada um.`)) return;
+        
+        setIsBulkProcessing(true);
+        let successCount = 0;
+        let failCount = 0;
+
+        try {
+            const createPix = httpsCallable(functions, 'createVipPixPayment');
+            
+            for (const m of toProcess) {
+                try {
+                    const event = vipEvents.find(e => e.id === m.vipEventId);
+                    if (!event) continue;
+
+                    // 1. Gera o Pix para este membro
+                    const pixRes: any = await createPix({
+                        vipEventId: m.vipEventId,
+                        promoterId: m.promoterId,
+                        email: m.promoterEmail,
+                        name: m.promoterName,
+                        whatsapp: m.promoterWhatsapp || "",
+                        instagram: m.promoterInstagram || "",
+                        amount: event.price
+                    });
+
+                    // 2. Envia o e-mail de recuperação
+                    await sendVipRecoveryEmail(m.id, pixRes.data);
+                    successCount++;
+                } catch (err) {
+                    console.error(`Erro ao processar recuperação de ${m.promoterName}:`, err);
+                    failCount++;
+                }
+            }
+            
+            alert(`Processamento concluído!\nSucesso: ${successCount}\nFalhas: ${failCount}`);
+            setSelectedIds(new Set());
+            fetchData();
+        } catch (e: any) { 
+            alert("Erro fatal no processamento em massa."); 
+        } finally { 
+            setIsBulkProcessing(false); 
+        }
+    };
+
     const handleRecoveryEmail = async (m: VipMembership) => {
         const event = vipEvents.find(e => e.id === m.vipEventId);
         if (!event) return;
@@ -242,6 +291,11 @@ const AdminClubVip: React.FC = () => {
                         {activeTab === 'members' && (
                             <button onClick={handleBulkNotify} disabled={isBulkProcessing} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-colors">
                                 {isBulkProcessing ? 'PROCESSANDO...' : 'ATIVAR E NOTIFICAR'}
+                            </button>
+                        )}
+                        {activeTab === 'recovery' && (
+                            <button onClick={handleBulkRecovery} disabled={isBulkProcessing} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-colors">
+                                {isBulkProcessing ? 'ENVIANDO...' : 'RECUPERAR SELECIONADOS (E-MAIL)'}
                             </button>
                         )}
                         <button onClick={() => setSelectedIds(new Set())} className="px-4 py-2 bg-black/20 text-white font-black text-[10px] uppercase rounded-xl">Cancelar</button>
