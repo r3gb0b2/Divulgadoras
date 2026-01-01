@@ -179,10 +179,18 @@ const PostCard: React.FC<{
         }
     };
 
+    const handleDownloadLink2 = () => {
+        if (!assignment.post.googleDriveUrl) return;
+        window.open(assignment.post.googleDriveUrl, '_blank');
+    };
+
     const handleLinkAction = () => {
         if (!assignment.post.postLink) return;
-        if (assignment.post.type === 'text') window.open(assignment.post.postLink, '_blank');
-        else {
+        // Se for post de texto, abre o link (geralmente whatsapp do gestor ou grupo)
+        // Se for imagem/video, copia o link (geralmente link do post para botar no instagram)
+        if (assignment.post.type === 'text') {
+            window.open(assignment.post.postLink, '_blank');
+        } else {
             navigator.clipboard.writeText(assignment.post.postLink);
             setLinkCopied(true);
             setTimeout(() => setLinkCopied(false), 2000);
@@ -224,19 +232,35 @@ const PostCard: React.FC<{
             </div>
             <div className="p-5 space-y-4">
                 <div className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 text-sm text-gray-300 whitespace-pre-wrap italic">{assignment.post.instructions}</div>
-                {assignment.post.type !== 'text' && (
-                    <div className="space-y-3">
+                
+                {/* ÁREA DE MÍDIA E LINKS */}
+                <div className="space-y-3">
+                    {assignment.post.type !== 'text' && (
                         <div className="rounded-2xl overflow-hidden border border-gray-700">
                              <StorageMedia path={assignment.post.mediaUrl || assignment.post.googleDriveUrl || ''} type={assignment.post.type as any} className="w-full h-auto max-h-64 object-contain bg-black" />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            {assignment.post.mediaUrl && (
-                                <button onClick={handleDownloadLink1} disabled={isDownloading} className="flex items-center justify-center gap-2 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold transition-all"><DownloadIcon className="w-4 h-4" /> LINK 1</button>
-                            )}
-                        </div>
+                    )}
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {assignment.post.mediaUrl && (
+                            <button onClick={handleDownloadLink1} disabled={isDownloading} className="flex items-center justify-center gap-2 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold transition-all">
+                                <DownloadIcon className="w-4 h-4" /> LINK 1 (MÍDIA)
+                            </button>
+                        )}
+                        {assignment.post.googleDriveUrl && (
+                            <button onClick={handleDownloadLink2} className="flex items-center justify-center gap-2 py-3 bg-indigo-900/40 border border-indigo-700/50 hover:bg-indigo-900/60 text-indigo-300 rounded-xl text-xs font-bold transition-all">
+                                <DownloadIcon className="w-4 h-4" /> LINK 2 (DRIVE)
+                            </button>
+                        )}
+                        {assignment.post.postLink && (
+                            <button onClick={handleLinkAction} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all border ${linkCopied ? 'bg-green-600 text-white border-green-500' : 'bg-blue-900/40 border-blue-700/50 text-blue-300 hover:bg-blue-900/60'}`}>
+                                <DocumentDuplicateIcon className="w-4 h-4" /> {linkCopied ? 'COPIADO!' : 'COPIAR LINK POST'}
+                            </button>
+                        )}
                     </div>
-                )}
+                </div>
             </div>
+            
             <div className="px-5 pb-5">
                 {!assignment.proofSubmittedAt && (
                     <div className="flex flex-col gap-4">
