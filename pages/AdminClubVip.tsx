@@ -93,6 +93,22 @@ const AdminClubVip: React.FC = () => {
         });
     }, [memberships, filterStatus, filterBenefit, searchQuery, selectedEventId]);
 
+    const toggleSelectOne = (id: string) => {
+        const newSet = new Set(selectedIds);
+        if (newSet.has(id)) newSet.delete(id);
+        else newSet.add(id);
+        setSelectedIds(newSet);
+    };
+
+    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.checked) {
+            const allIds = filteredMembers.map(m => m.id);
+            setSelectedIds(new Set(allIds));
+        } else {
+            setSelectedIds(new Set());
+        }
+    };
+
     const handleCopyReportLink = () => {
         const token = selectedEventId === 'all' ? 'global' : selectedEventId;
         const url = `${window.location.origin}/#/admin/vip-metrics/${token}`;
@@ -100,7 +116,6 @@ const AdminClubVip: React.FC = () => {
         alert("Link Público de Relatório Copiado!");
     };
 
-    // FIX: Added missing handleCopy helper function
     const handleCopy = (text: string) => {
         navigator.clipboard.writeText(text);
         alert("Código copiado!");
@@ -117,20 +132,18 @@ const AdminClubVip: React.FC = () => {
         } catch (e) { alert("Erro ao atualizar status."); }
     };
 
-    const handleWhatsAppRecovery = (promoter: Promoter) => {
-        const firstName = promoter.name.split(' ')[0];
-        const adminName = adminData?.email.split('@')[0];
-        const msg = `Olá ${firstName}! Tudo bem? Sou o ${adminName} da Equipe Certa. Vi que seu cadastro para a equipe do evento ${promoter.campaignName} não pôde ser aprovado no momento, mas não queremos que você fique de fora! 🚀\n\nLiberei uma condição VIP exclusiva pra você no nosso Clube. Você ganha benefícios e o seu ingresso sai por um valor promocional. Tem interesse em saber como funciona?`;
-        handleUpdateRecovery(promoter.id, 'contacted');
-        const url = `https://wa.me/55${promoter.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
-        window.open(url, '_blank');
-    };
-
     const handleDownloadXLS = () => {
-        const target = activeTab === 'members' ? filteredMembers : recoveryLeads as any[];
+        // Se houver seleção, exporta apenas selecionados. Senão, todos os filtrados.
+        const target = activeTab === 'members' 
+            ? (selectedIds.size > 0 ? filteredMembers.filter(m => selectedIds.has(m.id)) : filteredMembers)
+            : recoveryLeads as any[];
+            
         if (target.length === 0) return;
-        let table = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table border="1"><thead><tr><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Evento</th></tr></thead><tbody>`;
-        target.forEach(m => { table += `<tr><td>${m.promoterName || m.name}</td><td>${m.promoterEmail || m.email}</td><td>${m.promoterWhatsapp || m.whatsapp}</td><td>${m.vipEventName || m.campaignName}</td></tr>`; });
+        
+        let table = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table border="1"><thead><tr><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Evento</th><th>Status Pgto</th></tr></thead><tbody>`;
+        target.forEach(m => { 
+            table += `<tr><td>${m.promoterName || m.name}</td><td>${m.promoterEmail || m.email}</td><td>${m.promoterWhatsapp || m.whatsapp}</td><td>${m.vipEventName || m.campaignName}</td><td>${m.status || '---'}</td></tr>`; 
+        });
         table += `</tbody></table></body></html>`;
         const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
         const url = URL.createObjectURL(blob);
@@ -152,17 +165,6 @@ const AdminClubVip: React.FC = () => {
         } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
     };
 
-    const handleSaveEvent = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editingEvent?.name) return;
-        setIsBulkProcessing(true);
-        try {
-            if (editingEvent.id) await updateVipEvent(editingEvent.id, editingEvent);
-            else await createVipEvent({ name: editingEvent.name!, price: editingEvent.price || 0, description: editingEvent.description || '', benefits: editingEvent.benefits || [], pixKey: editingEvent.pixKey || '', externalSlug: editingEvent.externalSlug || '', isActive: editingEvent.isActive ?? true });
-            setIsModalOpen(false); setEditingEvent(null); fetchData();
-        } catch (e) { alert("Erro ao salvar."); } finally { setIsBulkProcessing(false); }
-    };
-
     return (
         <div className="pb-40">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
@@ -174,7 +176,7 @@ const AdminClubVip: React.FC = () => {
                         <ExternalLinkIcon className="w-4 h-4 text-primary" /> Link de Relatório
                     </button>
                     <button onClick={handleDownloadXLS} className="px-4 py-3 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-indigo-500 transition-all">
-                        <DownloadIcon className="w-4 h-4" /> Exportar XLS
+                        <DownloadIcon className="w-4 h-4" /> Exportar {selectedIds.size > 0 ? `(${selectedIds.size})` : ''} XLS
                     </button>
                     {activeTab === 'events' && (
                         <button onClick={() => { setEditingEvent({ benefits: [] }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
@@ -220,7 +222,14 @@ const AdminClubVip: React.FC = () => {
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
-                                        <th className="px-6 py-5 w-10"><input type="checkbox" className="w-5 h-5 rounded border-gray-700 bg-dark text-primary" /></th>
+                                        <th className="px-6 py-5 w-10">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={filteredMembers.length > 0 && selectedIds.size === filteredMembers.length}
+                                                onChange={handleSelectAll}
+                                                className="w-5 h-5 rounded border-gray-700 bg-dark text-primary" 
+                                            />
+                                        </th>
                                         <th className="px-6 py-5">Membro</th>
                                         <th className="px-6 py-5 text-center">Código</th>
                                         <th className="px-6 py-5 text-center">Ativação</th>
@@ -230,8 +239,15 @@ const AdminClubVip: React.FC = () => {
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {filteredMembers.map(m => (
-                                        <tr key={m.id} className="hover:bg-white/[0.02] transition-colors">
-                                            <td className="px-6 py-5"><input type="checkbox" className="w-5 h-5 rounded border-gray-700 bg-dark text-primary" /></td>
+                                        <tr key={m.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.has(m.id) ? 'bg-primary/5' : ''}`}>
+                                            <td className="px-6 py-5">
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={selectedIds.has(m.id)}
+                                                    onChange={() => toggleSelectOne(m.id)}
+                                                    className="w-5 h-5 rounded border-gray-700 bg-dark text-primary" 
+                                                />
+                                            </td>
                                             <td className="px-6 py-5"><p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p><p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p></td>
                                             <td className="px-6 py-5 text-center">{m.benefitCode ? <span onClick={() => handleCopy(m.benefitCode || '')} className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10">{m.benefitCode}</span> : <span className="text-gray-600 text-[10px] font-bold">---</span>}</td>
                                             <td className="px-6 py-5 text-center">{m.isBenefitActive ? <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">ATIVADO</span> : <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 border border-gray-700 text-[8px] font-black uppercase tracking-widest">AGUARDANDO</span>}</td>
@@ -244,9 +260,8 @@ const AdminClubVip: React.FC = () => {
                         </div>
                     </>
                 )}
-                {/* Outras abas (recovery, events) seguem o padrão original */}
+                {/* Outras abas permanecem com o mesmo funcionamento */}
             </div>
-            {/* Modal de Evento */}
         </div>
     );
 };
