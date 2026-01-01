@@ -205,22 +205,21 @@ const PostCard: React.FC<{
                     )}
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* LINK 1: MÍDIA */}
+                        {/* BOTÕES DE DOWNLOAD (Sempre aparecem se houver o link) */}
                         {assignment.post.mediaUrl && (
                             <button onClick={handleDownloadLink1} disabled={isDownloading} className="flex items-center justify-center gap-2 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold transition-all">
                                 <DownloadIcon className="w-4 h-4" /> BAIXAR MÍDIA
                             </button>
                         )}
                         
-                        {/* LINK 2: DRIVE / EXTERNO */}
                         {assignment.post.googleDriveUrl && (
                             <button onClick={handleDownloadLink2} className="flex items-center justify-center gap-2 py-3 bg-indigo-900/40 border border-indigo-700/50 hover:bg-indigo-900/60 text-indigo-300 rounded-xl text-xs font-bold transition-all">
                                 <ExternalLinkIcon className="w-4 h-4" /> LINK DRIVE
                             </button>
                         )}
 
-                        {/* BOTÕES DO POST LINK */}
-                        {assignment.post.postLink && (
+                        {/* BOTÕES DE INTERAÇÃO (Somente se for post de INTERAÇÃO/TEXTO) */}
+                        {assignment.post.type === 'text' && assignment.post.postLink && (
                             <>
                                 <button onClick={handleOpenPostLink} className="flex items-center justify-center gap-2 py-3 bg-blue-900/40 border border-blue-700/50 hover:bg-blue-900/60 text-blue-300 rounded-xl text-xs font-bold transition-all">
                                     <ExternalLinkIcon className="w-4 h-4" /> ABRIR POST
