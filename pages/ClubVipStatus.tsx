@@ -126,7 +126,7 @@ const ClubVipStatus: React.FC = () => {
                                         </div>
                                         <div className="text-left">
                                             <h2 className="text-xl font-black text-white uppercase tracking-tight leading-none">{m.vipEventName}</h2>
-                                            <p className="text-[9px] text-primary font-black uppercase tracking-[0.3em] mt-2">Membro Clube VIP</p>
+                                            <p className="text-[8px] text-primary font-black uppercase tracking-[0.3em] mt-2">Membro Clube VIP</p>
                                         </div>
                                     </div>
 
@@ -140,7 +140,10 @@ const ClubVipStatus: React.FC = () => {
                                             <div className="p-5 bg-orange-500/10 rounded-2xl border border-orange-500/30 text-center">
                                                 <ClockIcon className="w-8 h-8 text-orange-500 mx-auto mb-2" />
                                                 <p className="text-white font-black uppercase tracking-widest text-xs">LIBERAÇÃO EM ANDAMENTO</p>
-                                                <p className="text-[10px] text-orange-300 uppercase font-bold mt-1 leading-tight">Pagamento detectado. Aguarde a liberação do seu código exclusivo.</p>
+                                                <p className="text-[10px] text-orange-300 uppercase font-bold mt-2 leading-tight">
+                                                    Pagamento identificado com sucesso!<br/>
+                                                    O processo de geração e envio do seu código exclusivo é manual e <b>pode levar algumas horas</b> para chegar no seu e-mail.
+                                                </p>
                                             </div>
                                         )}
 

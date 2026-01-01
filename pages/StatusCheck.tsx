@@ -317,7 +317,9 @@ const StatusCheck: React.FC = () => {
                                                         ) : (
                                                             <div className="p-4 bg-amber-900/10 rounded-xl border border-amber-500/20 text-center">
                                                                 <p className="text-amber-400 font-black text-[10px] uppercase">LIBERAÇÃO EM ANDAMENTO</p>
-                                                                <p className="text-gray-500 text-[8px] mt-1">Aguarde a ativação pelo administrador.</p>
+                                                                <p className="text-gray-500 text-[8px] mt-2 leading-tight uppercase font-bold">
+                                                                    O envio do código é manual e <b>pode levar algumas horas</b> para chegar no seu e-mail.
+                                                                </p>
                                                             </div>
                                                         )}
                                                     </div>
