@@ -22,6 +22,7 @@ import {
     WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
+import * as XLSX from 'xlsx';
 
 const AdminClubVip: React.FC = () => {
     const navigate = useNavigate();
@@ -127,18 +128,23 @@ const AdminClubVip: React.FC = () => {
             : recoveryLeads as any[];
             
         if (target.length === 0) return;
+
+        // Prepara os dados formatados
+        const excelData = target.map(m => ({
+            "Nome": m.promoterName || m.name,
+            "E-mail": m.promoterEmail || m.email,
+            "WhatsApp": m.promoterWhatsapp || m.whatsapp,
+            "Evento": m.vipEventName || m.campaignName,
+            "Código VIP": m.benefitCode || '---',
+            "Status Pgto": m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(excelData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Clube VIP");
         
-        let table = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table border="1"><thead><tr><th>Nome</th><th>E-mail</th><th>WhatsApp</th><th>Evento</th><th>Código VIP</th><th>Status Pgto</th></tr></thead><tbody>`;
-        target.forEach(m => { 
-            table += `<tr><td>${m.promoterName || m.name}</td><td>${m.promoterEmail || m.email}</td><td>${m.promoterWhatsapp || m.whatsapp}</td><td>${m.vipEventName || m.campaignName}</td><td>${m.benefitCode || '---'}</td><td>${m.status || '---'}</td></tr>`; 
-        });
-        table += `</tbody></table></body></html>`;
-        const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `clube_vip_${activeTab}.xls`);
-        link.click();
+        // Gera e baixa o arquivo .xlsx legítimo
+        XLSX.writeFile(workbook, `clube_vip_${activeTab}.xlsx`);
     };
 
     const handleDownloadOnlyCodes = () => {
@@ -148,25 +154,19 @@ const AdminClubVip: React.FC = () => {
             ? filteredMembers.filter(m => selectedIds.has(m.id)) 
             : filteredMembers;
             
-        const codes = target.map(m => m.benefitCode).filter(Boolean);
+        // Prepara dados apenas com os códigos na Coluna A, sem cabeçalho
+        const codes = target.map(m => [m.benefitCode]).filter(row => row[0]);
             
         if (codes.length === 0) {
             alert("Nenhum código encontrado para exportação.");
             return;
         }
+
+        const worksheet = XLSX.utils.aoa_to_sheet(codes);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Códigos");
         
-        let table = `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><body><table border="1"><tbody>`;
-        codes.forEach(code => { 
-            table += `<tr><td>${code}</td></tr>`; 
-        });
-        table += `</tbody></table></body></html>`;
-        
-        const blob = new Blob([table], { type: 'application/vnd.ms-excel' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", `apenas_codigos_vip.xls`);
-        link.click();
+        XLSX.writeFile(workbook, `apenas_codigos_vip.xlsx`);
     };
 
     const handleManualNotifySingle = async (membership: VipMembership) => {
@@ -224,11 +224,11 @@ const AdminClubVip: React.FC = () => {
                     </button>
                     {activeTab === 'members' && (
                         <button onClick={handleDownloadOnlyCodes} className="px-4 py-3 bg-gray-700 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-gray-600 transition-all">
-                            <DocumentDuplicateIcon className="w-4 h-4" /> Apenas Códigos
+                            <DocumentDuplicateIcon className="w-4 h-4" /> Apenas Códigos (.xlsx)
                         </button>
                     )}
                     <button onClick={handleDownloadXLS} className="px-4 py-3 bg-indigo-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-indigo-500 transition-all">
-                        <DownloadIcon className="w-4 h-4" /> Tudo (.xls)
+                        <DownloadIcon className="w-4 h-4" /> Tudo (.xlsx)
                     </button>
                     {activeTab === 'events' && (
                         <button onClick={() => { setEditingEvent({ benefits: [] }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
@@ -325,7 +325,6 @@ const AdminClubVip: React.FC = () => {
                         </div>
                     </>
                 )}
-                {/* Outras abas permanecem */}
             </div>
         </div>
     );
