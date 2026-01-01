@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { findPromotersByEmail } from '../services/promoterService';
@@ -202,7 +203,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
         return (
             <div className="space-y-4">
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
-                    <p className="font-bold">{isEditing ? 'Lista Atualizada!' : 'Presença Confirmada!'}</p>
+                    <p className="font-bold">NOME NA LISTA CONFIRMADO</p>
                     <p>Sua lista para <strong>{list.name}</strong> foi {isEditing ? 'atualizada' : 'enviada'} com sucesso.</p>
                 </div>
                 <div className="bg-dark/70 p-4 rounded-lg shadow-sm">
@@ -250,7 +251,7 @@ const GuestListConfirmationForm: React.FC<{ list: GuestList; promoter: Promoter,
         return (
              <div className="space-y-4">
                 <div className="bg-green-900/50 border-l-4 border-green-500 text-green-300 p-4 rounded-md">
-                    <p className="font-bold">Lista Enviada!</p>
+                    <p className="font-bold">NOME NA LISTA CONFIRMADO</p>
                     <p>Sua lista para <strong>{list.name}</strong> já foi enviada. Para fazer alterações, clique no botão abaixo para solicitar a liberação ao organizador.</p>
                 </div>
                 <div className="bg-dark/70 p-4 rounded-lg shadow-sm">
