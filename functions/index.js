@@ -126,7 +126,7 @@ export const notifyApprovalBulk = functions.region("southamerica-east1").https.o
  * Gera novo pagamento Pix e envia por e-mail
  */
 export const sendVipRecoveryEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { membershipId } = data;
+    const { membershipId, pixData } = data;
     try {
         const snap = await db.collection("vipMemberships").doc(membershipId).get();
         if (!snap.exists) throw new Error("Adesão não encontrada.");
@@ -138,21 +138,7 @@ export const sendVipRecoveryEmail = functions.region("southamerica-east1").https
         if (!eventSnap.exists) throw new Error("Evento VIP não encontrado.");
         const ev = eventSnap.data();
 
-        // 1. Re-gera o Pix no Mercado Pago (reutilizando a lógica de criação)
-        const createPix = httpsCallable(functions, 'createVipPixPayment');
-        const pixRes = await createPix({
-            vipEventId: m.vipEventId,
-            promoterId: m.promoterId,
-            email: m.promoterEmail,
-            name: m.promoterName,
-            whatsapp: m.promoterWhatsapp || "",
-            instagram: m.promoterInstagram || "",
-            amount: ev.price
-        });
-
-        const pixData = pixRes.data;
-
-        // 2. Monta o E-mail de Recuperação
+        // Monta o E-mail de Recuperação com os dados do Pix fornecidos pelo cliente/admin
         const html = `
             <div style="font-family:sans-serif; max-width:600px; margin:0 auto; padding:40px; border:1px solid #e2e8f0; border-radius:24px; text-align:center; background-color:#ffffff;">
                 <h1 style="color:#7e39d5; font-size:24px; margin-bottom:10px;">Não perca seu acesso VIP! 🎟️</h1>
@@ -181,7 +167,7 @@ export const sendVipRecoveryEmail = functions.region("southamerica-east1").https
 
         if (emailSent) {
             await snap.ref.update({
-                lastRecoverySentAt: firebase.firestore.FieldValue.serverTimestamp()
+                lastRecoverySentAt: admin.firestore.FieldValue.serverTimestamp()
             });
             return { success: true, message: "E-mail de recuperação enviado com sucesso!" };
         } else {
@@ -196,12 +182,11 @@ export const sendVipRecoveryEmail = functions.region("southamerica-east1").https
 
 /**
  * Função de Newsletter Otimizada para Grande Escala
- * Suporta envios de 2.000+ e-mails usando processamento em lotes (chunks)
  */
 export const sendNewsletter = functions
     .runWith({ 
-        timeoutSeconds: 540, // Aumentado para 9 minutos
-        memory: '1GB'        // Aumentado para lidar com grandes listas em memória
+        timeoutSeconds: 540,
+        memory: '1GB'
     })
     .region("southamerica-east1")
     .https.onCall(async (data, context) => {
@@ -210,7 +195,6 @@ export const sendNewsletter = functions
         try {
             let docs = [];
             
-            // 1. Busca dos destinatários
             if (audience.type === 'individual' && audience.promoterIds && audience.promoterIds.length > 0) {
                 const promises = audience.promoterIds.map(id => db.collection("promoters").doc(id).get());
                 const snaps = await Promise.all(promises);
@@ -239,15 +223,13 @@ export const sendNewsletter = functions
                 return { success: false, message: "Nenhum destinatário encontrado." };
             }
 
-            // 2. Processamento em Lotes (Chunks) para evitar gargalos na API do Brevo e Rate Limiting
-            const chunkSize = 50; // Grupos de 50 e-mails por vez
+            const chunkSize = 50; 
             let sentCount = 0;
             let failureCount = 0;
 
             for (let i = 0; i < docs.length; i += chunkSize) {
                 const chunk = docs.slice(i, i + chunkSize);
                 
-                // Processa o lote atual em paralelo
                 const results = await Promise.all(chunk.map(async (p) => {
                     const personalizedBody = body.replace(/{{promoterName}}/g, p.name.split(' ')[0]);
                     return sendSystemEmail(p.email, subject, personalizedBody);
@@ -256,10 +238,7 @@ export const sendNewsletter = functions
                 sentCount += results.filter(r => r === true).length;
                 failureCount += results.filter(r => r === false).length;
 
-                // Pequena pausa opcional entre lotes para estabilidade (200ms)
                 await new Promise(resolve => setTimeout(resolve, 200));
-                
-                console.log(`[Newsletter Progress] Lote ${i/chunkSize + 1} enviado. Total acumulado: ${sentCount}`);
             }
 
             return { 

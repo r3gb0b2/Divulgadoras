@@ -44,7 +44,6 @@ export const checkVipMembership = async (email: string, vipEventId: string): Pro
 
 /**
  * Cria o registro inicial do membro antes mesmo do Pix.
- * Se o usuário desistir no pagamento, o admin ainda vê os dados.
  */
 export const createInitialVipMembership = async (data: Partial<VipMembership>) => {
     const docId = `${data.promoterId}_${data.vipEventId}`;
@@ -88,12 +87,12 @@ export const updateVipMembership = async (id: string, data: Partial<VipMembershi
 };
 
 /**
- * Dispara e-mail de recuperação com novo Pix
+ * Dispara e-mail de recuperação com dados do Pix fornecidos
  */
-export const sendVipRecoveryEmail = async (membershipId: string): Promise<void> => {
+export const sendVipRecoveryEmail = async (membershipId: string, pixData: any): Promise<void> => {
     try {
         const func = functions.httpsCallable('sendVipRecoveryEmail');
-        const res = await func({ membershipId });
+        const res = await func({ membershipId, pixData });
         const data = res.data as any;
         if (!data.success) throw new Error(data.error || "Erro desconhecido.");
     } catch (e: any) {
