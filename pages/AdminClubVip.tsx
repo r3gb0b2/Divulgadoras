@@ -121,19 +121,7 @@ const AdminClubVip: React.FC = () => {
         alert("Código copiado!");
     };
 
-    const handleUpdateRecovery = async (promoterId: string, status: RecoveryStatus) => {
-        try {
-            await updatePromoter(promoterId, {
-                recoveryStatus: status,
-                recoveryAdminEmail: adminData?.email,
-                recoveryUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            setRecoveryLeads(prev => prev.map(p => p.id === promoterId ? { ...p, recoveryStatus: status, recoveryAdminEmail: adminData?.email } : p));
-        } catch (e) { alert("Erro ao atualizar status."); }
-    };
-
     const handleDownloadXLS = () => {
-        // Se houver seleção, exporta apenas selecionados. Senão, todos os filtrados.
         const target = activeTab === 'members' 
             ? (selectedIds.size > 0 ? filteredMembers.filter(m => selectedIds.has(m.id)) : filteredMembers)
             : recoveryLeads as any[];
@@ -165,6 +153,37 @@ const AdminClubVip: React.FC = () => {
         } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
     };
 
+    const handleBulkNotify = async () => {
+        if (selectedIds.size === 0) return;
+        const toProcess = filteredMembers.filter(m => selectedIds.has(m.id) && m.status === 'confirmed');
+        
+        if (toProcess.length === 0) {
+            alert("Nenhum dos selecionados possui status de pagamento 'PAGO'.");
+            return;
+        }
+
+        if (!window.confirm(`Deseja ativar e notificar ${toProcess.length} membros selecionados?`)) return;
+
+        setIsBulkProcessing(true);
+        try {
+            const notifyActivation = httpsCallable(functions, 'notifyVipActivation');
+            
+            for (const m of toProcess) {
+                await updateVipMembership(`${m.promoterId}_${m.vipEventId}`, { isBenefitActive: true });
+                await updatePromoter(m.promoterId, { emocoesBenefitActive: true });
+                await notifyActivation({ membershipId: `${m.promoterId}_${m.vipEventId}` });
+            }
+            
+            alert("Processamento concluído!");
+            setSelectedIds(new Set());
+            fetchData();
+        } catch (e: any) {
+            alert("Erro no processamento: " + e.message);
+        } finally {
+            setIsBulkProcessing(false);
+        }
+    };
+
     return (
         <div className="pb-40">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
@@ -194,6 +213,19 @@ const AdminClubVip: React.FC = () => {
                 <button onClick={() => setActiveTab('recovery')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'recovery' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Recuperação de Carrinho</button>
                 <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Eventos</button>
             </div>
+
+            {/* Barra de Ação em Massa */}
+            {selectedIds.size > 0 && activeTab === 'members' && (
+                <div className="mx-4 md:mx-0 p-4 bg-primary rounded-2xl shadow-lg flex items-center justify-between animate-fadeIn sticky top-24 z-30 mb-6">
+                    <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} membros selecionados</p>
+                    <div className="flex gap-2">
+                        <button onClick={handleBulkNotify} disabled={isBulkProcessing} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-colors">
+                            {isBulkProcessing ? 'PROCESSANDO...' : 'ATIVAR E NOTIFICAR SELECIONADOS'}
+                        </button>
+                        <button onClick={() => setSelectedIds(new Set())} className="px-4 py-2 bg-black/20 text-white font-black text-[10px] uppercase rounded-xl">Cancelar</button>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
                 {activeTab === 'members' && (
