@@ -66,6 +66,7 @@ const PostCard: React.FC<{
         if (assignment.status !== 'confirmed' || !assignment.confirmedAt || assignment.proofSubmittedAt) return;
         
         const confirmationTime = toDateSafe(assignment.confirmedAt);
+        // FIX: Fixed typo where confirmationTime was referred to as countdownTime.
         if (!confirmationTime) return;
 
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
@@ -273,6 +274,7 @@ const PostCheck: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [searched, setSearched] = useState(false);
     const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'rewards'>('pending');
+    const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
     
     const [vipMemberships, setVipMemberships] = useState<VipMembership[]>([]);
     const [vipEventsMap, setVipEventsMap] = useState<Record<string, VipEvent>>({});
@@ -345,11 +347,26 @@ const PostCheck: React.FC = () => {
     return (
         <div className="max-w-xl mx-auto pb-20">
             <div className="flex justify-between items-start mb-8 px-2">
-                <div>
+                <div className="min-w-0 flex-1 mr-4">
                     <h1 className="text-2xl font-black text-white uppercase truncate">Olá, {promoter.name.split(' ')[0]}!</h1>
                     <p className="text-xs text-gray-500 font-mono truncate">{promoter.email}</p>
                 </div>
-                <button onClick={handleLogout} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-red-400 transition-colors"><LogoutIcon className="w-6 h-6" /></button>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={() => setIsStatsModalOpen(true)}
+                        className="p-3 bg-gray-800 text-primary rounded-2xl hover:bg-gray-700 transition-colors shadow-lg border border-white/5"
+                        title="Ver meu desempenho"
+                    >
+                        <ChartBarIcon className="w-6 h-6" />
+                    </button>
+                    <button 
+                        onClick={handleLogout} 
+                        className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-red-400 transition-colors shadow-lg border border-white/5"
+                        title="Trocar conta"
+                    >
+                        <LogoutIcon className="w-6 h-6" />
+                    </button>
+                </div>
             </div>
 
             <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-gray-700/50">
@@ -436,6 +453,12 @@ const PostCheck: React.FC = () => {
                     </div>
                 )}
             </div>
+
+            <PromoterPublicStatsModal 
+                isOpen={isStatsModalOpen} 
+                onClose={() => setIsStatsModalOpen(false)} 
+                promoter={promoter} 
+            />
         </div>
     );
 };
