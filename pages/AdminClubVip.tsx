@@ -22,7 +22,12 @@ import {
     WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
-import * as XLSX from 'xlsx';
+
+declare global {
+  interface Window {
+    XLSX: any;
+  }
+}
 
 const AdminClubVip: React.FC = () => {
     const navigate = useNavigate();
@@ -123,13 +128,17 @@ const AdminClubVip: React.FC = () => {
     };
 
     const handleDownloadXLS = () => {
+        if (!window.XLSX) {
+            alert("Biblioteca Excel ainda não carregada. Aguarde um instante.");
+            return;
+        }
+
         const target = activeTab === 'members' 
             ? (selectedIds.size > 0 ? filteredMembers.filter(m => selectedIds.has(m.id)) : filteredMembers)
             : recoveryLeads as any[];
             
         if (target.length === 0) return;
 
-        // Prepara os dados formatados
         const excelData = target.map(m => ({
             "Nome": m.promoterName || m.name,
             "E-mail": m.promoterEmail || m.email,
@@ -139,22 +148,25 @@ const AdminClubVip: React.FC = () => {
             "Status Pgto": m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'
         }));
 
-        const worksheet = XLSX.utils.json_to_sheet(excelData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Clube VIP");
+        const worksheet = window.XLSX.utils.json_to_sheet(excelData);
+        const workbook = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(workbook, worksheet, "Clube VIP");
         
-        // Gera e baixa o arquivo .xlsx legítimo
-        XLSX.writeFile(workbook, `clube_vip_${activeTab}.xlsx`);
+        window.XLSX.writeFile(workbook, `clube_vip_${activeTab}.xlsx`);
     };
 
     const handleDownloadOnlyCodes = () => {
+        if (!window.XLSX) {
+            alert("Biblioteca Excel ainda não carregada.");
+            return;
+        }
+
         if (activeTab !== 'members') return;
         
         const target = selectedIds.size > 0 
             ? filteredMembers.filter(m => selectedIds.has(m.id)) 
             : filteredMembers;
             
-        // Prepara dados apenas com os códigos na Coluna A, sem cabeçalho
         const codes = target.map(m => [m.benefitCode]).filter(row => row[0]);
             
         if (codes.length === 0) {
@@ -162,11 +174,11 @@ const AdminClubVip: React.FC = () => {
             return;
         }
 
-        const worksheet = XLSX.utils.aoa_to_sheet(codes);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Códigos");
+        const worksheet = window.XLSX.utils.aoa_to_sheet(codes);
+        const workbook = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(workbook, worksheet, "Códigos");
         
-        XLSX.writeFile(workbook, `apenas_codigos_vip.xlsx`);
+        window.XLSX.writeFile(workbook, `apenas_codigos_vip.xlsx`);
     };
 
     const handleManualNotifySingle = async (membership: VipMembership) => {
