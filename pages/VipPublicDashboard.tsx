@@ -22,6 +22,7 @@ const VipPublicDashboard: React.FC = () => {
     const [memberships, setMemberships] = useState<VipMembership[]>([]);
     const [events, setEvents] = useState<VipEvent[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [selectedEventId, setSelectedEventId] = useState<string>('all');
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -44,8 +45,12 @@ const VipPublicDashboard: React.FC = () => {
     }, [token]);
 
     const stats = useMemo(() => {
-        const confirmed = memberships.filter(m => m.status === 'confirmed');
-        const pending = memberships.filter(m => m.status === 'pending');
+        const filteredMemberships = selectedEventId === 'all' 
+            ? memberships 
+            : memberships.filter(m => m.vipEventId === selectedEventId);
+
+        const confirmed = filteredMemberships.filter(m => m.status === 'confirmed');
+        const pending = filteredMemberships.filter(m => m.status === 'pending');
         
         // Faturamento
         const totalRevenue = confirmed.reduce((acc, curr) => {
@@ -63,12 +68,12 @@ const VipPublicDashboard: React.FC = () => {
             }
         });
 
-        const conversionRate = memberships.length > 0 
-            ? ((confirmed.length / memberships.length) * 100).toFixed(1) 
+        const conversionRate = filteredMemberships.length > 0 
+            ? ((confirmed.length / filteredMemberships.length) * 100).toFixed(1) 
             : '0';
 
         return {
-            totalLeads: memberships.length,
+            totalLeads: filteredMemberships.length,
             totalSales: confirmed.length,
             totalPending: pending.length,
             totalRevenue,
@@ -76,7 +81,7 @@ const VipPublicDashboard: React.FC = () => {
             activatedBenefits: confirmed.filter(m => m.isBenefitActive).length,
             dailySales: Object.entries(dailySales).slice(-7).reverse()
         };
-    }, [memberships, events]);
+    }, [memberships, events, selectedEventId]);
 
     if (isLoading) return (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center">
@@ -101,8 +106,26 @@ const VipPublicDashboard: React.FC = () => {
                             </p>
                         </div>
                     </div>
-                    <div className="flex gap-3">
-                        <button onClick={fetchData} className="p-4 bg-gray-800 rounded-2xl hover:text-white transition-colors border border-white/5">
+                    <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                        <div className="relative group min-w-[240px]">
+                            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-primary">
+                                <FilterIcon className="w-4 h-4" />
+                            </div>
+                            <select 
+                                value={selectedEventId}
+                                onChange={(e) => setSelectedEventId(e.target.value)}
+                                className="w-full pl-12 pr-6 py-4 bg-gray-800 border border-white/10 rounded-2xl text-white text-[10px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-primary transition-all appearance-none cursor-pointer"
+                            >
+                                <option value="all">TODOS OS EVENTOS</option>
+                                {events.map(ev => (
+                                    <option key={ev.id} value={ev.id}>{ev.name}</option>
+                                ))}
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                        </div>
+                        <button onClick={fetchData} className="p-4 bg-gray-800 rounded-2xl hover:text-white transition-colors border border-white/5 flex items-center justify-center">
                             <RefreshIcon className="w-6 h-6" />
                         </button>
                     </div>
@@ -191,7 +214,7 @@ const VipPublicDashboard: React.FC = () => {
                                     <span>{stats.totalPending}</span>
                                 </div>
                                 <div className="h-4 bg-dark rounded-full overflow-hidden border border-white/5">
-                                    <div className="h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" style={{ width: `${(stats.totalPending / stats.totalLeads) * 100}%` }}></div>
+                                    <div className="h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" style={{ width: `${stats.totalLeads > 0 ? (stats.totalPending / stats.totalLeads) * 100 : 0}%` }}></div>
                                 </div>
                             </div>
                         </div>
