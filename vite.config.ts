@@ -1,3 +1,4 @@
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -10,7 +11,8 @@ export default defineConfig({
       external: [
         '@capacitor/core',
         '@capacitor/push-notifications',
-        '@capacitor-community/fcm'
+        '@capacitor-community/fcm',
+        'xlsx'
       ],
       output: {
         manualChunks: {
