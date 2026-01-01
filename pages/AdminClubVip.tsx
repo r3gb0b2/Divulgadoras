@@ -124,6 +124,38 @@ const AdminClubVip: React.FC = () => {
         alert("Código copiado!");
     };
 
+    // FUNÇÕES DE DOWNLOAD EXCEL
+    const handleDownloadXLSX = (mode: 'codes' | 'full') => {
+        if (filteredMembers.length === 0) return alert("Nenhum dado para exportar.");
+        
+        const data = filteredMembers.map(m => {
+            if (mode === 'codes') {
+                return {
+                    'NOME': m.promoterName,
+                    'E-MAIL': m.promoterEmail,
+                    'CÓDIGO VIP': m.benefitCode || 'Pendente',
+                    'EVENTO': m.vipEventName
+                };
+            }
+            return {
+                'NOME': m.promoterName,
+                'E-MAIL': m.promoterEmail,
+                'WHATSAPP': m.promoterWhatsapp || '',
+                'INSTAGRAM': m.promoterInstagram || '',
+                'CÓDIGO VIP': m.benefitCode || '',
+                'EVENTO': m.vipEventName,
+                'STATUS PGTO': m.status === 'confirmed' ? 'PAGO' : 'PENDENTE',
+                'ATIVAÇÃO': m.isBenefitActive ? 'SIM' : 'NÃO',
+                'DATA ADESÃO': m.submittedAt ? (m.submittedAt as any).toDate().toLocaleString('pt-BR') : ''
+            };
+        });
+
+        const ws = window.XLSX.utils.json_to_sheet(data);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, "Membros VIP");
+        window.XLSX.writeFile(wb, `membros_vip_${mode === 'codes' ? 'codigos' : 'completo'}_${new Date().getTime()}.xlsx`);
+    };
+
     const handleManualNotifySingle = async (membership: VipMembership) => {
         if (membership.status !== 'confirmed') return;
         setIsBulkProcessing(true);
@@ -156,7 +188,6 @@ const AdminClubVip: React.FC = () => {
         } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
     };
 
-    // FUNÇÃO DE RECUPERAÇÃO EM MASSA
     const handleBulkRecovery = async () => {
         const toProcess = recoveryMembers.filter(m => selectedIds.has(m.id));
         if (toProcess.length === 0) return alert("Selecione leads de carrinho abandonado.");
@@ -175,7 +206,6 @@ const AdminClubVip: React.FC = () => {
                     const event = vipEvents.find(e => e.id === m.vipEventId);
                     if (!event) continue;
 
-                    // 1. Gera o Pix para este membro
                     const pixRes: any = await createPix({
                         vipEventId: m.vipEventId,
                         promoterId: m.promoterId,
@@ -186,7 +216,6 @@ const AdminClubVip: React.FC = () => {
                         amount: event.price
                     });
 
-                    // 2. Envia o e-mail de recuperação
                     await sendVipRecoveryEmail(m.id, pixRes.data);
                     successCount++;
                 } catch (err) {
@@ -266,6 +295,19 @@ const AdminClubVip: React.FC = () => {
                     <TicketIcon className="w-8 h-8 text-primary" /> Gestão Clube VIP
                 </h1>
                 <div className="flex flex-wrap gap-2">
+                    {activeTab === 'members' && (
+                        <>
+                            <button onClick={() => window.open('/#/admin/vip-metrics/global', '_blank')} className="px-4 py-3 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-900/50">
+                                <ChartBarIcon className="w-4 h-4" /> Relatório Público
+                            </button>
+                            <button onClick={() => handleDownloadXLSX('codes')} className="px-4 py-3 bg-gray-800 text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:text-white">
+                                <DownloadIcon className="w-4 h-4" /> Códigos (.xlsx)
+                            </button>
+                            <button onClick={() => handleDownloadXLSX('full')} className="px-4 py-3 bg-gray-800 text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:text-white">
+                                <DownloadIcon className="w-4 h-4" /> Dados Completos
+                            </button>
+                        </>
+                    )}
                     {activeTab === 'events' && (
                         <button onClick={() => { setEditingEvent({ benefits: [], isActive: true }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
                             <PlusIcon className="w-4 h-4" /> Novo Evento
