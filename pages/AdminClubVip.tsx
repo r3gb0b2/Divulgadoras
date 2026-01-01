@@ -132,17 +132,21 @@ const AdminClubVip: React.FC = () => {
 
         if (listToExport.length === 0) return alert("Nenhum dado para exportar.");
         
-        const data = listToExport.map(m => {
-            if (mode === 'codes') {
-                // A ordem das chaves define a ordem das colunas (A, B, C...)
-                return {
-                    'CÓDIGO VIP': m.benefitCode || 'PENDENTE',
-                    'NOME': m.promoterName,
-                    'E-MAIL': m.promoterEmail,
-                    'EVENTO': m.vipEventName
-                };
-            }
-            return {
+        let ws;
+        if (mode === 'codes') {
+            // MODO SOMENTE CÓDIGOS: Cria um "Array of Arrays" (AOA)
+            // Cada sub-array representa uma linha. Com um elemento por linha, fica tudo na Coluna A.
+            const aoaData = listToExport
+                .filter(m => m.benefitCode && m.benefitCode.trim() !== '')
+                .map(m => [m.benefitCode]);
+
+            if (aoaData.length === 0) return alert("Nenhum código gerado para exportar.");
+            
+            // Cria a planilha a partir do array bruto, sem cabeçalhos
+            ws = window.XLSX.utils.aoa_to_sheet(aoaData);
+        } else {
+            // MODO DADOS COMPLETOS: Usa mapeamento de objeto para json_to_sheet (com cabeçalhos)
+            const jsonData = listToExport.map(m => ({
                 'NOME': m.promoterName,
                 'E-MAIL': m.promoterEmail,
                 'WHATSAPP': m.promoterWhatsapp || '',
@@ -152,10 +156,10 @@ const AdminClubVip: React.FC = () => {
                 'STATUS PGTO': m.status === 'confirmed' ? 'PAGO' : 'PENDENTE',
                 'ATIVAÇÃO': m.isBenefitActive ? 'SIM' : 'NÃO',
                 'DATA ADESÃO': m.submittedAt ? (m.submittedAt as any).toDate().toLocaleString('pt-BR') : ''
-            };
-        });
+            }));
+            ws = window.XLSX.utils.json_to_sheet(jsonData);
+        }
 
-        const ws = window.XLSX.utils.json_to_sheet(data);
         const wb = window.XLSX.utils.book_new();
         window.XLSX.utils.book_append_sheet(wb, ws, "Membros VIP");
         window.XLSX.writeFile(wb, `membros_vip_${mode === 'codes' ? 'codigos' : 'completo'}_${new Date().getTime()}.xlsx`);
