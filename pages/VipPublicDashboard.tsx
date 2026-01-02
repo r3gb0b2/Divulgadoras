@@ -49,16 +49,18 @@ const VipPublicDashboard: React.FC = () => {
             ? memberships 
             : memberships.filter(m => m.vipEventId === selectedEventId);
 
+        // Somente confirmados que NÃO foram estornados entram no faturamento e vendas totais
         const confirmed = filteredMemberships.filter(m => m.status === 'confirmed');
         const pending = filteredMemberships.filter(m => m.status === 'pending');
+        const refunded = filteredMemberships.filter(m => m.status === 'refunded');
         
-        // Faturamento
+        // Faturamento real (somente confirmados ativos)
         const totalRevenue = confirmed.reduce((acc, curr) => {
             const event = events.find(e => e.id === curr.vipEventId);
             return acc + (event?.price || 0);
         }, 0);
 
-        // Vendas por dia (últimos 7 dias)
+        // Vendas por dia (últimos 7 dias) - Somente vendas que não foram estornadas
         const dailySales: Record<string, number> = {};
         confirmed.forEach(m => {
             const date = toDateSafe(m.updatedAt || m.submittedAt);
@@ -76,6 +78,7 @@ const VipPublicDashboard: React.FC = () => {
             totalLeads: filteredMemberships.length,
             totalSales: confirmed.length,
             totalPending: pending.length,
+            totalRefunded: refunded.length,
             totalRevenue,
             conversionRate,
             activatedBenefits: confirmed.filter(m => m.isBenefitActive).length,
@@ -134,7 +137,7 @@ const VipPublicDashboard: React.FC = () => {
                 {/* KPI Cards */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     <div className="bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-                        <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.2em] mb-2">Faturamento Bruto</p>
+                        <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.2em] mb-2">Faturamento Líquido</p>
                         <h2 className="text-4xl font-black text-green-400 tracking-tighter">
                             R$ {stats.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </h2>
@@ -152,9 +155,9 @@ const VipPublicDashboard: React.FC = () => {
                         </h2>
                     </div>
                     <div className="bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-                        <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.2em] mb-2">Ingressos Ativados</p>
-                        <h2 className="text-4xl font-black text-blue-400 tracking-tighter">
-                            {stats.activatedBenefits}
+                        <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.2em] mb-2">Estornos Efetuados</p>
+                        <h2 className="text-4xl font-black text-red-400 tracking-tighter">
+                            {stats.totalRefunded}
                         </h2>
                     </div>
                 </div>
@@ -165,11 +168,11 @@ const VipPublicDashboard: React.FC = () => {
                     <div className="lg:col-span-2 bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
                         <div className="flex items-center gap-3 mb-8">
                             <ChartBarIcon className="w-6 h-6 text-primary" />
-                            <h3 className="text-xl font-black text-white uppercase tracking-tight">Histórico de Vendas</h3>
+                            <h3 className="text-xl font-black text-white uppercase tracking-tight">Vendas Confirmadas</h3>
                         </div>
                         <div className="space-y-4">
                             {stats.dailySales.length === 0 ? (
-                                <p className="text-center text-gray-600 py-10 font-bold uppercase text-xs">Nenhuma venda nos últimos 7 dias</p>
+                                <p className="text-center text-gray-600 py-10 font-bold uppercase text-xs">Nenhuma venda confirmada ativa</p>
                             ) : stats.dailySales.map(([date, count]) => (
                                 <div key={date} className="flex items-center justify-between p-5 bg-dark/40 rounded-2xl border border-white/5 group hover:border-primary/20 transition-all">
                                     <span className="font-bold text-gray-300">{date}</span>
@@ -187,7 +190,7 @@ const VipPublicDashboard: React.FC = () => {
                     {/* Funnel Breakdown */}
                     <div className="bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
                         <h3 className="text-xl font-black text-white uppercase tracking-tight mb-8 flex items-center gap-3">
-                            <FilterIcon className="w-6 h-6 text-primary" /> Funil de Vendas
+                            <FilterIcon className="w-6 h-6 text-primary" /> Saúde da Operação
                         </h3>
                         <div className="space-y-6">
                             <div className="space-y-2">
@@ -201,7 +204,7 @@ const VipPublicDashboard: React.FC = () => {
                             </div>
                             <div className="space-y-2">
                                 <div className="flex justify-between text-[10px] font-black uppercase text-gray-500">
-                                    <span>Pagamentos Confirmados</span>
+                                    <span>Pagamentos Ativos</span>
                                     <span>{stats.totalSales}</span>
                                 </div>
                                 <div className="h-4 bg-dark rounded-full overflow-hidden border border-white/5">
@@ -214,14 +217,23 @@ const VipPublicDashboard: React.FC = () => {
                                     <span>{stats.totalPending}</span>
                                 </div>
                                 <div className="h-4 bg-dark rounded-full overflow-hidden border border-white/5">
-                                    <div className="h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" style={{ width: `${stats.totalLeads > 0 ? (stats.totalPending / stats.totalLeads) * 100 : 0}%` }}></div>
+                                    <div className="h-full bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]" style={{ width: `${stats.totalLeads > 0 ? (stats.totalPending / stats.totalLeads) * 100 : 0}%` }}></div>
+                                </div>
+                            </div>
+                             <div className="space-y-2">
+                                <div className="flex justify-between text-[10px] font-black uppercase text-gray-500">
+                                    <span>Vendas Estornadas</span>
+                                    <span>{stats.totalRefunded}</span>
+                                </div>
+                                <div className="h-4 bg-dark rounded-full overflow-hidden border border-white/5">
+                                    <div className="h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" style={{ width: `${stats.totalLeads > 0 ? (stats.totalRefunded / stats.totalLeads) * 100 : 0}%` }}></div>
                                 </div>
                             </div>
                         </div>
 
                         <div className="mt-10 p-6 bg-primary/5 border border-primary/20 rounded-3xl text-center">
                             <p className="text-xs font-bold text-gray-400 uppercase leading-relaxed">
-                                Gerenciado via <span className="text-primary font-black">Equipe Certa</span>. Todos os pagamentos processados via PIX Mercado Pago com identificação automática.
+                                Faturamento líquido considera apenas vendas com status <span className="text-white">PAGO</span>. Valores de <span className="text-red-400">ESTORNO</span> são deduzidos automaticamente do total.
                             </p>
                         </div>
                     </div>

@@ -8,7 +8,8 @@ import {
     getAllVipEvents, 
     createVipEvent, 
     updateVipEvent, 
-    deleteVipEvent
+    deleteVipEvent,
+    refundVipMembership
 } from '../services/vipService';
 import { updatePromoter, getAllPromoters } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
@@ -19,7 +20,7 @@ import {
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
     TicketIcon, RefreshIcon, ClockIcon, UserIcon,
     BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon,
-    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon, LinkIcon
+    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon, LinkIcon, UndoIcon
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
 
@@ -62,7 +63,7 @@ const AdminClubVip: React.FC = () => {
     const [organizations, setOrganizations] = useState<Record<string, string>>({});
     
     const [isLoading, setIsLoading] = useState(true);
-    const [filterStatus, setFilterStatus] = useState<'pending' | 'confirmed' | 'all'>('all');
+    const [filterStatus, setFilterStatus] = useState<'pending' | 'confirmed' | 'refunded' | 'all'>('all');
     const [filterBenefit, setFilterBenefit] = useState<'active' | 'waiting' | 'all'>('all');
     const [selectedEventId, setSelectedEventId] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
@@ -117,7 +118,7 @@ const AdminClubVip: React.FC = () => {
 
     const recoveryMembers = useMemo(() => {
         return memberships.filter(m => {
-            if (m.status === 'confirmed') return false;
+            if (m.status === 'confirmed' || m.status === 'refunded') return false;
             const matchesSearch = (m.promoterName || '').toLowerCase().includes(searchQuery.toLowerCase()) || (m.promoterEmail || '').toLowerCase().includes(searchQuery.toLowerCase());
             const matchesEvent = selectedEventId === 'all' || m.vipEventId === selectedEventId;
             return matchesSearch && matchesEvent;
@@ -169,7 +170,7 @@ const AdminClubVip: React.FC = () => {
                 'INSTAGRAM': m.promoterInstagram || '',
                 'CÓDIGO VIP': m.benefitCode || '',
                 'EVENTO': m.vipEventName,
-                'STATUS PGTO': m.status === 'confirmed' ? 'PAGO' : 'PENDENTE',
+                'STATUS PGTO': m.status === 'confirmed' ? 'PAGO' : m.status === 'refunded' ? 'ESTORNADO' : 'PENDENTE',
                 'ATIVAÇÃO': m.isBenefitActive ? 'SIM' : 'NÃO',
                 'DATA ADESÃO': m.submittedAt ? (m.submittedAt as any).toDate().toLocaleString('pt-BR') : ''
             }));
@@ -191,6 +192,21 @@ const AdminClubVip: React.FC = () => {
             await notifyActivation({ membershipId: membership.id });
             alert("Sucesso!"); fetchData();
         } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
+    };
+
+    const handleRefundAction = async (membership: VipMembership) => {
+        if (!window.confirm(`ATENÇÃO: Deseja estornar a adesão de ${membership.promoterName}? O valor sairá das métricas e o benefício será cancelado no portal dela.`)) return;
+        setIsProcessingId(membership.id);
+        try {
+            await refundVipMembership(membership.id);
+            // Também remove o status de VIP do perfil da divulgadora
+            await updatePromoter(membership.promoterId, { 
+                emocoesStatus: 'rejected',
+                emocoesBenefitActive: false 
+            });
+            alert("Adesão estornada com sucesso!");
+            fetchData();
+        } catch (e: any) { alert("Erro ao estornar: " + e.message); } finally { setIsProcessingId(null); }
     };
 
     const handleBulkNotify = async () => {
@@ -402,6 +418,7 @@ const AdminClubVip: React.FC = () => {
                                     <option value="all">STATUS PGTO (TODOS)</option>
                                     <option value="confirmed">PAGO</option>
                                     <option value="pending">PENDENTE</option>
+                                    <option value="refunded">ESTORNADO</option>
                                 </select>
                                 <select value={filterBenefit} onChange={e => setFilterBenefit(e.target.value as any)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase outline-none focus:border-primary">
                                     <option value="all">ATIVAÇÃO (TODAS)</option>
@@ -452,7 +469,11 @@ const AdminClubVip: React.FC = () => {
                                                     <td className="px-6 py-5"><p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p><p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p></td>
                                                     <td className="px-6 py-5 text-center">{m.benefitCode ? <span onClick={() => handleCopy(m.benefitCode || '')} className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10">{m.benefitCode}</span> : <span className="text-gray-600 text-[10px] font-bold">---</span>}</td>
                                                     <td className="px-6 py-5 text-center">{m.isBenefitActive ? <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">ATIVADO</span> : <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 border border-gray-700 text-[8px] font-black uppercase tracking-widest">AGUARDANDO</span>}</td>
-                                                    <td className="px-6 py-5 text-center"><span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>{m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}</span></td>
+                                                    <td className="px-6 py-5 text-center">
+                                                        <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : m.status === 'refunded' ? 'bg-red-900/40 text-red-400 border-red-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>
+                                                            {m.status === 'confirmed' ? 'PAGO' : m.status === 'refunded' ? 'ESTORNADO' : 'PENDENTE'}
+                                                        </span>
+                                                    </td>
                                                     <td className="px-6 py-5 text-right">
                                                         <div className="flex justify-end gap-2">
                                                             {m.status === 'confirmed' && directLink && (
@@ -464,7 +485,14 @@ const AdminClubVip: React.FC = () => {
                                                                     <LinkIcon className="w-4 h-4" />
                                                                 </button>
                                                             )}
-                                                            {m.status === 'confirmed' && <button onClick={() => handleManualNotifySingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">{m.isBenefitActive ? 'REENVIAR' : 'ATIVAR'}</button>}
+                                                            {m.status === 'confirmed' && (
+                                                                <>
+                                                                    <button onClick={() => handleManualNotifySingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">{m.isBenefitActive ? 'REENVIAR' : 'ATIVAR'}</button>
+                                                                    <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30" title="Estornar">
+                                                                        <UndoIcon className="w-4 h-4" />
+                                                                    </button>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </td>
                                                 </tr>

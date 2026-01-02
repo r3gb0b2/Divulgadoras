@@ -54,13 +54,14 @@ export interface VipMembership {
   promoterWhatsapp?: string;
   promoterInstagram?: string;
   organizationId: string;
-  status: 'pending' | 'confirmed' | 'rejected';
+  status: 'pending' | 'confirmed' | 'rejected' | 'refunded';
   isBenefitActive: boolean; 
   proofUrl?: string;
   benefitCode?: string;
   paymentId?: string;
   submittedAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
+  refundedAt?: Timestamp | FieldValue;
 }
 
 export interface Promoter {
