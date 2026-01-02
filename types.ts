@@ -41,6 +41,7 @@ export interface VipEvent {
   benefits: string[];
   pixKey: string;
   externalSlug: string; 
+  pixelId?: string;
   createdAt: Timestamp | FieldValue;
 }
 

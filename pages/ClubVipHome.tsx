@@ -12,7 +12,41 @@ import {
   AlertTriangleIcon, SearchIcon, ClockIcon
 } from '../components/Icons';
 
+declare global {
+  interface Window {
+    fbq: any;
+    _fbq: any;
+  }
+}
+
 type CampaignStep = 'select_event' | 'benefits' | 'identify' | 'confirm_data' | 'payment' | 'success';
+
+const trackPixel = (eventName: string, pixelId?: string, data?: any) => {
+    if (!pixelId || typeof window === 'undefined') return;
+
+    if (!window.fbq) {
+        // Inicializa o script do Pixel se ainda não existir
+        (function(f: any, b: any, e: any, v: any, n?: any, t?: any, s?: any) {
+            if (f.fbq) return;
+            n = f.fbq = function() {
+                n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments);
+            };
+            if (!f._fbq) f._fbq = n;
+            n.push = n;
+            n.loaded = !0;
+            n.version = '2.0';
+            n.queue = [];
+            t = b.createElement(e);
+            t.async = !0;
+            t.src = v;
+            s = b.getElementsByTagName(e)[0];
+            s.parentNode.insertBefore(t, s);
+        })(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+        window.fbq('init', pixelId);
+    }
+    
+    window.fbq('track', eventName, data);
+};
 
 const ClubVipHome: React.FC = () => {
     const navigate = useNavigate();
@@ -40,6 +74,27 @@ const ClubVipHome: React.FC = () => {
             setIsLoading(false);
         });
     }, []);
+
+    // Meta Pixel Tracking
+    useEffect(() => {
+        if (!selectedEvent?.pixelId) return;
+
+        if (step === 'benefits') {
+            trackPixel('PageView', selectedEvent.pixelId);
+        } else if (step === 'identify' || step === 'confirm_data') {
+            trackPixel('InitiateCheckout', selectedEvent.pixelId, {
+                content_name: selectedEvent.name,
+                value: selectedEvent.price,
+                currency: 'BRL'
+            });
+        } else if (step === 'success') {
+            trackPixel('Purchase', selectedEvent.pixelId, {
+                content_name: selectedEvent.name,
+                value: selectedEvent.price,
+                currency: 'BRL'
+            });
+        }
+    }, [step, selectedEvent]);
 
     // Observer para detecção automática de pagamento
     useEffect(() => {

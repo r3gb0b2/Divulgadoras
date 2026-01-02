@@ -326,6 +326,7 @@ const AdminClubVip: React.FC = () => {
                 description: editingEvent.description || '',
                 benefits: editingEvent.benefits || [],
                 externalSlug: editingEvent.externalSlug || '',
+                pixelId: editingEvent.pixelId || '',
                 pixKey: editingEvent.pixKey || ''
             };
             if (editingEvent.id) await updateVipEvent(editingEvent.id, data);
@@ -427,7 +428,7 @@ const AdminClubVip: React.FC = () => {
                                 </select>
                                 <div className="relative">
                                     <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                                    <input type="text" placeholder="BUSCAR NOME..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-xl text-white text-[10px] font-black uppercase outline-none focus:border-primary" />
+                                    <input type="text" placeholder="BUSCAR NOME..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary" />
                                 </div>
                             </div>
                             <div className="overflow-x-auto">
@@ -514,7 +515,7 @@ const AdminClubVip: React.FC = () => {
                                 </select>
                                 <div className="relative flex-grow">
                                     <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                                    <input type="text" placeholder="BUSCAR POR NOME OU E-MAIL..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-xl text-white text-[10px] font-black uppercase outline-none focus:border-primary" />
+                                    <input type="text" placeholder="BUSCAR POR NOME OU E-MAIL..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary" />
                                 </div>
                             </div>
                             <div className="overflow-x-auto">
@@ -622,9 +623,15 @@ const AdminClubVip: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Slug Externo (Site ST Ingressos)</label>
-                                <input type="text" value={editingEvent?.externalSlug || ''} onChange={e => setEditingEvent({...editingEvent!, externalSlug: e.target.value})} placeholder="ex: emocoes-sunset" className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Slug Externo (Site ST Ingressos)</label>
+                                    <input type="text" value={editingEvent?.externalSlug || ''} onChange={e => setEditingEvent({...editingEvent!, externalSlug: e.target.value})} placeholder="ex: emocoes-sunset" className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Meta Pixel ID (Opcional)</label>
+                                    <input type="text" value={editingEvent?.pixelId || ''} onChange={e => setEditingEvent({...editingEvent!, pixelId: e.target.value})} placeholder="Apenas o ID numérico" className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
                             </div>
 
                             <div className="space-y-1">
