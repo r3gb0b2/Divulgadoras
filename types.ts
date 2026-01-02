@@ -37,6 +37,7 @@ export interface VipEvent {
   name: string;
   price: number;
   isActive: boolean;
+  isSoldOut?: boolean; // Novo campo
   description: string;
   benefits: string[];
   pixKey: string;

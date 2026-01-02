@@ -323,6 +323,7 @@ const AdminClubVip: React.FC = () => {
                 name: editingEvent.name,
                 price: Number(editingEvent.price),
                 isActive: editingEvent.isActive ?? true,
+                isSoldOut: editingEvent.isSoldOut ?? false,
                 description: editingEvent.description || '',
                 benefits: editingEvent.benefits || [],
                 externalSlug: editingEvent.externalSlug || '',
@@ -365,7 +366,7 @@ const AdminClubVip: React.FC = () => {
                         </>
                     )}
                     {activeTab === 'events' && (
-                        <button onClick={() => { setEditingEvent({ benefits: [], isActive: true }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
+                        <button onClick={() => { setEditingEvent({ benefits: [], isActive: true, isSoldOut: false }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
                             <PlusIcon className="w-4 h-4" /> Novo Evento
                         </button>
                     )}
@@ -576,11 +577,14 @@ const AdminClubVip: React.FC = () => {
                             {vipEvents.map(ev => (
                                 <div key={ev.id} className="bg-dark/40 p-6 rounded-3xl border border-white/5 flex flex-col group hover:border-primary transition-all">
                                     <div className="flex justify-between items-start mb-4">
-                                        <div>
+                                        <div className="min-w-0 flex-grow">
                                             <h3 className="text-xl font-black text-white uppercase truncate">{ev.name}</h3>
                                             <p className="text-primary font-black text-lg mt-1">R$ {ev.price.toFixed(2)}</p>
                                         </div>
-                                        <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
+                                        <div className="flex flex-col items-end gap-2">
+                                            <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
+                                            {ev.isSoldOut && <span className="px-2 py-0.5 bg-red-600 text-white text-[8px] font-black rounded uppercase">ESGOTADO</span>}
+                                        </div>
                                     </div>
                                     <div className="flex-grow space-y-2 mb-6">
                                         <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Benefícios:</p>
@@ -639,10 +643,17 @@ const AdminClubVip: React.FC = () => {
                                 <textarea rows={4} value={editingEvent?.benefits?.join('\n') || ''} onChange={e => setEditingEvent({...editingEvent!, benefits: e.target.value.split('\n')})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white text-sm" />
                             </div>
 
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input type="checkbox" checked={editingEvent?.isActive || false} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-5 h-5 rounded border-gray-600 bg-dark text-primary" />
-                                <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Oferta Ativa no Site</span>
-                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <label className="flex items-center gap-3 cursor-pointer p-4 bg-dark/50 rounded-2xl border border-white/5 hover:border-primary/30 transition-all">
+                                    <input type="checkbox" checked={editingEvent?.isActive || false} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-5 h-5 rounded border-gray-600 bg-dark text-primary" />
+                                    <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Oferta Ativa no Site</span>
+                                </label>
+
+                                <label className="flex items-center gap-3 cursor-pointer p-4 bg-dark/50 rounded-2xl border border-white/5 hover:border-red-500/30 transition-all">
+                                    <input type="checkbox" checked={editingEvent?.isSoldOut || false} onChange={e => setEditingEvent({...editingEvent!, isSoldOut: e.target.checked})} className="w-5 h-5 rounded border-gray-600 bg-dark text-red-500" />
+                                    <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Marcar como Esgotado</span>
+                                </label>
+                            </div>
 
                             <button type="submit" disabled={isBulkProcessing} className="w-full py-5 bg-primary text-white font-black rounded-2xl shadow-xl uppercase text-xs tracking-widest disabled:opacity-50">
                                 {isBulkProcessing ? 'SALVANDO...' : 'CONFIRMAR E SALVAR'}

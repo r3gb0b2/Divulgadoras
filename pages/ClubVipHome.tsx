@@ -237,15 +237,32 @@ const ClubVipHome: React.FC = () => {
 
                             <div className="grid gap-6">
                                 <h2 className="text-xl font-black text-white uppercase tracking-widest text-center mb-2">Escolha sua Vantagem</h2>
-                                {events.map(ev => (
-                                    <button key={ev.id} onClick={() => { setSelectedEvent(ev); setStep('benefits'); }} className="bg-dark/60 p-8 rounded-[2rem] border border-white/5 hover:border-primary text-left transition-all group flex justify-between items-center shadow-lg">
-                                        <div>
-                                            <p className="text-white font-black text-xl uppercase group-hover:text-primary transition-colors">{ev.name}</p>
-                                            <p className="text-[10px] text-gray-500 font-black uppercase mt-1">Adesão Imediata</p>
-                                        </div>
-                                        <p className="text-primary font-black text-2xl">R$ {ev.price.toFixed(2).replace('.', ',')}</p>
-                                    </button>
-                                ))}
+                                {events.map(ev => {
+                                    const isSoldOut = ev.isSoldOut === true;
+
+                                    return (
+                                        <button 
+                                            key={ev.id} 
+                                            disabled={isSoldOut}
+                                            onClick={() => { setSelectedEvent(ev); setStep('benefits'); }} 
+                                            className={`bg-dark/60 p-8 rounded-[2rem] border transition-all group flex justify-between items-center shadow-lg ${isSoldOut ? 'opacity-50 border-gray-800 grayscale cursor-not-allowed' : 'hover:border-primary border-white/5'}`}
+                                        >
+                                            <div className="min-w-0 flex-grow pr-4">
+                                                <p className={`font-black text-xl uppercase transition-colors ${isSoldOut ? 'text-gray-500' : 'text-white group-hover:text-primary'}`}>{ev.name}</p>
+                                                <p className="text-[10px] text-gray-500 font-black uppercase mt-1">
+                                                    {isSoldOut ? 'Indisponível no momento' : 'Adesão Imediata'}
+                                                </p>
+                                            </div>
+                                            <div className="text-right flex-shrink-0">
+                                                {isSoldOut ? (
+                                                    <span className="px-4 py-2 bg-red-900/40 text-red-400 border border-red-800 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg">ESGOTADO</span>
+                                                ) : (
+                                                    <p className="text-primary font-black text-2xl">R$ {ev.price.toFixed(2).replace('.', ',')}</p>
+                                                )}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
                                 {events.length === 0 && !isLoading && <p className="text-center text-gray-500 font-bold uppercase text-xs py-10">Nenhuma oferta VIP disponível no momento.</p>}
                             </div>
                         </div>
