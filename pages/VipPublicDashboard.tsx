@@ -49,18 +49,27 @@ const VipPublicDashboard: React.FC = () => {
             ? memberships 
             : memberships.filter(m => m.vipEventId === selectedEventId);
 
-        // Somente confirmados que NÃO foram estornados entram no faturamento e vendas totais
+        // Somente confirmados que NÃO foram estornados entram nos cálculos
         const confirmed = filteredMemberships.filter(m => m.status === 'confirmed');
         const pending = filteredMemberships.filter(m => m.status === 'pending');
         const refunded = filteredMemberships.filter(m => m.status === 'refunded');
         
-        // Faturamento real (somente confirmados ativos)
-        const totalRevenue = confirmed.reduce((acc, curr) => {
+        // Valor da taxa fixa por transação
+        const FIXED_FEE = 0.50;
+
+        // Faturamento Bruto (Valor real que entrou)
+        const totalRevenueGross = confirmed.reduce((acc, curr) => {
             const event = events.find(e => e.id === curr.vipEventId);
             return acc + (event?.price || 0);
         }, 0);
 
-        // Vendas por dia (últimos 7 dias) - Somente vendas que não foram estornadas
+        // Total de Taxas (0.50 por venda ativa)
+        const totalFees = confirmed.length * FIXED_FEE;
+
+        // Faturamento Líquido (O que sobra após a taxa do PagSeguro)
+        const totalRevenueNet = totalRevenueGross - totalFees;
+
+        // Vendas por dia (últimos 7 dias)
         const dailySales: Record<string, number> = {};
         confirmed.forEach(m => {
             const date = toDateSafe(m.updatedAt || m.submittedAt);
@@ -79,7 +88,9 @@ const VipPublicDashboard: React.FC = () => {
             totalSales: confirmed.length,
             totalPending: pending.length,
             totalRefunded: refunded.length,
-            totalRevenue,
+            totalRevenueGross,
+            totalFees,
+            totalRevenueNet,
             conversionRate,
             activatedBenefits: confirmed.filter(m => m.isBenefitActive).length,
             dailySales: Object.entries(dailySales).slice(-7).reverse()
@@ -89,7 +100,7 @@ const VipPublicDashboard: React.FC = () => {
     if (isLoading) return (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center">
             <RefreshIcon className="w-10 h-10 text-primary animate-spin mb-4" />
-            <p className="text-gray-500 font-black uppercase text-[10px] tracking-widest">Sincronizando faturamento...</p>
+            <p className="text-gray-500 font-black uppercase text-[10px] tracking-widest">Calculando faturamento...</p>
         </div>
     );
 
@@ -103,9 +114,9 @@ const VipPublicDashboard: React.FC = () => {
                             <SparklesIcon className="w-10 h-10 text-primary" />
                         </div>
                         <div>
-                            <h1 className="text-4xl font-black text-white uppercase tracking-tighter">Relatório <span className="text-primary">VIP</span></h1>
+                            <h1 className="text-4xl font-black text-white uppercase tracking-tighter">Métricas <span className="text-primary">VIP</span></h1>
                             <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest flex items-center gap-2">
-                                <ClockIcon className="w-3 h-3" /> Atualizado agora
+                                <ClockIcon className="w-3 h-3" /> Transações Reais
                             </p>
                         </div>
                     </div>
@@ -124,9 +135,6 @@ const VipPublicDashboard: React.FC = () => {
                                     <option key={ev.id} value={ev.id}>{ev.name}</option>
                                 ))}
                             </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
-                            </div>
                         </div>
                         <button onClick={fetchData} className="p-4 bg-gray-800 rounded-2xl hover:text-white transition-colors border border-white/5 flex items-center justify-center">
                             <RefreshIcon className="w-6 h-6" />
@@ -134,45 +142,66 @@ const VipPublicDashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* KPI Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {/* KPI Cards Principal */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-                        <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.2em] mb-2">Faturamento Líquido</p>
-                        <h2 className="text-4xl font-black text-green-400 tracking-tighter">
-                            R$ {stats.totalRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </h2>
-                    </div>
-                    <div className="bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-                        <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.2em] mb-2">Vendas Totais</p>
+                        <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.2em] mb-2">Faturamento Bruto</p>
                         <h2 className="text-4xl font-black text-white tracking-tighter">
-                            {stats.totalSales} <span className="text-sm text-gray-600">/ {stats.totalLeads}</span>
+                            R$ {stats.totalRevenueGross.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </h2>
+                        <p className="text-[9px] text-gray-600 font-bold uppercase mt-2">Valor total das adesões confirmadas</p>
                     </div>
-                    <div className="bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-                        <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.2em] mb-2">Taxa de Conversão</p>
-                        <h2 className="text-4xl font-black text-primary tracking-tighter">
-                            {stats.conversionRate}%
-                        </h2>
-                    </div>
-                    <div className="bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
-                        <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.2em] mb-2">Estornos Efetuados</p>
+                    
+                    <div className="bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                            <XIcon className="w-12 h-12 text-red-500" />
+                        </div>
+                        <p className="text-red-400 font-black uppercase text-[10px] tracking-[0.2em] mb-2">Taxas Operacionais</p>
                         <h2 className="text-4xl font-black text-red-400 tracking-tighter">
-                            {stats.totalRefunded}
+                            - R$ {stats.totalFees.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </h2>
+                        <p className="text-[9px] text-gray-600 font-bold uppercase mt-2">R$ 0,50 por transação PagSeguro</p>
+                    </div>
+
+                    <div className="bg-primary/10 backdrop-blur-xl p-8 rounded-[2.5rem] border border-primary/20 shadow-2xl ring-1 ring-primary/30">
+                        <p className="text-primary font-black uppercase text-[10px] tracking-[0.2em] mb-2">Faturamento Líquido</p>
+                        <h2 className="text-4xl font-black text-green-400 tracking-tighter">
+                            R$ {stats.totalRevenueNet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </h2>
+                        <p className="text-[9px] text-primary/60 font-black uppercase mt-2">Lucro real após taxas do gateway</p>
                     </div>
                 </div>
 
-                {/* Secondary Metrics */}
+                {/* KPI Cards Secundários */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div className="bg-dark/40 p-6 rounded-3xl border border-white/5">
+                        <p className="text-gray-500 font-black uppercase text-[8px] tracking-widest mb-1">Vendas Ativas</p>
+                        <p className="text-2xl font-black text-white">{stats.totalSales}</p>
+                    </div>
+                    <div className="bg-dark/40 p-6 rounded-3xl border border-white/5">
+                        <p className="text-gray-500 font-black uppercase text-[8px] tracking-widest mb-1">Conversão</p>
+                        <p className="text-2xl font-black text-primary">{stats.conversionRate}%</p>
+                    </div>
+                    <div className="bg-dark/40 p-6 rounded-3xl border border-white/5">
+                        <p className="text-gray-500 font-black uppercase text-[8px] tracking-widest mb-1">Pendentes</p>
+                        <p className="text-2xl font-black text-orange-400">{stats.totalPending}</p>
+                    </div>
+                    <div className="bg-dark/40 p-6 rounded-3xl border border-white/5">
+                        <p className="text-gray-500 font-black uppercase text-[8px] tracking-widest mb-1">Estornados</p>
+                        <p className="text-2xl font-black text-red-500">{stats.totalRefunded}</p>
+                    </div>
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Daily Sales Table */}
+                    {/* Histórico Visual */}
                     <div className="lg:col-span-2 bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
                         <div className="flex items-center gap-3 mb-8">
                             <ChartBarIcon className="w-6 h-6 text-primary" />
-                            <h3 className="text-xl font-black text-white uppercase tracking-tight">Vendas Confirmadas</h3>
+                            <h3 className="text-xl font-black text-white uppercase tracking-tight">Vendas por Dia</h3>
                         </div>
                         <div className="space-y-4">
                             {stats.dailySales.length === 0 ? (
-                                <p className="text-center text-gray-600 py-10 font-bold uppercase text-xs">Nenhuma venda confirmada ativa</p>
+                                <p className="text-center text-gray-600 py-10 font-bold uppercase text-xs">Nenhuma venda ativa no período</p>
                             ) : stats.dailySales.map(([date, count]) => (
                                 <div key={date} className="flex items-center justify-between p-5 bg-dark/40 rounded-2xl border border-white/5 group hover:border-primary/20 transition-all">
                                     <span className="font-bold text-gray-300">{date}</span>
@@ -187,12 +216,12 @@ const VipPublicDashboard: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Funnel Breakdown */}
-                    <div className="bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
+                    {/* Breakdown de Saúde */}
+                    <div className="bg-secondary/40 backdrop-blur-xl p-8 rounded-[2.5rem] border border-white/5 shadow-2xl flex flex-col">
                         <h3 className="text-xl font-black text-white uppercase tracking-tight mb-8 flex items-center gap-3">
-                            <FilterIcon className="w-6 h-6 text-primary" /> Saúde da Operação
+                            <FilterIcon className="w-6 h-6 text-primary" /> Funil de Conversão
                         </h3>
-                        <div className="space-y-6">
+                        <div className="space-y-6 flex-grow">
                             <div className="space-y-2">
                                 <div className="flex justify-between text-[10px] font-black uppercase text-gray-500">
                                     <span>Total Interessados</span>
@@ -204,7 +233,7 @@ const VipPublicDashboard: React.FC = () => {
                             </div>
                             <div className="space-y-2">
                                 <div className="flex justify-between text-[10px] font-black uppercase text-gray-500">
-                                    <span>Pagamentos Ativos</span>
+                                    <span>Vendas Líquidas</span>
                                     <span>{stats.totalSales}</span>
                                 </div>
                                 <div className="h-4 bg-dark rounded-full overflow-hidden border border-white/5">
@@ -213,7 +242,7 @@ const VipPublicDashboard: React.FC = () => {
                             </div>
                             <div className="space-y-2">
                                 <div className="flex justify-between text-[10px] font-black uppercase text-gray-500">
-                                    <span>Carrinhos Abandonados</span>
+                                    <span>Abandonos</span>
                                     <span>{stats.totalPending}</span>
                                 </div>
                                 <div className="h-4 bg-dark rounded-full overflow-hidden border border-white/5">
@@ -222,18 +251,18 @@ const VipPublicDashboard: React.FC = () => {
                             </div>
                              <div className="space-y-2">
                                 <div className="flex justify-between text-[10px] font-black uppercase text-gray-500">
-                                    <span>Vendas Estornadas</span>
+                                    <span>Estornos</span>
                                     <span>{stats.totalRefunded}</span>
                                 </div>
                                 <div className="h-4 bg-dark rounded-full overflow-hidden border border-white/5">
-                                    <div className="h-full bg-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]" style={{ width: `${stats.totalLeads > 0 ? (stats.totalRefunded / stats.totalLeads) * 100 : 0}%` }}></div>
+                                    <div className="h-full bg-red-500" style={{ width: `${stats.totalLeads > 0 ? (stats.totalRefunded / stats.totalLeads) * 100 : 0}%` }}></div>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="mt-10 p-6 bg-primary/5 border border-primary/20 rounded-3xl text-center">
-                            <p className="text-xs font-bold text-gray-400 uppercase leading-relaxed">
-                                Faturamento líquido considera apenas vendas com status <span className="text-white">PAGO</span>. Valores de <span className="text-red-400">ESTORNO</span> são deduzidos automaticamente do total.
+                        <div className="mt-10 p-6 bg-red-900/10 border border-red-500/20 rounded-3xl text-center">
+                            <p className="text-[10px] font-black text-red-300 uppercase leading-relaxed">
+                                Regra aplicada: Faturamento bruto deduzindo R$ 0,50 por PIX confirmado. Adesões estornadas são 100% excluídas dos totais financeiros.
                             </p>
                         </div>
                     </div>
