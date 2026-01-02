@@ -123,27 +123,26 @@ export const notifyApprovalBulk = functions.region("southamerica-east1").https.o
 
 /**
  * Recuperação de Vendas VIP via E-mail
- * Gera novo pagamento Pix e envia por e-mail
+ * Gera novo pagamento Pix e envia por e-mail com corpo dinâmico
  */
 export const sendVipRecoveryEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { membershipId, pixData } = data;
+    const { membershipId, pixData, customMessage } = data;
     try {
         const snap = await db.collection("vipMemberships").doc(membershipId).get();
         if (!snap.exists) throw new Error("Adesão não encontrada.");
         
         const m = snap.data();
-        if (m.status === 'confirmed') throw new Error("Esta adesão já está paga.");
-
         const eventSnap = await db.collection("vipEvents").doc(m.vipEventId).get();
         if (!eventSnap.exists) throw new Error("Evento VIP não encontrado.");
         const ev = eventSnap.data();
 
-        // Monta o E-mail de Recuperação com os dados do Pix fornecidos pelo cliente/admin
+        // Template de e-mail flexível
         const html = `
             <div style="font-family:sans-serif; max-width:600px; margin:0 auto; padding:40px; border:1px solid #e2e8f0; border-radius:24px; text-align:center; background-color:#ffffff;">
-                <h1 style="color:#7e39d5; font-size:24px; margin-bottom:10px;">Não perca seu acesso VIP! 🎟️</h1>
-                <p style="color:#64748b; font-size:16px; line-height:1.6;">Olá <b>${m.promoterName.split(' ')[0]}</b>, vimos que você iniciou sua adesão ao <b>${ev.name}</b> mas não concluiu o pagamento.</p>
-                <p style="color:#64748b; font-size:16px; margin-bottom:30px;">Geramos um novo código Pix exclusivo para você garantir seus benefícios agora:</p>
+                <h1 style="color:#7e39d5; font-size:24px; margin-bottom:10px;">Aviso Importante 🎟️</h1>
+                <div style="color:#64748b; font-size:16px; line-height:1.6; text-align:left; margin-bottom:30px;">
+                    ${customMessage.replace(/\n/g, '<br>')}
+                </div>
                 
                 <div style="background-color:#f8fafc; padding:30px; border-radius:20px; margin-bottom:30px;">
                     <img src="data:image/jpeg;base64,${pixData.qr_code_base64}" style="width:200px; height:200px; margin-bottom:20px;" alt="QR Code Pix">
@@ -153,7 +152,7 @@ export const sendVipRecoveryEmail = functions.region("southamerica-east1").https
                     </div>
                 </div>
 
-                <p style="color:#64748b; font-size:14px; margin-bottom:30px;">Após o pagamento, seu acesso será liberado <b>automaticamente</b> em nosso sistema.</p>
+                <p style="color:#64748b; font-size:14px; margin-bottom:30px;">Após o pagamento, seu acesso será liberado <b>automaticamente</b>.</p>
                 
                 <div style="text-align:center;">
                     <a href="https://divulgadoras.vercel.app/#/clubvip/status?email=${encodeURIComponent(m.promoterEmail)}" style="background-color:#7e39d5; color:#ffffff; padding:16px 32px; text-decoration:none; border-radius:12px; font-weight:bold; display:inline-block; font-size:14px;">VER MEU STATUS VIP</a>
@@ -163,13 +162,14 @@ export const sendVipRecoveryEmail = functions.region("southamerica-east1").https
                 <p style="font-size:11px; color:#94a3b8;">Equipe Certa - Gestão Oficial de Equipes e Benefícios</p>
             </div>`;
 
-        const emailSent = await sendSystemEmail(m.promoterEmail, `🎟️ Complete seu acesso VIP: ${ev.name}`, html);
+        const subject = data.subject || `🎟️ Complete seu acesso VIP: ${ev.name}`;
+        const emailSent = await sendSystemEmail(m.promoterEmail, subject, html);
 
         if (emailSent) {
             await snap.ref.update({
                 lastRecoverySentAt: admin.firestore.FieldValue.serverTimestamp()
             });
-            return { success: true, message: "E-mail de recuperação enviado com sucesso!" };
+            return { success: true, message: "E-mail de recuperação enviado!" };
         } else {
             throw new Error("Falha ao disparar e-mail.");
         }
@@ -178,122 +178,4 @@ export const sendVipRecoveryEmail = functions.region("southamerica-east1").https
         console.error("Erro na recuperação VIP:", e);
         return { success: false, error: e.message };
     }
-});
-
-/**
- * Função de Newsletter Otimizada para Grande Escala
- */
-export const sendNewsletter = functions
-    .runWith({ 
-        timeoutSeconds: 540,
-        memory: '1GB'
-    })
-    .region("southamerica-east1")
-    .https.onCall(async (data, context) => {
-        const { audience, subject, body } = data;
-        
-        try {
-            let docs = [];
-            
-            if (audience.type === 'individual' && audience.promoterIds && audience.promoterIds.length > 0) {
-                const promises = audience.promoterIds.map(id => db.collection("promoters").doc(id).get());
-                const snaps = await Promise.all(promises);
-                docs = snaps.filter(s => s.exists).map(s => ({ id: s.id, ...s.data() }));
-            } else {
-                let query = db.collection("promoters");
-                
-                if (audience.status) {
-                    query = query.where("status", "==", audience.status);
-                } else {
-                    query = query.where("status", "==", "approved");
-                }
-
-                if (audience.type === 'org' && audience.orgId) {
-                    query = query.where("organizationId", "==", audience.orgId);
-                } else if (audience.type === 'campaign' && audience.campaignName) {
-                    query = query.where("campaignName", "==", audience.campaignName);
-                    if (audience.orgId) query = query.where("organizationId", "==", audience.orgId);
-                }
-                
-                const snap = await query.get();
-                docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            }
-
-            if (docs.length === 0) {
-                return { success: false, message: "Nenhum destinatário encontrado." };
-            }
-
-            const chunkSize = 50; 
-            let sentCount = 0;
-            let failureCount = 0;
-
-            for (let i = 0; i < docs.length; i += chunkSize) {
-                const chunk = docs.slice(i, i + chunkSize);
-                
-                const results = await Promise.all(chunk.map(async (p) => {
-                    const personalizedBody = body.replace(/{{promoterName}}/g, p.name.split(' ')[0]);
-                    return sendSystemEmail(p.email, subject, personalizedBody);
-                }));
-
-                sentCount += results.filter(r => r === true).length;
-                failureCount += results.filter(r => r === false).length;
-
-                await new Promise(resolve => setTimeout(resolve, 200));
-            }
-
-            return { 
-                success: true, 
-                message: `Envio concluído. Sucesso: ${sentCount}, Falhas: ${failureCount}. Total: ${docs.length}` 
-            };
-
-        } catch (e) { 
-            console.error("Erro fatal na função de newsletter:", e);
-            return { success: false, error: e.message }; 
-        }
-    });
-
-export const notifyPostEmail = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { postId } = data;
-    try {
-        const postSnap = await db.collection("posts").doc(postId).get();
-        const post = postSnap.data();
-        const assignmentsSnap = await db.collection("postAssignments").where("postId", "==", postId).where("status", "==", "pending").get();
-
-        const promises = assignmentsSnap.docs.map(doc => {
-            const a = doc.data();
-            const html = `
-                <div style="font-family:sans-serif; max-width:600px; padding:30px; border:1px solid #eee; border-radius:15px;">
-                    <h2 style="color:#7e39d5;">Nova Publicação Disponível!</h2>
-                    <p>Olá ${a.promoterName.split(' ')[0]}, uma nova tarefa foi designada no evento: <b>${post.campaignName}</b></p>
-                    <a href="https://divulgadoras.vercel.app/#/posts" style="display:inline-block; background:#7e39d5; color:#fff; padding:15px 25px; text-decoration:none; border-radius:10px; font-weight:bold;">ACESSAR MEU PORTAL</a>
-                </div>`;
-            return sendSystemEmail(a.promoterEmail, `📢 Nova Publicação: ${post.campaignName}`, html);
-        });
-        await Promise.all(promises);
-        return { success: true };
-    } catch (e) { return { success: false, error: e.message }; }
-});
-
-export const notifyVipActivation = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { membershipId } = data;
-    try {
-        const snap = await db.collection("vipMemberships").doc(membershipId).get();
-        const m = snap.data();
-        const eventSnap = await db.collection("vipEvents").doc(m.vipEventId).get();
-        const ev = eventSnap.data();
-        const code = m.benefitCode || "VIP-" + Math.random().toString(36).substring(2, 8).toUpperCase();
-        if (!m.benefitCode) await snap.ref.update({ benefitCode: code });
-
-        const html = `
-            <div style="font-family:sans-serif; max-width:600px; padding:40px; border:2px solid #7e39d5; border-radius:20px; text-align:center;">
-                <h2 style="color:#7e39d5;">Seu Ingresso Promocional Está Liberado! 🎟️</h2>
-                <p>Olá <b>${m.promoterName}</b>, seu acesso VIP para o evento <b>${m.vipEventName}</b> foi confirmado!</p>
-                <div style="background:#f9f9f9; padding:20px; border-radius:15px; margin:20px 0;">
-                    <span style="font-size:10px; color:#999; display:block;">SEU CÓDIGO:</span>
-                    <b style="font-size:28px; color:#7e39d5;">${code}</b>
-                </div>
-                <a href="https://stingressos.com.br/eventos/${ev?.externalSlug || ""}?cupom=${code}" style="display:block; background:#7e39d5; color:#fff; padding:18px; text-decoration:none; border-radius:12px; font-weight:bold;">RESGATAR AGORA</a>
-            </div>`;
-        return { success: await sendSystemEmail(m.promoterEmail, `🎟️ Ingresso Promocional Liberado: ${m.vipEventName}`, html) };
-    } catch (e) { return { success: false, error: e.message }; }
 });

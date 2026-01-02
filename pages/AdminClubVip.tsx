@@ -8,12 +8,11 @@ import {
     getAllVipEvents, 
     createVipEvent, 
     updateVipEvent, 
-    deleteVipEvent,
-    sendVipRecoveryEmail
+    deleteVipEvent
 } from '../services/vipService';
 import { updatePromoter, getAllPromoters } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
-import { VipMembership, VipEvent, Organization, Promoter, RecoveryStatus } from '../types';
+import { VipMembership, VipEvent, Organization, Promoter } from '../types';
 import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { 
@@ -23,6 +22,29 @@ import {
     WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
+
+const RECOVERY_TEMPLATES = [
+    { s: "Seu VIP está te esperando! 🎟️", b: "Olá {{nome}}, vimos que você iniciou sua adesão ao {{evento}}, mas o pagamento não foi concluído. Seu código de cortesia já está reservado, basta finalizar o Pix abaixo!" },
+    { s: "Tivemos um problema com seu Pix? 🤔", b: "Ei {{nome}}, notamos que o Pix gerado para o {{evento}} expirou. Para você não perder os benefícios exclusivos, geramos um novo código agora mesmo. Aproveite!" },
+    { s: "Não deixe sua cortesia expirar! ⏳", b: "Olá {{nome}}! Muitas pessoas estão solicitando acesso ao {{evento}} agora. Como você já iniciou o processo, sua vaga está garantida por mais alguns minutos. Finalize aqui:" },
+    { s: "Sua vaga no VIP do {{evento}} 🚀", b: "Fala {{nome}}! Passando para lembrar que seu ingresso promocional está aguardando confirmação. O processo é automático após o pagamento do Pix abaixo." },
+    { s: "Esqueceu de finalizar sua adesão? 😱", b: "Oi {{nome}}, percebemos que você parou na tela de pagamento. Se teve alguma dúvida, estamos aqui! Caso queira seguir, aqui está um novo Pix para o {{evento}}." },
+    { s: "Tudo pronto para o {{evento}}? ✅", b: "Olá {{nome}}, só falta o pagamento do seu Pix para liberarmos seu código VIP. Não fique de fora da nossa equipe oficial!" },
+    { s: "Vaga VIP reservada para {{nome}} 🌟", b: "Reservamos seu lugar no Clube VIP para o {{evento}}. Clique abaixo para ver o novo QR Code e garantir seus benefícios antes que o lote mude." },
+    { s: "Sua cortesia está quase liberada! 🔓", b: "Ei {{nome}}! Recebemos sua solicitação para o {{evento}}. Assim que o Pix abaixo for confirmado, seu código de resgate chegará instantaneamente no seu e-mail." },
+    { s: "Ei, falta só um passo! 👣", b: "Olá {{nome}}, falta muito pouco para você garantir seu acesso exclusivo ao {{evento}}. O Pix abaixo é válido por tempo limitado. Garanta agora!" },
+    { s: "VIP: Sua participação confirmada? 🎫", b: "Oi {{nome}}! Ainda não identificamos seu pagamento para o {{evento}}. Queremos muito você na nossa equipe, finalize sua adesão no link abaixo:" },
+    { s: "Última chamada para o VIP! 📣", b: "Olá {{nome}}, esta é a última oportunidade de garantir o valor promocional para o {{evento}}. Geramos um novo Pix final para você." },
+    { s: "Problemas com o pagamento? 🛠️", b: "Olá {{nome}}, notamos que seu Pix não foi concluído. Se precisar de suporte, responda este e-mail. Caso queira tentar novamente, aqui está o código:" },
+    { s: "Seu lugar está garantido! (Por enquanto) ✋", b: "Ei {{nome}}, seguramos sua vaga VIP no {{evento}} por mais um pouco. Mas corra, o sistema libera para a fila de espera em breve!" },
+    { s: "O {{evento}} te espera! ✨", b: "Olá {{nome}}! Não perca a chance de viver essa experiência com benefícios exclusivos. Finalize sua adesão agora com o Pix abaixo:" },
+    { s: "Aviso de pendência: {{evento}} 📁", b: "Prezada {{nome}}, consta em nosso sistema uma adesão VIP pendente de pagamento. Para ativar seus benefícios, utilize o QR Code atualizado abaixo." },
+    { s: "Copy VIP exclusiva para você 💎", b: "Olá {{nome}}, como você é da nossa base, liberamos este acesso especial para o {{evento}}. O Pix abaixo garante seu lugar imediatamente." },
+    { s: "Sua cortesia VIP vai expirar... 🎈", b: "Oi {{nome}}! O tempo para garantir seu ingresso do {{evento}} pelo valor de membro está acabando. Não perca essa chance!" },
+    { s: "Dúvida sobre o Clube VIP? ❓", b: "Olá {{nome}}, vimos que você se interessou pelo {{evento}}. Alguma dúvida sobre os benefícios? Se estiver tudo ok, você pode finalizar por aqui:" },
+    { s: "Confirmando seu interesse no {{evento}} 🤝", b: "Fala {{nome}}! Queremos garantir que você receba seu código VIP a tempo. Use este novo Pix para uma confirmação instantânea." },
+    { s: "Quase lá, {{nome}}! 🏁", b: "Sua jornada rumo ao VIP do {{evento}} está 90% concluída. Só falta o pagamento. Aqui está o Pix atualizado para você finalizar em 1 minuto!" }
+];
 
 declare global {
   interface Window {
@@ -124,7 +146,6 @@ const AdminClubVip: React.FC = () => {
         alert("Código copiado!");
     };
 
-    // FUNÇÕES DE DOWNLOAD EXCEL
     const handleDownloadXLSX = (mode: 'codes' | 'full') => {
         const listToExport = selectedIds.size > 0 
             ? filteredMembers.filter(m => selectedIds.has(m.id))
@@ -134,18 +155,13 @@ const AdminClubVip: React.FC = () => {
         
         let ws;
         if (mode === 'codes') {
-            // MODO SOMENTE CÓDIGOS: Cria um "Array of Arrays" (AOA)
-            // Cada sub-array representa uma linha. Com um elemento por linha, fica tudo na Coluna A.
             const aoaData = listToExport
                 .filter(m => m.benefitCode && m.benefitCode.trim() !== '')
                 .map(m => [m.benefitCode]);
 
             if (aoaData.length === 0) return alert("Nenhum código gerado para exportar.");
-            
-            // Cria a planilha a partir do array bruto, sem cabeçalhos
             ws = window.XLSX.utils.aoa_to_sheet(aoaData);
         } else {
-            // MODO DADOS COMPLETOS: Usa mapeamento de objeto para json_to_sheet (com cabeçalhos)
             const jsonData = listToExport.map(m => ({
                 'NOME': m.promoterName,
                 'E-MAIL': m.promoterEmail,
@@ -180,7 +196,6 @@ const AdminClubVip: React.FC = () => {
     const handleBulkNotify = async () => {
         const toProcess = filteredMembers.filter(m => selectedIds.has(m.id) && m.status === 'confirmed');
         if (toProcess.length === 0) return alert("Selecione membros com pagamento PAGO.");
-        
         if (!window.confirm(`Ativar e notificar ${toProcess.length} membros?`)) return;
         
         setIsBulkProcessing(true);
@@ -197,60 +212,21 @@ const AdminClubVip: React.FC = () => {
         } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
     };
 
-    const handleBulkRecovery = async () => {
-        const toProcess = recoveryMembers.filter(m => selectedIds.has(m.id));
-        if (toProcess.length === 0) return alert("Selecione leads de carrinho abandonado.");
-        
-        if (!window.confirm(`Enviar e-mail de recuperação para ${toProcess.length} leads selecionados? Será gerado um novo Pix Mercado Pago para cada um.`)) return;
-        
-        setIsBulkProcessing(true);
-        let successCount = 0;
-        let failCount = 0;
-
-        try {
-            const createPix = httpsCallable(functions, 'createVipPixPayment');
-            
-            for (const m of toProcess) {
-                try {
-                    const event = vipEvents.find(e => e.id === m.vipEventId);
-                    if (!event) continue;
-
-                    const pixRes: any = await createPix({
-                        vipEventId: m.vipEventId,
-                        promoterId: m.promoterId,
-                        email: m.promoterEmail,
-                        name: m.promoterName,
-                        whatsapp: m.promoterWhatsapp || "",
-                        instagram: m.promoterInstagram || "",
-                        amount: event.price
-                    });
-
-                    await sendVipRecoveryEmail(m.id, pixRes.data);
-                    successCount++;
-                } catch (err) {
-                    console.error(`Erro ao processar recuperação de ${m.promoterName}:`, err);
-                    failCount++;
-                }
-            }
-            
-            alert(`Processamento concluído!\nSucesso: ${successCount}\nFalhas: ${failCount}`);
-            setSelectedIds(new Set());
-            fetchData();
-        } catch (e: any) { 
-            alert("Erro fatal no processamento em massa."); 
-        } finally { 
-            setIsBulkProcessing(false); 
-        }
-    };
-
     const handleRecoveryEmail = async (m: VipMembership) => {
         const event = vipEvents.find(e => e.id === m.vipEventId);
         if (!event) return;
 
-        if (!window.confirm(`Enviar e-mail de recuperação para ${m.promoterName}? Será gerado um novo Pix Mercado Pago.`)) return;
+        if (!window.confirm(`Enviar e-mail de recuperação para ${m.promoterName}? O sistema escolherá uma das 20 mensagens de copy aleatoriamente.`)) return;
         
         setIsProcessingId(m.id);
         try {
+            // Seleciona template aleatório
+            const template = RECOVERY_TEMPLATES[Math.floor(Math.random() * RECOVERY_TEMPLATES.length)];
+            const formattedBody = template.b
+                .replace(/{{nome}}/g, m.promoterName.split(' ')[0])
+                .replace(/{{evento}}/g, event.name);
+            const formattedSubject = template.s.replace(/{{nome}}/g, m.promoterName.split(' ')[0]).replace(/{{evento}}/g, event.name);
+
             const createPix = httpsCallable(functions, 'createVipPixPayment');
             const pixRes: any = await createPix({
                 vipEventId: m.vipEventId,
@@ -262,10 +238,64 @@ const AdminClubVip: React.FC = () => {
                 amount: event.price
             });
 
-            await sendVipRecoveryEmail(m.id, pixRes.data);
+            const sendRecovery = httpsCallable(functions, 'sendVipRecoveryEmail');
+            await sendRecovery({
+                membershipId: m.id,
+                pixData: pixRes.data,
+                customMessage: formattedBody,
+                subject: formattedSubject
+            });
+
             alert("E-mail de recuperação enviado com sucesso!");
             fetchData();
         } catch (e: any) { alert("Erro: " + e.message); } finally { setIsProcessingId(null); }
+    };
+
+    const handleBulkRecovery = async () => {
+        const toProcess = recoveryMembers.filter(m => selectedIds.has(m.id));
+        if (toProcess.length === 0) return alert("Selecione leads.");
+        if (!window.confirm(`Enviar recuperação para ${toProcess.length} leads? Cada um receberá uma mensagem de copy diferente.`)) return;
+        
+        setIsBulkProcessing(true);
+        let successCount = 0;
+        let failCount = 0;
+
+        try {
+            const createPix = httpsCallable(functions, 'createVipPixPayment');
+            const sendRecovery = httpsCallable(functions, 'sendVipRecoveryEmail');
+            
+            for (const m of toProcess) {
+                try {
+                    const event = vipEvents.find(e => e.id === m.vipEventId);
+                    if (!event) continue;
+
+                    const template = RECOVERY_TEMPLATES[Math.floor(Math.random() * RECOVERY_TEMPLATES.length)];
+                    const formattedBody = template.b.replace(/{{nome}}/g, m.promoterName.split(' ')[0]).replace(/{{evento}}/g, event.name);
+                    const formattedSubject = template.s.replace(/{{nome}}/g, m.promoterName.split(' ')[0]).replace(/{{evento}}/g, event.name);
+
+                    const pixRes: any = await createPix({
+                        vipEventId: m.vipEventId,
+                        promoterId: m.promoterId,
+                        email: m.promoterEmail,
+                        name: m.promoterName,
+                        whatsapp: m.promoterWhatsapp || "",
+                        instagram: m.promoterInstagram || "",
+                        amount: event.price
+                    });
+
+                    await sendRecovery({
+                        membershipId: m.id,
+                        pixData: pixRes.data,
+                        customMessage: formattedBody,
+                        subject: formattedSubject
+                    });
+                    successCount++;
+                } catch (err) { failCount++; }
+            }
+            alert(`Concluído! Sucesso: ${successCount}, Falhas: ${failCount}`);
+            setSelectedIds(new Set());
+            fetchData();
+        } catch (e: any) { alert("Erro fatal."); } finally { setIsBulkProcessing(false); }
     };
 
     const handleSaveEvent = async (e: React.FormEvent) => {
@@ -334,7 +364,6 @@ const AdminClubVip: React.FC = () => {
                 <button onClick={() => { setActiveTab('events'); setSelectedIds(new Set()); }} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Eventos / Ofertas</button>
             </div>
 
-            {/* BARRA DE AÇÕES EM MASSA */}
             {selectedIds.size > 0 && (
                 <div className="mx-4 md:mx-0 p-4 bg-primary rounded-2xl shadow-lg flex items-center justify-between animate-fadeIn sticky top-24 z-30 mb-6 border border-white/20">
                     <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} selecionados</p>
@@ -346,7 +375,7 @@ const AdminClubVip: React.FC = () => {
                         )}
                         {activeTab === 'recovery' && (
                             <button onClick={handleBulkRecovery} disabled={isBulkProcessing} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-colors">
-                                {isBulkProcessing ? 'ENVIANDO...' : 'RECUPERAR SELECIONADOS (E-MAIL)'}
+                                {isBulkProcessing ? 'ENVIANDO...' : 'RECUPERAR (E-MAILS ALEATÓRIOS)'}
                             </button>
                         )}
                         <button onClick={() => setSelectedIds(new Set())} className="px-4 py-2 bg-black/20 text-white font-black text-[10px] uppercase rounded-xl">Cancelar</button>
@@ -480,7 +509,7 @@ const AdminClubVip: React.FC = () => {
                                                         disabled={isProcessingId === m.id}
                                                         className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-blue-500 flex items-center gap-2"
                                                     >
-                                                        {isProcessingId === m.id ? <RefreshIcon className="w-3 h-3 animate-spin"/> : <MailIcon className="w-3 h-3" />} E-MAIL COM NOVO PIX
+                                                        {isProcessingId === m.id ? <RefreshIcon className="w-3 h-3 animate-spin"/> : <MailIcon className="w-3 h-3" />} E-MAIL (COPY ALEATÓRIA)
                                                     </button>
                                                 </td>
                                             </tr>
