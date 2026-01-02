@@ -19,7 +19,7 @@ import {
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
     TicketIcon, RefreshIcon, ClockIcon, UserIcon,
     BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon,
-    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon
+    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon, LinkIcon
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
 
@@ -141,9 +141,9 @@ const AdminClubVip: React.FC = () => {
         }
     };
 
-    const handleCopy = (text: string) => {
+    const handleCopy = (text: string, msg: string = "Código copiado!") => {
         navigator.clipboard.writeText(text);
-        alert("Código copiado!");
+        alert(msg);
     };
 
     const handleDownloadXLSX = (mode: 'codes' | 'full') => {
@@ -433,25 +433,43 @@ const AdminClubVip: React.FC = () => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
-                                        {filteredMembers.map(m => (
-                                            <tr key={m.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.has(m.id) ? 'bg-primary/5' : ''}`}>
-                                                <td className="px-6 py-5 text-center">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        checked={selectedIds.has(m.id)}
-                                                        onChange={() => toggleSelectOne(m.id)}
-                                                        className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-0" 
-                                                    />
-                                                </td>
-                                                <td className="px-6 py-5"><p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p><p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p></td>
-                                                <td className="px-6 py-5 text-center">{m.benefitCode ? <span onClick={() => handleCopy(m.benefitCode || '')} className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10">{m.benefitCode}</span> : <span className="text-gray-600 text-[10px] font-bold">---</span>}</td>
-                                                <td className="px-6 py-5 text-center">{m.isBenefitActive ? <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">ATIVADO</span> : <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 border border-gray-700 text-[8px] font-black uppercase tracking-widest">AGUARDANDO</span>}</td>
-                                                <td className="px-6 py-5 text-center"><span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>{m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}</span></td>
-                                                <td className="px-6 py-5 text-right">
-                                                    {m.status === 'confirmed' && <button onClick={() => handleManualNotifySingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">{m.isBenefitActive ? 'REENVIAR' : 'ATIVAR'}</button>}
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {filteredMembers.map(m => {
+                                            const event = vipEvents.find(e => e.id === m.vipEventId);
+                                            const directLink = event?.externalSlug && m.benefitCode 
+                                                ? `https://stingressos.com.br/eventos/${event.externalSlug}?cupom=${m.benefitCode}`
+                                                : null;
+
+                                            return (
+                                                <tr key={m.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.has(m.id) ? 'bg-primary/5' : ''}`}>
+                                                    <td className="px-6 py-5 text-center">
+                                                        <input 
+                                                            type="checkbox" 
+                                                            checked={selectedIds.has(m.id)}
+                                                            onChange={() => toggleSelectOne(m.id)}
+                                                            className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-0" 
+                                                        />
+                                                    </td>
+                                                    <td className="px-6 py-5"><p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p><p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p></td>
+                                                    <td className="px-6 py-5 text-center">{m.benefitCode ? <span onClick={() => handleCopy(m.benefitCode || '')} className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10">{m.benefitCode}</span> : <span className="text-gray-600 text-[10px] font-bold">---</span>}</td>
+                                                    <td className="px-6 py-5 text-center">{m.isBenefitActive ? <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">ATIVADO</span> : <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 border border-gray-700 text-[8px] font-black uppercase tracking-widest">AGUARDANDO</span>}</td>
+                                                    <td className="px-6 py-5 text-center"><span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>{m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}</span></td>
+                                                    <td className="px-6 py-5 text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            {m.status === 'confirmed' && directLink && (
+                                                                <button 
+                                                                    onClick={() => handleCopy(directLink, "Link direto copiado!")}
+                                                                    className="p-2 bg-dark border border-primary/20 text-primary rounded-xl hover:bg-primary/10 transition-all"
+                                                                    title="Copiar Link Direto"
+                                                                >
+                                                                    <LinkIcon className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                            {m.status === 'confirmed' && <button onClick={() => handleManualNotifySingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">{m.isBenefitActive ? 'REENVIAR' : 'ATIVAR'}</button>}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
