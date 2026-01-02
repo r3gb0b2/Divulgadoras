@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -7,8 +8,10 @@ import { getAllCampaigns } from '../services/settingsService';
 import { PostAssignment, Promoter, Campaign, PromoterStats } from '../types';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
-import { ArrowLeftIcon, WhatsAppIcon, InstagramIcon, TrashIcon, FilterIcon, ClockIcon } from '../components/Icons';
+// Added RefreshIcon to imports
+import { ArrowLeftIcon, WhatsAppIcon, InstagramIcon, TrashIcon, FilterIcon, ClockIcon, SearchIcon, RefreshIcon } from '../components/Icons';
 import { Timestamp } from 'firebase/firestore';
+import PromoterFullControlModal from '../components/PromoterFullControlModal';
 
 type SortKey = keyof Omit<PromoterStats, 'id' | 'photoUrls' | 'createdAt' | 'state' | 'campaignName' | 'associatedCampaigns' | 'allCampaigns' | 'organizationId' | 'rejectionReason' | 'hasJoinedGroup' | 'actionTakenByUid' | 'actionTakenByEmail' | 'statusChangedAt' | 'observation' | 'lastManualNotificationAt' | 'status' | 'tiktok' | 'dateOfBirth'> | 'name';
 type SortDirection = 'asc' | 'desc';
@@ -64,6 +67,9 @@ const PostDashboard: React.FC = () => {
     const [groupFilterStatus, setGroupFilterStatus] = useState<'all' | 'inGroup' | 'notInGroup'>('all');
     const [selectedPromoterIds, setSelectedPromoterIds] = useState<Set<string>>(new Set());
     const [showFilters, setShowFilters] = useState(false);
+
+    // Controle do novo modal 360º
+    const [selectedPromoterForControl, setSelectedPromoterForControl] = useState<Promoter | null>(null);
 
     const [numFilters, setNumFilters] = useState<{
         assigned: NumericFilter;
@@ -285,119 +291,107 @@ const PostDashboard: React.FC = () => {
         }
     };
 
-     const handleRemovePromoter = async (promoter: Promoter) => {
-        if (window.confirm(`Tem certeza que deseja remover ${promoter.name} da equipe? Esta ação mudará seu status para 'Removida', a removerá da lista de aprovadas e de todas as publicações ativas.`)) {
-            setIsProcessing(promoter.id);
-            setError('');
-            try {
-                const setPromoterStatusToRemoved = httpsCallable(functions, 'setPromoterStatusToRemoved');
-                await setPromoterStatusToRemoved({ promoterId: promoter.id });
-                alert(`${promoter.name} foi removida com sucesso.`);
-                await fetchData();
-            } catch (err: any) {
-                const message = err.message || 'Falha ao remover divulgadora.';
-                setError(message);
-                alert(message);
-            } finally {
-                setIsProcessing(null);
-            }
-        }
+    const handleOpenControl = (promoter: Promoter) => {
+        setSelectedPromoterForControl(promoter);
     };
     
     return (
-        <div>
+        <div className="pb-40">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Desempenho das Divulgadoras</h1>
-                <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-                    <ArrowLeftIcon className="w-4 h-4" />
-                    <span>Voltar</span>
+                <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Desempenho da Equipe</h1>
+                <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-xl hover:bg-gray-500 text-[10px] font-black uppercase tracking-widest transition-all">
+                    <ArrowLeftIcon className="w-4 h-4" /> Voltar
                 </button>
             </div>
-            <div className="bg-secondary shadow-lg rounded-lg p-6">
-                 <div className="flex flex-col gap-4 mb-6">
-                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-                        <div className="flex flex-col sm:flex-row gap-4 w-full">
+
+            <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
+                 <div className="flex flex-col gap-4">
+                    <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
+                        <div className="flex flex-col sm:flex-row gap-3 w-full">
                             <select
                                 value={filterCampaign}
                                 onChange={e => setFilterCampaign(e.target.value)}
-                                className="w-full sm:w-auto px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
+                                className="w-full sm:w-auto px-4 py-3 border border-gray-700 rounded-2xl bg-dark text-white font-black text-[10px] uppercase outline-none focus:border-primary"
                             >
-                                <option value="all">Todos Eventos</option>
+                                <option value="all">TODOS EVENTOS</option>
                                 {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                             </select>
-                            <input
-                                type="text"
-                                placeholder="Buscar por nome ou email..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full sm:flex-grow px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200"
-                            />
+                            <div className="relative flex-grow">
+                                <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                                <input
+                                    type="text"
+                                    placeholder="BUSCAR POR NOME OU E-MAIL..."
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary"
+                                />
+                            </div>
                         </div>
                         <button 
                             onClick={() => setShowFilters(!showFilters)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${showFilters ? 'bg-primary text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                            className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${showFilters ? 'bg-primary text-white shadow-xl' : 'bg-gray-800 text-gray-400 hover:text-white border border-white/5'}`}
                         >
                             <FilterIcon className="w-4 h-4" />
-                            <span>Filtros</span>
+                            Filtros
                         </button>
                     </div>
 
-                    <div className="flex items-center gap-4 flex-wrap">
-                        <label className="flex items-center space-x-2 text-sm font-medium text-gray-200 cursor-pointer">
+                    <div className="flex items-center gap-4 flex-wrap px-1">
+                        <label className="flex items-center space-x-2 text-[10px] font-black uppercase text-gray-400 cursor-pointer group">
                             <input
                                 type="checkbox"
                                 checked={groupFilterStatus === 'inGroup'}
                                 onChange={(e) => setGroupFilterStatus(e.target.checked ? 'inGroup' : 'all')}
-                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                className="h-4 w-4 text-primary bg-dark border-gray-700 rounded focus:ring-primary"
                             />
-                            <span>Apenas no grupo</span>
+                            <span className="group-hover:text-white transition-colors">Apenas no grupo</span>
                         </label>
-                        <label className="flex items-center space-x-2 text-sm font-medium text-gray-200 cursor-pointer">
+                        <label className="flex items-center space-x-2 text-[10px] font-black uppercase text-gray-400 cursor-pointer group">
                             <input
                                 type="checkbox"
                                 checked={groupFilterStatus === 'notInGroup'}
                                 onChange={(e) => setGroupFilterStatus(e.target.checked ? 'notInGroup' : 'all')}
-                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded focus:ring-primary"
+                                className="h-4 w-4 text-primary bg-dark border-gray-700 rounded focus:ring-primary"
                             />
-                            <span>Apenas fora do grupo</span>
+                            <span className="group-hover:text-white transition-colors">Apenas fora do grupo</span>
                         </label>
                     </div>
 
                     {showFilters && (
-                        <div className="p-4 bg-gray-800 rounded-lg border border-gray-700 grid grid-cols-2 md:grid-cols-5 gap-4 animate-fadeIn">
+                        <div className="p-6 bg-dark/40 rounded-[2rem] border border-white/5 grid grid-cols-2 md:grid-cols-5 gap-6 animate-slideDown shadow-inner">
                              <div>
-                                <label className="block text-xs text-gray-400 mb-1">Designadas</label>
-                                <div className="flex gap-1">
-                                    <input type="number" placeholder="Min" value={numFilters.assigned.min} onChange={e => handleNumFilterChange('assigned', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
-                                    <input type="number" placeholder="Max" value={numFilters.assigned.max} onChange={e => handleNumFilterChange('assigned', 'max', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                <label className="block text-[8px] font-black text-gray-500 uppercase tracking-widest mb-2">Designadas</label>
+                                <div className="flex gap-2">
+                                    <input type="number" placeholder="MIN" value={numFilters.assigned.min} onChange={e => handleNumFilterChange('assigned', 'min', e.target.value)} className="w-full px-3 py-2 text-xs bg-dark border border-gray-700 rounded-xl text-white outline-none focus:border-primary"/>
+                                    <input type="number" placeholder="MAX" value={numFilters.assigned.max} onChange={e => handleNumFilterChange('assigned', 'max', e.target.value)} className="w-full px-3 py-2 text-xs bg-dark border border-gray-700 rounded-xl text-white outline-none focus:border-primary"/>
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-400 mb-1">Concluídas</label>
-                                <div className="flex gap-1">
-                                    <input type="number" placeholder="Min" value={numFilters.completed.min} onChange={e => handleNumFilterChange('completed', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
-                                    <input type="number" placeholder="Max" value={numFilters.completed.max} onChange={e => handleNumFilterChange('completed', 'max', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                <label className="block text-[8px] font-black text-gray-500 uppercase tracking-widest mb-2">Concluídas</label>
+                                <div className="flex gap-2">
+                                    <input type="number" placeholder="MIN" value={numFilters.completed.min} onChange={e => handleNumFilterChange('completed', 'min', e.target.value)} className="w-full px-3 py-2 text-xs bg-dark border border-gray-700 rounded-xl text-white outline-none focus:border-primary"/>
+                                    <input type="number" placeholder="MAX" value={numFilters.completed.max} onChange={e => handleNumFilterChange('completed', 'max', e.target.value)} className="w-full px-3 py-2 text-xs bg-dark border border-gray-700 rounded-xl text-white outline-none focus:border-primary"/>
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-400 mb-1">Justificativas</label>
-                                <div className="flex gap-1">
-                                    <input type="number" placeholder="Min" value={numFilters.justifications.min} onChange={e => handleNumFilterChange('justifications', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
-                                    <input type="number" placeholder="Max" value={numFilters.justifications.max} onChange={e => handleNumFilterChange('justifications', 'max', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                <label className="block text-[8px] font-black text-gray-500 uppercase tracking-widest mb-2">Justificativas</label>
+                                <div className="flex gap-2">
+                                    <input type="number" placeholder="MIN" value={numFilters.justifications.min} onChange={e => handleNumFilterChange('justifications', 'min', e.target.value)} className="w-full px-3 py-2 text-xs bg-dark border border-gray-700 rounded-xl text-white outline-none focus:border-primary"/>
+                                    <input type="number" placeholder="MAX" value={numFilters.justifications.max} onChange={e => handleNumFilterChange('justifications', 'max', e.target.value)} className="w-full px-3 py-2 text-xs bg-dark border border-gray-700 rounded-xl text-white outline-none focus:border-primary"/>
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-400 mb-1">Perdidas</label>
-                                <div className="flex gap-1">
-                                    <input type="number" placeholder="Min" value={numFilters.missed.min} onChange={e => handleNumFilterChange('missed', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
-                                    <input type="number" placeholder="Max" value={numFilters.missed.max} onChange={e => handleNumFilterChange('missed', 'max', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                <label className="block text-[8px] font-black text-gray-500 uppercase tracking-widest mb-2">Perdidas</label>
+                                <div className="flex gap-2">
+                                    <input type="number" placeholder="MIN" value={numFilters.missed.min} onChange={e => handleNumFilterChange('missed', 'min', e.target.value)} className="w-full px-3 py-2 text-xs bg-dark border border-gray-700 rounded-xl text-white outline-none focus:border-primary"/>
+                                    <input type="number" placeholder="MAX" value={numFilters.missed.max} onChange={e => handleNumFilterChange('missed', 'max', e.target.value)} className="w-full px-3 py-2 text-xs bg-dark border border-gray-700 rounded-xl text-white outline-none focus:border-primary"/>
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs text-gray-400 mb-1">Aproveitamento (%)</label>
-                                <div className="flex gap-1">
-                                    <input type="number" placeholder="Min" value={numFilters.rate.min} onChange={e => handleNumFilterChange('rate', 'min', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
-                                    <input type="number" placeholder="Max" value={numFilters.rate.max} onChange={e => handleNumFilterChange('rate', 'max', e.target.value)} className="w-full px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded"/>
+                                <label className="block text-[8px] font-black text-gray-500 uppercase tracking-widest mb-2">Aproveitamento (%)</label>
+                                <div className="flex gap-2">
+                                    <input type="number" placeholder="MIN" value={numFilters.rate.min} onChange={e => handleNumFilterChange('rate', 'min', e.target.value)} className="w-full px-3 py-2 text-xs bg-dark border border-gray-700 rounded-xl text-white outline-none focus:border-primary"/>
+                                    <input type="number" placeholder="MAX" value={numFilters.rate.max} onChange={e => handleNumFilterChange('rate', 'max', e.target.value)} className="w-full px-3 py-2 text-xs bg-dark border border-gray-700 rounded-xl text-white outline-none focus:border-primary"/>
                                 </div>
                             </div>
                         </div>
@@ -405,29 +399,35 @@ const PostDashboard: React.FC = () => {
                  </div>
 
                  {selectedPromoterIds.size > 0 && (
-                    <div className="sticky top-2 z-20 bg-blue-900/90 backdrop-blur-sm border-l-4 border-blue-500 text-white p-3 rounded-md shadow-lg flex items-center justify-between gap-4 mb-4">
-                        <div className="font-semibold">{selectedPromoterIds.size} selecionadas</div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setSelectedPromoterIds(new Set())} className="px-3 py-1.5 text-sm hover:underline">Cancelar</button>
-                            <button onClick={handleBulkRemove} disabled={isBulkProcessing} className="px-4 py-1.5 bg-red-600 hover:bg-red-500 rounded-md text-sm font-semibold flex items-center gap-2">
-                                <TrashIcon className="w-4 h-4"/> {isBulkProcessing ? 'Removendo...' : 'Remover Selecionadas'}
+                    <div className="sticky top-2 z-20 bg-primary/95 backdrop-blur-md border border-white/20 text-white p-4 rounded-3xl shadow-2xl flex items-center justify-between gap-4 mb-4 animate-fadeIn">
+                        <div className="font-black uppercase text-[10px] tracking-widest">{selectedPromoterIds.size} selecionadas</div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setSelectedPromoterIds(new Set())} className="px-4 py-2 text-[10px] font-black uppercase hover:text-white/70 transition-colors">Cancelar</button>
+                            <button onClick={handleBulkRemove} disabled={isBulkProcessing} className="px-6 py-2 bg-red-600 hover:bg-red-500 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg">
+                                <TrashIcon className="w-4 h-4"/> {isBulkProcessing ? 'REMOVENDO...' : 'EXCLUIR DA EQUIPE'}
                             </button>
                         </div>
                     </div>
                  )}
 
-                 {error && <p className="text-red-400 mb-4">{error}</p>}
-                 {isLoading ? <p className="text-center py-8">Carregando estatísticas...</p> : (
+                 {error && <p className="text-red-400 bg-red-900/20 p-4 rounded-2xl border border-red-900/50 mb-4 text-[10px] font-black uppercase">{error}</p>}
+                 
+                 {isLoading ? (
+                    <div className="py-20 flex flex-col items-center gap-4">
+                        <RefreshIcon className="w-12 h-12 text-primary animate-spin" />
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Sincronizando estatísticas...</p>
+                    </div>
+                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-700">
-                            <thead className="bg-gray-700/50">
+                        <table className="min-w-full divide-y divide-white/5 border-separate border-spacing-0">
+                            <thead className="bg-dark/50">
                                 <tr>
-                                    <th className="px-4 py-3 w-10">
+                                    <th className="px-4 py-5 w-10 text-center">
                                         <input 
                                             type="checkbox" 
                                             onChange={handleSelectAll} 
                                             checked={processedStats.length > 0 && selectedPromoterIds.size === processedStats.length}
-                                            className="rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary"
+                                            className="rounded border-gray-700 bg-dark text-primary focus:ring-0"
                                         />
                                     </th>
                                     { (
@@ -440,64 +440,77 @@ const PostDashboard: React.FC = () => {
                                             {key: 'completionRate', label: 'Aproveitamento'},
                                         ] as {key: SortKey, label: string}[]
                                     ).map(({key, label}) => (
-                                        <th key={key} onClick={() => requestSort(key)} className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer hover:text-white">
-                                            {label} {getSortIndicator(key)}
+                                        <th key={key} onClick={() => requestSort(key)} className="px-4 py-5 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest cursor-pointer hover:text-white transition-colors">
+                                            <div className="flex items-center gap-1.5">
+                                                {label} <span className="text-primary/50 font-normal">{getSortIndicator(key)}</span>
+                                            </div>
                                         </th>
                                     ))}
-                                    <th className="px-4 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Ações</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-700">
+                            <tbody className="divide-y divide-white/5">
                                 {processedStats.map(stat => (
-                                    <tr key={stat.id} className="hover:bg-gray-700/40">
-                                        <td className="px-4 py-3">
+                                    <tr 
+                                        key={stat.id} 
+                                        onClick={() => handleOpenControl(stat)}
+                                        className={`hover:bg-white/[0.03] transition-all cursor-pointer group ${selectedPromoterIds.has(stat.id) ? 'bg-primary/5' : ''}`}
+                                    >
+                                        <td className="px-4 py-5 text-center" onClick={e => e.stopPropagation()}>
                                             <input 
                                                 type="checkbox" 
                                                 checked={selectedPromoterIds.has(stat.id)} 
                                                 onChange={() => handleToggleSelect(stat.id)}
-                                                className="rounded border-gray-600 bg-gray-700 text-primary focus:ring-primary"
+                                                className="rounded border-gray-700 bg-dark text-primary focus:ring-0"
                                             />
                                         </td>
-                                        <td className="px-4 py-3 whitespace-nowrap">
-                                            <div className={`font-medium ${getPerformanceColor(stat.completionRate)}`}>{stat.name}</div>
-                                            <div className="text-xs text-gray-400">{stat.email}</div>
-                                            <div className="flex items-center gap-4 mt-2">
-                                                <a href={`https://wa.me/55${(stat.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-green-400 hover:underline flex items-center text-xs gap-1">
-                                                    <WhatsAppIcon className="w-4 h-4" />
-                                                    <span>WhatsApp</span>
-                                                </a>
-                                                <a href={`https://instagram.com/${(stat.instagram || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-dark flex items-center text-xs gap-1">
-                                                    <InstagramIcon className="w-4 h-4" />
-                                                    <span>Instagram</span>
-                                                </a>
-                                            </div>
-                                            <div className="mt-1 text-xs text-gray-500 flex items-center gap-1">
-                                                <ClockIcon className="w-3 h-3" />
-                                                {calculateTimeInGroup(stat.createdAt)}
+                                        <td className="px-4 py-5 whitespace-nowrap">
+                                            <div className="flex items-center gap-4">
+                                                <img src={stat.facePhotoUrl || stat.photoUrls[0]} className="w-10 h-10 rounded-xl object-cover border border-white/5 shadow-md group-hover:scale-105 transition-transform" alt="" />
+                                                <div>
+                                                    <div className="font-black text-white uppercase text-sm group-hover:text-primary transition-colors">{stat.name}</div>
+                                                    <div className="flex items-center gap-3 mt-1.5">
+                                                        <a href={`https://wa.me/55${(stat.whatsapp || '').replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-green-500/70 hover:text-green-400 transition-colors">
+                                                            <WhatsAppIcon className="w-3.5 h-3.5" />
+                                                        </a>
+                                                        <a href={`https://instagram.com/${(stat.instagram || '').replace('@', '')}`} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="text-pink-500/70 hover:text-pink-400 transition-colors">
+                                                            <InstagramIcon className="w-3.5 h-3.5" />
+                                                        </a>
+                                                        <div className="text-[9px] text-gray-600 font-bold uppercase flex items-center gap-1">
+                                                            <ClockIcon className="w-3 h-3" />
+                                                            {calculateTimeInGroup(stat.createdAt)}
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-center font-semibold">{stat.assigned}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-center font-semibold text-green-400">{stat.completed}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-center font-semibold text-yellow-400">{stat.justifications}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-center font-semibold text-red-400">{stat.missed}</td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-center font-bold text-blue-400">{stat.completionRate}%</td>
-                                        <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                                            <button 
-                                                onClick={() => handleRemovePromoter(stat)}
-                                                disabled={isProcessing === stat.id}
-                                                className="text-red-400 hover:text-red-300 disabled:opacity-50"
-                                            >
-                                                {isProcessing === stat.id ? '...' : 'Remover da Equipe'}
-                                            </button>
+                                        <td className="px-4 py-5 whitespace-nowrap text-xs font-black text-white">{stat.assigned}</td>
+                                        <td className="px-4 py-5 whitespace-nowrap text-xs font-black text-green-400">{stat.completed}</td>
+                                        <td className="px-4 py-5 whitespace-nowrap text-xs font-black text-yellow-400">{stat.justifications}</td>
+                                        <td className="px-4 py-5 whitespace-nowrap text-xs font-black text-red-400">{stat.missed}</td>
+                                        <td className="px-4 py-5 whitespace-nowrap">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 bg-dark h-1 rounded-full overflow-hidden">
+                                                    <div className={`h-full ${getPerformanceColor(stat.completionRate).replace('text-', 'bg-')}`} style={{ width: `${stat.completionRate}%` }}></div>
+                                                </div>
+                                                <span className={`font-black text-xs ${getPerformanceColor(stat.completionRate)}`}>{stat.completionRate}%</span>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
-                        {processedStats.length === 0 && <p className="text-center text-gray-400 py-8">Nenhuma divulgadora encontrada com os filtros atuais.</p>}
+                        {processedStats.length === 0 && <p className="text-center text-gray-600 py-20 font-black uppercase text-[10px] tracking-widest italic">Nenhuma divulgadora encontrada.</p>}
                     </div>
                  )}
             </div>
+
+            {/* MODAL COM CONTROLE COMPLETO */}
+            <PromoterFullControlModal 
+                isOpen={!!selectedPromoterForControl} 
+                onClose={() => setSelectedPromoterForControl(null)} 
+                promoter={selectedPromoterForControl} 
+                onDataUpdated={fetchData}
+            />
         </div>
     );
 };
