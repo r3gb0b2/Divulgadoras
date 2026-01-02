@@ -105,21 +105,31 @@ const AdminClubVip: React.FC = () => {
     }, [authLoading, fetchData]);
 
     const filteredMembers = useMemo(() => {
+        const query = searchQuery.toLowerCase().trim();
         return memberships.filter(m => {
             const matchesStatus = filterStatus === 'all' || m.status === filterStatus;
             const matchesBenefit = filterBenefit === 'all' || 
                 (filterBenefit === 'active' && m.isBenefitActive === true) ||
                 (filterBenefit === 'waiting' && m.isBenefitActive === false && m.status === 'confirmed');
-            const matchesSearch = (m.promoterName || '').toLowerCase().includes(searchQuery.toLowerCase()) || (m.promoterEmail || '').toLowerCase().includes(searchQuery.toLowerCase());
+            
+            const matchesSearch = 
+                (m.promoterName || '').toLowerCase().includes(query) || 
+                (m.promoterEmail || '').toLowerCase().includes(query);
+            
             const matchesEvent = selectedEventId === 'all' || m.vipEventId === selectedEventId;
             return matchesStatus && matchesBenefit && matchesSearch && matchesEvent;
         });
     }, [memberships, filterStatus, filterBenefit, searchQuery, selectedEventId]);
 
     const recoveryMembers = useMemo(() => {
+        const query = searchQuery.toLowerCase().trim();
         return memberships.filter(m => {
             if (m.status === 'confirmed' || m.status === 'refunded') return false;
-            const matchesSearch = (m.promoterName || '').toLowerCase().includes(searchQuery.toLowerCase()) || (m.promoterEmail || '').toLowerCase().includes(searchQuery.toLowerCase());
+            
+            const matchesSearch = 
+                (m.promoterName || '').toLowerCase().includes(query) || 
+                (m.promoterEmail || '').toLowerCase().includes(query);
+                
             const matchesEvent = selectedEventId === 'all' || m.vipEventId === selectedEventId;
             return matchesSearch && matchesEvent;
         });
@@ -429,7 +439,7 @@ const AdminClubVip: React.FC = () => {
                                 </select>
                                 <div className="relative">
                                     <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                                    <input type="text" placeholder="BUSCAR NOME..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary" />
+                                    <input type="text" placeholder="BUSCAR NOME OU E-MAIL..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary" />
                                 </div>
                             </div>
                             <div className="overflow-x-auto">
@@ -468,7 +478,11 @@ const AdminClubVip: React.FC = () => {
                                                             className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-0" 
                                                         />
                                                     </td>
-                                                    <td className="px-6 py-5"><p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p><p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p></td>
+                                                    <td className="px-6 py-5">
+                                                        <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
+                                                        <p className="text-[10px] text-gray-500 font-mono lowercase truncate">{m.promoterEmail}</p>
+                                                        <p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p>
+                                                    </td>
                                                     <td className="px-6 py-5 text-center">{m.benefitCode ? <span onClick={() => handleCopy(m.benefitCode || '')} className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10">{m.benefitCode}</span> : <span className="text-gray-600 text-[10px] font-bold">---</span>}</td>
                                                     <td className="px-6 py-5 text-center">{m.isBenefitActive ? <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">ATIVADO</span> : <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 border border-gray-700 text-[8px] font-black uppercase tracking-widest">AGUARDANDO</span>}</td>
                                                     <td className="px-6 py-5 text-center">
@@ -548,7 +562,11 @@ const AdminClubVip: React.FC = () => {
                                                         className="w-4 h-4 rounded border-gray-700 bg-dark text-primary focus:ring-0" 
                                                     />
                                                 </td>
-                                                <td className="px-6 py-5"><p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p><p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p></td>
+                                                <td className="px-6 py-5">
+                                                    <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
+                                                    <p className="text-[10px] text-gray-500 font-mono lowercase truncate">{m.promoterEmail}</p>
+                                                    <p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p>
+                                                </td>
                                                 <td className="px-6 py-5 text-sm text-gray-400 font-mono">{m.promoterWhatsapp || '---'}</td>
                                                 <td className="px-6 py-5 text-xs text-gray-500">{m.submittedAt ? (m.submittedAt as any).toDate().toLocaleDateString('pt-BR') : '---'}</td>
                                                 <td className="px-6 py-5 text-right">
