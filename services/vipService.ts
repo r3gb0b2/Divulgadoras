@@ -2,6 +2,7 @@
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { VipEvent, VipMembership } from '../types';
+import { httpsCallable } from 'firebase/functions';
 
 const COLLECTION_EVENTS = 'vipEvents';
 const COLLECTION_MEMBERSHIPS = 'vipMemberships';
@@ -16,11 +17,21 @@ export const getAllVipEvents = async (): Promise<VipEvent[]> => {
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
 };
 
-export const createVipEvent = async (data: Omit<VipEvent, 'id' | 'createdAt'>) => {
-    return firestore.collection(COLLECTION_EVENTS).add({
+/**
+ * Inicia o fluxo de pagamento via Stripe Pix (Embedded)
+ */
+export const createVipStripePixPayment = async (data: any): Promise<{ qr_code: string }> => {
+    const createPix = httpsCallable(functions, 'createVipStripePix');
+    const res: any = await createPix(data);
+    return res.data;
+};
+
+export const createVipEvent = async (data: Omit<VipEvent, 'id' | 'createdAt'>): Promise<string> => {
+    const docRef = await firestore.collection(COLLECTION_EVENTS).add({
         ...data,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
+    return docRef.id;
 };
 
 export const updateVipEvent = async (id: string, data: Partial<VipEvent>) => {
@@ -42,9 +53,6 @@ export const checkVipMembership = async (email: string, vipEventId: string): Pro
     return { id: snap.docs[0].id, ...snap.docs[0].data() } as VipMembership;
 };
 
-/**
- * Cria o registro inicial do membro antes mesmo do Pix.
- */
 export const createInitialVipMembership = async (data: Partial<VipMembership>) => {
     const docId = `${data.promoterId}_${data.vipEventId}`;
     return firestore.collection(COLLECTION_MEMBERSHIPS).doc(docId).set({
@@ -58,14 +66,11 @@ export const createInitialVipMembership = async (data: Partial<VipMembership>) =
 
 export const getAllVipMemberships = async (vipEventId?: string) => {
     let query: firebase.firestore.Query = firestore.collection(COLLECTION_MEMBERSHIPS);
-    
     if (vipEventId && vipEventId !== 'all') {
         query = query.where('vipEventId', '==', vipEventId);
     }
-    
     const snap = await query.get();
     const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipMembership));
-    
     results.sort((a, b) => {
         const getTime = (ts: any) => {
             if (!ts) return 0;
@@ -75,7 +80,6 @@ export const getAllVipMemberships = async (vipEventId?: string) => {
         };
         return getTime(b.submittedAt) - getTime(a.submittedAt);
     });
-    
     return results;
 };
 
@@ -86,9 +90,6 @@ export const updateVipMembership = async (id: string, data: Partial<VipMembershi
     });
 };
 
-/**
- * Realiza o estorno lógico de uma adesão.
- */
 export const refundVipMembership = async (membershipId: string) => {
     return firestore.collection(COLLECTION_MEMBERSHIPS).doc(membershipId).update({
         status: 'refunded',
@@ -96,18 +97,4 @@ export const refundVipMembership = async (membershipId: string) => {
         refundedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-};
-
-/**
- * Dispara e-mail de recuperação com dados do Pix fornecidos
- */
-export const sendVipRecoveryEmail = async (membershipId: string, pixData: any): Promise<void> => {
-    try {
-        const func = functions.httpsCallable('sendVipRecoveryEmail');
-        const res = await func({ membershipId, pixData });
-        const data = res.data as any;
-        if (!data.success) throw new Error(data.error || "Erro desconhecido.");
-    } catch (e: any) {
-        throw new Error(e.message || "Erro ao disparar e-mail de recuperação.");
-    }
 };
