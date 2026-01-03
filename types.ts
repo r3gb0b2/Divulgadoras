@@ -55,6 +55,8 @@ export interface VipMembership {
   promoterEmail: string;
   promoterWhatsapp?: string;
   promoterInstagram?: string;
+  /* Added promoterTaxId to resolve property access error in AdminClubVip.tsx */
+  promoterTaxId?: string;
   organizationId: string;
   status: 'pending' | 'confirmed' | 'rejected' | 'refunded';
   isBenefitActive: boolean; 

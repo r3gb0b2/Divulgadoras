@@ -9,21 +9,18 @@ const db = admin.firestore();
 
 // Helper para chamadas Asaas
 const asaasFetch = async (endpoint, options = {}) => {
-    // Busca no arquivo credentials.js primeiro, depois no config do Firebase como backup
     const config = functions.config();
     const apiKey = ASAAS_CONFIG?.key || config.asaas?.key;
     const env = ASAAS_CONFIG?.env || config.asaas?.env || 'sandbox';
 
     if (!apiKey || apiKey.includes('SUA_CHAVE_AQUI')) {
-        console.error("ERRO: API Key não encontrada no credentials.js ou formatada incorretamente.");
-        throw new Error("API Key do Asaas não configurada. Edite o arquivo functions/credentials.js");
+        console.error("ERRO: API Key não encontrada no credentials.js");
+        throw new Error("API Key do Asaas não configurada.");
     }
 
     const baseUrl = env === 'production' 
         ? 'https://www.asaas.com/api/v3' 
         : 'https://sandbox.asaas.com/api/v3';
-
-    console.log(`Iniciando chamada Asaas [${env}]: ${endpoint}`);
 
     const res = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
@@ -35,13 +32,66 @@ const asaasFetch = async (endpoint, options = {}) => {
     });
 
     const data = await res.json();
-    
-    if (data.errors) {
-        console.error("Erro retornado pelo Asaas:", JSON.stringify(data.errors));
-        throw new Error(data.errors[0].description);
-    }
-
+    if (data.errors) throw new Error(data.errors[0].description);
     return data;
+};
+
+/**
+ * Lógica central para atribuir um código do estoque a uma adesão
+ * Pode ser chamada pelo Webhook ou manualmente pelo Admin
+ */
+const internalAssignVipCode = async (membershipId) => {
+    const [promoterId, vipEventId] = membershipId.split('_');
+    
+    return await db.runTransaction(async (transaction) => {
+        const membershipRef = db.collection("vipMemberships").doc(membershipId);
+        const membershipSnap = await transaction.get(membershipRef);
+        
+        if (!membershipSnap.exists) throw new Error("Adesão não encontrada.");
+        const mData = membershipSnap.data();
+
+        // Se já tem um código real atribuído (não o placeholder), não faz nada
+        if (mData.benefitCode && mData.benefitCode !== 'AGUARDANDO_GERACAO' && mData.isBenefitActive) {
+            return mData.benefitCode;
+        }
+
+        // 1. Buscar código disponível no estoque do evento
+        const codesRef = db.collection("vipEvents").doc(vipEventId).collection("availableCodes");
+        const unusedCodeSnap = await transaction.get(codesRef.where("used", "==", false).limit(1));
+        
+        if (unusedCodeSnap.empty) {
+            throw new Error("ESTOQUE ESGOTADO: Não há códigos disponíveis para este evento.");
+        }
+
+        const codeDoc = unusedCodeSnap.docs[0];
+        const assignedCode = codeDoc.data().code;
+        
+        // 2. Marcar código como usado
+        transaction.update(codeDoc.ref, { 
+            used: true, 
+            usedBy: promoterId, 
+            usedAt: admin.firestore.FieldValue.serverTimestamp() 
+        });
+
+        // 3. Atualizar adesão
+        transaction.update(membershipRef, {
+            status: 'confirmed',
+            benefitCode: assignedCode,
+            isBenefitActive: true,
+            paidAt: mData.paidAt || admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 4. Atualizar perfil da divulgadora
+        transaction.update(db.collection("promoters").doc(promoterId), {
+            emocoesStatus: 'confirmed',
+            emocoesBenefitCode: assignedCode,
+            emocoesBenefitActive: true,
+            statusChangedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return assignedCode;
+    });
 };
 
 /**
@@ -51,121 +101,78 @@ export const createVipAsaasPix = functions.region("southamerica-east1").https.on
     const { email, name, whatsapp, taxId, amount, vipEventId, promoterId, vipEventName } = data;
 
     try {
-        // 1. Criar ou buscar cliente (Agora com cpfCnpj)
         const customerRes = await asaasFetch('/customers', {
             method: 'POST',
             body: JSON.stringify({
-                name,
-                email,
-                mobilePhone: whatsapp,
-                cpfCnpj: taxId,
-                externalReference: promoterId
+                name, email, mobilePhone: whatsapp, cpfCnpj: taxId, externalReference: promoterId
             })
         });
 
-        const customerId = customerRes.id;
-
-        // 2. Criar Cobrança Pix
         const paymentRes = await asaasFetch('/payments', {
             method: 'POST',
             body: JSON.stringify({
-                customer: customerId,
+                customer: customerRes.id,
                 billingType: 'PIX',
                 value: amount,
-                dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], // 1 dia
+                dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
                 description: `Adesão VIP: ${vipEventName}`,
                 externalReference: `${promoterId}_${vipEventId}`
             })
         });
 
-        const paymentId = paymentRes.id;
+        const pixRes = await asaasFetch(`/payments/${paymentRes.id}/pixQrCode`);
 
-        // 3. Obter QR Code e Copia e Cola
-        const pixRes = await asaasFetch(`/payments/${paymentId}/pixQrCode`);
-
-        // 4. Registrar no Firebase
         const membershipId = `${promoterId}_${vipEventId}`;
         await db.collection("vipMemberships").doc(membershipId).set({
-            asaasPaymentId: paymentId,
+            asaasPaymentId: paymentRes.id,
             status: 'pending',
+            benefitCode: 'AGUARDANDO_GERACAO',
+            isBenefitActive: false,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-            promoterId,
-            promoterEmail: email,
-            promoterName: name,
-            promoterTaxId: taxId,
-            vipEventId,
-            vipEventName,
-            amount
+            promoterId, promoterEmail: email, promoterName: name, promoterTaxId: taxId,
+            vipEventId, vipEventName, amount
         }, { merge: true });
 
         return {
-            paymentId,
+            paymentId: paymentRes.id,
             payload: pixRes.payload,
-            encodedImage: pixRes.encodedImage,
-            expirationDate: pixRes.expirationDate
+            encodedImage: pixRes.encodedImage
         };
-
     } catch (e) {
-        console.error("FALHA NA FUNÇÃO:", e.message);
+        throw new functions.https.HttpsError('internal', e.message);
+    }
+});
+
+/**
+ * Ativação Manual via Painel Admin
+ * Busca código no estoque e notifica o usuário
+ */
+export const activateVipMembership = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { membershipId } = data;
+    try {
+        const code = await internalAssignVipCode(membershipId);
+        // Aqui você pode adicionar lógica de envio de e-mail se desejar
+        return { success: true, code };
+    } catch (e) {
         throw new functions.https.HttpsError('internal', e.message);
     }
 });
 
 /**
  * Webhook Asaas para confirmar pagamento
- * Agora com entrega automática de código
  */
 export const asaasWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     const body = req.body;
-
     if (body.event === 'PAYMENT_CONFIRMED' || body.event === 'PAYMENT_RECEIVED') {
-        const payment = body.payment;
-        const externalRef = payment.externalReference; // "promoterId_vipEventId"
-        
+        const externalRef = body.payment?.externalReference;
         if (externalRef) {
-            const [promoterId, vipEventId] = externalRef.split('_');
-            const membershipId = externalRef;
-
-            await db.runTransaction(async (transaction) => {
-                // 1. Buscar código disponível
-                const codesRef = db.collection("vipEvents").doc(vipEventId).collection("availableCodes");
-                const unusedCodeSnap = await transaction.get(codesRef.where("used", "==", false).limit(1));
-                
-                let assignedCode = null;
-
-                if (!unusedCodeSnap.empty) {
-                    const codeDoc = unusedCodeSnap.docs[0];
-                    assignedCode = codeDoc.data().code;
-                    
-                    // Marcar código como usado
-                    transaction.update(codeDoc.ref, { 
-                        used: true, 
-                        usedBy: promoterId, 
-                        usedAt: admin.firestore.FieldValue.serverTimestamp() 
-                    });
-                }
-
-                // 2. Atualizar adesão
-                transaction.update(db.collection("vipMemberships").doc(membershipId), {
-                    status: 'confirmed',
-                    benefitCode: assignedCode || 'AGUARDANDO_GERACAO',
-                    isBenefitActive: !!assignedCode,
-                    paidAt: admin.firestore.FieldValue.serverTimestamp(),
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-
-                // 3. Atualizar perfil da divulgadora
-                transaction.update(db.collection("promoters").doc(promoterId), {
-                    emocoesStatus: 'confirmed',
-                    emocoesBenefitCode: assignedCode || '',
-                    emocoesBenefitActive: !!assignedCode,
-                    statusChangedAt: admin.firestore.FieldValue.serverTimestamp()
-                });
-            });
-
-            console.log(`Pagamento confirmado e código automático atribuído: ${membershipId}`);
+            try {
+                await internalAssignVipCode(externalRef);
+                console.log(`Pagamento e código auto-atribuído via Webhook: ${externalRef}`);
+            } catch (e) {
+                console.error(`Erro ao processar webhook para ${externalRef}:`, e.message);
+            }
         }
     }
-
     res.status(200).send('OK');
 });

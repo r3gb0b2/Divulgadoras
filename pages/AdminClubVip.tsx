@@ -264,16 +264,58 @@ const AdminClubVip: React.FC = () => {
         window.XLSX.writeFile(wb, `membros_vip_${mode === 'codes' ? 'codigos' : 'completo'}_${new Date().getTime()}.xlsx`);
     };
 
-    const handleManualNotifySingle = async (membership: VipMembership) => {
-        if (membership.status !== 'confirmed') return;
+    /**
+     * ATIVAÇÃO CENTRALIZADA (NOVA LÓGICA)
+     * Chama a Cloud Function que atribui o código do estoque automaticamente
+     */
+    const handleManualActivateSingle = async (membership: VipMembership) => {
+        if (membership.status !== 'confirmed' && membership.status !== 'pending') {
+             if(!window.confirm("Esta adesão não está marcada como PAGA. Deseja forçar a ativação com um cupom do estoque?")) return;
+        }
+        
         setIsBulkProcessing(true);
         try {
-            await updateVipMembership(membership.id, { isBenefitActive: true });
-            await updatePromoter(membership.promoterId, { emocoesBenefitActive: true });
-            const notifyActivation = httpsCallable(functions, 'notifyVipActivation');
-            await notifyActivation({ membershipId: membership.id });
-            alert("Sucesso!"); fetchData();
-        } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
+            const activateVip = httpsCallable(functions, 'activateVipMembership');
+            const res: any = await activateVip({ membershipId: membership.id });
+            
+            if (res.data.success) {
+                alert(`Sucesso! Código atribuído: ${res.data.code}`);
+                fetchData();
+            }
+        } catch (e: any) { 
+            alert("Erro ao ativar: " + e.message); 
+        } finally { 
+            setIsBulkProcessing(false); 
+        }
+    };
+
+    const handleBulkNotify = async () => {
+        const toProcess = filteredMembers.filter(m => selectedIds.has(m.id));
+        if (toProcess.length === 0) return alert("Selecione membros.");
+        if (!window.confirm(`Ativar e atribuir códigos automaticamente para ${toProcess.length} membros selecionados?`)) return;
+        
+        setIsBulkProcessing(true);
+        let successCount = 0;
+        let failCount = 0;
+        
+        try {
+            const activateVip = httpsCallable(functions, 'activateVipMembership');
+            for (const m of toProcess) {
+                try {
+                    await activateVip({ membershipId: m.id });
+                    successCount++;
+                } catch (err) {
+                    failCount++;
+                }
+            }
+            alert(`Processamento concluído!\nSucessos: ${successCount}\nFalhas: ${failCount} (Verifique se há estoque)`);
+            setSelectedIds(new Set());
+            fetchData();
+        } catch (e: any) { 
+            alert(e.message); 
+        } finally { 
+            setIsBulkProcessing(false); 
+        }
     };
 
     const handleRefundAction = async (membership: VipMembership) => {
@@ -281,7 +323,6 @@ const AdminClubVip: React.FC = () => {
         setIsProcessingId(membership.id);
         try {
             await refundVipMembership(membership.id);
-            // Também remove o status de VIP do perfil da divulgadora
             await updatePromoter(membership.promoterId, { 
                 emocoesStatus: 'rejected',
                 emocoesBenefitActive: false 
@@ -289,25 +330,6 @@ const AdminClubVip: React.FC = () => {
             alert("Adesão estornada com sucesso!");
             fetchData();
         } catch (e: any) { alert("Erro ao estornar: " + e.message); } finally { setIsProcessingId(null); }
-    };
-
-    const handleBulkNotify = async () => {
-        const toProcess = filteredMembers.filter(m => selectedIds.has(m.id) && m.status === 'confirmed');
-        if (toProcess.length === 0) return alert("Selecione membros com pagamento PAGO.");
-        if (!window.confirm(`Ativar e notificar ${toProcess.length} membros?`)) return;
-        
-        setIsBulkProcessing(true);
-        try {
-            const notifyActivation = httpsCallable(functions, 'notifyVipActivation');
-            for (const m of toProcess) {
-                await updateVipMembership(m.id, { isBenefitActive: true });
-                await updatePromoter(m.promoterId, { emocoesBenefitActive: true });
-                await notifyActivation({ membershipId: m.id });
-            }
-            alert("Processado com sucesso!");
-            setSelectedIds(new Set());
-            fetchData();
-        } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
     };
 
     const handleRecoveryEmail = async (m: VipMembership) => {
@@ -318,7 +340,6 @@ const AdminClubVip: React.FC = () => {
         
         setIsProcessingId(m.id);
         try {
-            // Seleciona template aleatório
             const template = RECOVERY_TEMPLATES[Math.floor(Math.random() * RECOVERY_TEMPLATES.length)];
             const formattedBody = template.b
                 .replace(/{{nome}}/g, m.promoterName.split(' ')[0])
@@ -328,11 +349,12 @@ const AdminClubVip: React.FC = () => {
             const createPix = httpsCallable(functions, 'createVipAsaasPix');
             const pixRes: any = await createPix({
                 vipEventId: m.vipEventId,
+                vipEventName: event.name,
                 promoterId: m.promoterId,
                 email: m.promoterEmail,
                 name: m.promoterName,
                 whatsapp: m.promoterWhatsapp || "",
-                instagram: m.promoterInstagram || "",
+                taxId: m.promoterTaxId || "",
                 amount: event.price
             });
 
@@ -347,53 +369,6 @@ const AdminClubVip: React.FC = () => {
             alert("E-mail de recuperação enviado com sucesso!");
             fetchData();
         } catch (e: any) { alert("Erro: " + e.message); } finally { setIsProcessingId(null); }
-    };
-
-    const handleBulkRecovery = async () => {
-        const toProcess = recoveryMembers.filter(m => selectedIds.has(m.id));
-        if (toProcess.length === 0) return alert("Selecione leads.");
-        if (!window.confirm(`Enviar recuperação para ${toProcess.length} leads? Cada um receberá uma mensagem de copy diferente.`)) return;
-        
-        setIsBulkProcessing(true);
-        let successCount = 0;
-        let failCount = 0;
-
-        try {
-            const createPix = httpsCallable(functions, 'createVipAsaasPix');
-            const sendRecovery = httpsCallable(functions, 'sendVipRecoveryEmail');
-            
-            for (const m of toProcess) {
-                try {
-                    const event = vipEvents.find(e => e.id === m.vipEventId);
-                    if (!event) continue;
-
-                    const template = RECOVERY_TEMPLATES[Math.floor(Math.random() * RECOVERY_TEMPLATES.length)];
-                    const formattedBody = template.b.replace(/{{nome}}/g, m.promoterName.split(' ')[0]).replace(/{{evento}}/g, event.name);
-                    const formattedSubject = template.s.replace(/{{nome}}/g, m.promoterName.split(' ')[0]).replace(/{{evento}}/g, event.name);
-
-                    const pixRes: any = await createPix({
-                        vipEventId: m.vipEventId,
-                        promoterId: m.promoterId,
-                        email: m.promoterEmail,
-                        name: m.promoterName,
-                        whatsapp: m.promoterWhatsapp || "",
-                        instagram: m.promoterInstagram || "",
-                        amount: event.price
-                    });
-
-                    await sendRecovery({
-                        membershipId: m.id,
-                        pixData: pixRes.data,
-                        customMessage: formattedBody,
-                        subject: formattedSubject
-                    });
-                    successCount++;
-                } catch (err) { failCount++; }
-            }
-            alert(`Concluído! Sucesso: ${successCount}, Falhas: ${failCount}`);
-            setSelectedIds(new Set());
-            fetchData();
-        } catch (e: any) { alert("Erro fatal."); } finally { setIsBulkProcessing(false); }
     };
 
     const handleSaveEvent = async (e: React.FormEvent) => {
@@ -475,12 +450,7 @@ const AdminClubVip: React.FC = () => {
                     <div className="flex gap-2">
                         {activeTab === 'members' && (
                             <button onClick={handleBulkNotify} disabled={isBulkProcessing} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-colors">
-                                {isBulkProcessing ? 'PROCESSANDO...' : 'ATIVAR E NOTIFICAR'}
-                            </button>
-                        )}
-                        {activeTab === 'recovery' && (
-                            <button onClick={handleBulkRecovery} disabled={isBulkProcessing} className="px-4 py-2 bg-white text-primary font-black text-[10px] uppercase rounded-xl hover:bg-gray-100 transition-colors">
-                                {isBulkProcessing ? 'ENVIANDO...' : 'RECUPERAR (E-MAILS ALEATÓRIOS)'}
+                                {isBulkProcessing ? 'PROCESSANDO...' : 'ATIVAR E ATRIBUIR CÓDIGOS'}
                             </button>
                         )}
                         <button onClick={() => setSelectedIds(new Set())} className="px-4 py-2 bg-black/20 text-white font-black text-[10px] uppercase rounded-xl">Cancelar</button>
@@ -560,7 +530,13 @@ const AdminClubVip: React.FC = () => {
                                                         <p className="text-[10px] text-gray-500 font-mono lowercase truncate">{m.promoterEmail}</p>
                                                         <p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p>
                                                     </td>
-                                                    <td className="px-6 py-5 text-center">{m.benefitCode ? <span onClick={() => handleCopy(m.benefitCode || '')} className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10">{m.benefitCode}</span> : <span className="text-gray-600 text-[10px] font-bold">---</span>}</td>
+                                                    <td className="px-6 py-5 text-center">
+                                                        {m.benefitCode && m.benefitCode !== 'AGUARDANDO_GERACAO' ? (
+                                                            <span onClick={() => handleCopy(m.benefitCode || '')} className="px-3 py-1 bg-dark text-primary border border-primary/30 rounded-lg font-mono text-xs font-black tracking-widest cursor-pointer hover:bg-primary/10">{m.benefitCode}</span>
+                                                        ) : (
+                                                            <span className="text-gray-600 text-[10px] font-bold">---</span>
+                                                        )}
+                                                    </td>
                                                     <td className="px-6 py-5 text-center">{m.isBenefitActive ? <span className="px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 border border-green-800 text-[8px] font-black uppercase tracking-widest">ATIVADO</span> : <span className="px-2 py-0.5 rounded-full bg-gray-800 text-gray-500 border border-gray-700 text-[8px] font-black uppercase tracking-widest">AGUARDANDO</span>}</td>
                                                     <td className="px-6 py-5 text-center">
                                                         <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : m.status === 'refunded' ? 'bg-red-900/40 text-red-400 border-red-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>
@@ -578,9 +554,9 @@ const AdminClubVip: React.FC = () => {
                                                                     <LinkIcon className="w-4 h-4" />
                                                                 </button>
                                                             )}
-                                                            {m.status === 'confirmed' && (
+                                                            {m.status !== 'refunded' && (
                                                                 <>
-                                                                    <button onClick={() => handleManualNotifySingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">{m.isBenefitActive ? 'REENVIAR' : 'ATIVAR'}</button>
+                                                                    <button onClick={() => handleManualActivateSingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">{m.isBenefitActive ? 'REENVIAR' : 'ATIVAR'}</button>
                                                                     <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30" title="Estornar">
                                                                         <UndoIcon className="w-4 h-4" />
                                                                     </button>

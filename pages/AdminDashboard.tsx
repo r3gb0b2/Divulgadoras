@@ -165,16 +165,18 @@ const AdminDashboard: React.FC = () => {
                         </Link>
                     )}
 
-                    <Link to="/admin/settings" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-gray-700 transition-all duration-300 border border-white/5 hover:border-primary shadow-xl">
-                        <div className="flex items-center">
-                            <div className="p-3 rounded-2xl bg-gray-600/20 text-gray-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                <CogIcon className="w-8 h-8" />
+                    {!isRecoveryAdmin && (
+                        <Link to="/admin/settings" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-gray-700 transition-all duration-300 border border-white/5 hover:border-primary shadow-xl">
+                            <div className="flex items-center">
+                                <div className="p-3 rounded-2xl bg-gray-600/20 text-gray-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                    <CogIcon className="w-8 h-8" />
+                                </div>
+                                <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Ajustes</h2>
                             </div>
-                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Ajustes</h2>
-                        </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-white line-clamp-2">Configurações de equipe, eventos, estados e dados da organização.</p>
-                        <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
-                    </Link>
+                            <p className="mt-4 text-gray-400 text-sm group-hover:text-white line-clamp-2">Configurações de equipe, eventos, estados e dados da organização.</p>
+                            <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
+                        </Link>
+                    )}
                 </div>
             </div>
         </div>
