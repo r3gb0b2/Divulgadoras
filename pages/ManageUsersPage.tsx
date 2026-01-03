@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AdminUserData, AdminRole, Campaign, Organization } from '../types';
@@ -221,7 +222,14 @@ const ManageUsersPage: React.FC = () => {
         }).join('; ');
     }
 
-    const roleNames: { [key in AdminRole]: string } = { superadmin: 'Super Admin', admin: 'Admin', approver: 'Aprovador', viewer: 'Visualizador', poster: 'Criador de Posts' };
+    const roleNames: { [key in AdminRole]: string } = { 
+        superadmin: 'Super Admin', 
+        admin: 'Admin', 
+        approver: 'Aprovador', 
+        viewer: 'Visualizador', 
+        poster: 'Criador de Posts',
+        recovery: 'Recuperador'
+    };
 
     return (
         <div>
@@ -257,6 +265,7 @@ const ManageUsersPage: React.FC = () => {
                                 <option value="viewer">Visualizador</option>
                                 <option value="approver">Aprovador</option>
                                 <option value="poster">Criador de Posts</option>
+                                <option value="recovery">Recuperador</option>
                                 <option value="admin">Admin</option>
                                 {isSuperAdmin && <option value="superadmin">Super Admin</option>}
                             </select>
