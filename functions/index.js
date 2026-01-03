@@ -8,10 +8,21 @@ const db = admin.firestore();
 // Helper para chamadas Asaas
 const asaasFetch = async (endpoint, options = {}) => {
     const config = functions.config();
-    const apiKey = config.asaas?.key; // Setar via: firebase functions:config:set asaas.key="SUA_CHAVE"
-    const baseUrl = config.asaas?.env === 'production' 
+    
+    // Tenta pegar de functions:config ou de variáveis de ambiente
+    const apiKey = config.asaas?.key || process.env.ASAAS_KEY;
+    const env = config.asaas?.env || process.env.ASAAS_ENV || 'sandbox';
+
+    if (!apiKey) {
+        console.error("ERRO DE CONFIGURAÇÃO: Chave asaas.key não encontrada.");
+        throw new Error("API Key do Asaas não configurada. Certifique-se de ter executado o deploy após o comando config:set.");
+    }
+
+    const baseUrl = env === 'production' 
         ? 'https://www.asaas.com/api/v3' 
         : 'https://sandbox.asaas.com/api/v3';
+
+    console.log(`Fazendo requisição para Asaas (${env}): ${endpoint}`);
 
     const res = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
@@ -21,7 +32,15 @@ const asaasFetch = async (endpoint, options = {}) => {
             ...options.headers
         }
     });
-    return res.json();
+
+    const data = await res.json();
+    
+    if (data.errors) {
+        console.error("Erro retornado pelo Asaas:", JSON.stringify(data.errors));
+        throw new Error(data.errors[0].description);
+    }
+
+    return data;
 };
 
 /**
@@ -43,7 +62,6 @@ export const createVipAsaasPix = functions.region("southamerica-east1").https.on
         });
 
         const customerId = customerRes.id;
-        if (!customerId) throw new Error("Falha ao registrar cliente no Asaas: " + JSON.stringify(customerRes));
 
         // 2. Criar Cobrança Pix
         const paymentRes = await asaasFetch('/payments', {
@@ -59,7 +77,6 @@ export const createVipAsaasPix = functions.region("southamerica-east1").https.on
         });
 
         const paymentId = paymentRes.id;
-        if (!paymentId) throw new Error("Falha ao gerar cobrança: " + JSON.stringify(paymentRes));
 
         // 3. Obter QR Code e Copia e Cola
         const pixRes = await asaasFetch(`/payments/${paymentId}/pixQrCode`);
@@ -69,18 +86,24 @@ export const createVipAsaasPix = functions.region("southamerica-east1").https.on
         await db.collection("vipMemberships").doc(membershipId).set({
             asaasPaymentId: paymentId,
             status: 'pending',
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            promoterId,
+            promoterEmail: email,
+            promoterName: name,
+            vipEventId,
+            vipEventName,
+            amount
         }, { merge: true });
 
         return {
             paymentId,
-            payload: pixRes.payload, // Código copia e cola
-            encodedImage: pixRes.encodedImage, // QR Code em Base64
+            payload: pixRes.payload,
+            encodedImage: pixRes.encodedImage,
             expirationDate: pixRes.expirationDate
         };
 
     } catch (e) {
-        console.error("ERRO ASAAS:", e);
+        console.error("FALHA NA INTEGRAÇÃO:", e.message);
         throw new functions.https.HttpsError('internal', e.message);
     }
 });
@@ -90,13 +113,10 @@ export const createVipAsaasPix = functions.region("southamerica-east1").https.on
  */
 export const asaasWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     const body = req.body;
-    
-    // Validar token de segurança do webhook (opcional mas recomendado)
-    // const authToken = req.headers['asaas-access-token'];
 
     if (body.event === 'PAYMENT_CONFIRMED' || body.event === 'PAYMENT_RECEIVED') {
         const payment = body.payment;
-        const externalRef = payment.externalReference; // "promoterId_eventId"
+        const externalRef = payment.externalReference;
         
         if (externalRef) {
             const [promoterId, vipEventId] = externalRef.split('_');
@@ -116,8 +136,9 @@ export const asaasWebhook = functions.region("southamerica-east1").https.onReque
             });
 
             await batch.commit();
+            console.log(`Pagamento confirmado para: ${membershipId}`);
         }
     }
 
-    res.json({ received: true });
+    res.status(200).send('OK');
 });
