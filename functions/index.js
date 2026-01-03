@@ -1,39 +1,29 @@
 
 import admin from "firebase-admin";
 import functions from "firebase-functions";
-// Tentamos importar o arquivo de credenciais normal
-let localCredentials = null;
-try {
-    const module = await import("./credentials.js");
-    localCredentials = module.ASAAS_CONFIG;
-} catch (e) {
-    console.log("Arquivo credentials.js não encontrado, usando variáveis de ambiente.");
-}
+// Importação estática (corrige o erro ERR_REQUIRE_ASYNC_MODULE)
+import { ASAAS_CONFIG } from "./credentials.js";
 
 admin.initializeApp();
 const db = admin.firestore();
 
 // Helper para chamadas Asaas
 const asaasFetch = async (endpoint, options = {}) => {
+    // Busca no arquivo credentials.js primeiro, depois no config do Firebase como backup
     const config = functions.config();
-    
-    // Ordem de prioridade:
-    // 1. Arquivo credentials.js (Novo)
-    // 2. Variáveis de ambiente (process.env)
-    // 3. Configuração do Firebase (functions:config)
-    const apiKey = localCredentials?.key || process.env.ASAAS_KEY || config.asaas?.key;
-    const env = localCredentials?.env || process.env.ASAAS_ENV || config.asaas?.env || 'sandbox';
+    const apiKey = ASAAS_CONFIG?.key || config.asaas?.key;
+    const env = ASAAS_CONFIG?.env || config.asaas?.env || 'sandbox';
 
-    if (!apiKey) {
-        console.error("DIAGNÓSTICO: API Key não encontrada em nenhum dos métodos (credentials.js, process.env ou functions.config)");
-        throw new Error("API Key do Asaas não configurada. Verifique o arquivo functions/credentials.js");
+    if (!apiKey || apiKey.includes('SUA_CHAVE_AQUI')) {
+        console.error("ERRO: API Key não encontrada no credentials.js ou formatada incorretamente.");
+        throw new Error("API Key do Asaas não configurada. Edite o arquivo functions/credentials.js");
     }
 
     const baseUrl = env === 'production' 
         ? 'https://www.asaas.com/api/v3' 
         : 'https://sandbox.asaas.com/api/v3';
 
-    console.log(`Chamada Asaas [${env}]: ${endpoint}`);
+    console.log(`Iniciando chamada Asaas [${env}]: ${endpoint}`);
 
     const res = await fetch(`${baseUrl}${endpoint}`, {
         ...options,
@@ -47,7 +37,7 @@ const asaasFetch = async (endpoint, options = {}) => {
     const data = await res.json();
     
     if (data.errors) {
-        console.error("Erro Asaas:", JSON.stringify(data.errors));
+        console.error("Erro retornado pelo Asaas:", JSON.stringify(data.errors));
         throw new Error(data.errors[0].description);
     }
 
@@ -81,7 +71,7 @@ export const createVipAsaasPix = functions.region("southamerica-east1").https.on
                 customer: customerId,
                 billingType: 'PIX',
                 value: amount,
-                dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+                dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0], // 1 dia
                 description: `Adesão VIP: ${vipEventName}`,
                 externalReference: `${promoterId}_${vipEventId}`
             })
@@ -89,7 +79,7 @@ export const createVipAsaasPix = functions.region("southamerica-east1").https.on
 
         const paymentId = paymentRes.id;
 
-        // 3. Obter QR Code
+        // 3. Obter QR Code e Copia e Cola
         const pixRes = await asaasFetch(`/payments/${paymentId}/pixQrCode`);
 
         // 4. Registrar no Firebase
@@ -114,7 +104,7 @@ export const createVipAsaasPix = functions.region("southamerica-east1").https.on
         };
 
     } catch (e) {
-        console.error("ERRO CRÍTICO NA FUNÇÃO:", e.message);
+        console.error("FALHA NA FUNÇÃO:", e.message);
         throw new functions.https.HttpsError('internal', e.message);
     }
 });
@@ -147,7 +137,7 @@ export const asaasWebhook = functions.region("southamerica-east1").https.onReque
             });
 
             await batch.commit();
-            console.log(`Pagamento confirmado: ${membershipId}`);
+            console.log(`Pagamento confirmado para: ${membershipId}`);
         }
     }
 
