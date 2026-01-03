@@ -113,33 +113,57 @@ export const createVipAsaasPix = functions.region("southamerica-east1").https.on
 
 /**
  * Webhook Asaas para confirmar pagamento
+ * Agora com entrega automática de código
  */
 export const asaasWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     const body = req.body;
 
     if (body.event === 'PAYMENT_CONFIRMED' || body.event === 'PAYMENT_RECEIVED') {
         const payment = body.payment;
-        const externalRef = payment.externalReference;
+        const externalRef = payment.externalReference; // "promoterId_vipEventId"
         
         if (externalRef) {
             const [promoterId, vipEventId] = externalRef.split('_');
             const membershipId = externalRef;
 
-            const batch = db.batch();
-            
-            batch.update(db.collection("vipMemberships").doc(membershipId), {
-                status: 'confirmed',
-                paidAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            await db.runTransaction(async (transaction) => {
+                // 1. Buscar código disponível
+                const codesRef = db.collection("vipEvents").doc(vipEventId).collection("availableCodes");
+                const unusedCodeSnap = await transaction.get(codesRef.where("used", "==", false).limit(1));
+                
+                let assignedCode = null;
+
+                if (!unusedCodeSnap.empty) {
+                    const codeDoc = unusedCodeSnap.docs[0];
+                    assignedCode = codeDoc.data().code;
+                    
+                    // Marcar código como usado
+                    transaction.update(codeDoc.ref, { 
+                        used: true, 
+                        usedBy: promoterId, 
+                        usedAt: admin.firestore.FieldValue.serverTimestamp() 
+                    });
+                }
+
+                // 2. Atualizar adesão
+                transaction.update(db.collection("vipMemberships").doc(membershipId), {
+                    status: 'confirmed',
+                    benefitCode: assignedCode || 'AGUARDANDO_GERACAO',
+                    isBenefitActive: !!assignedCode,
+                    paidAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                // 3. Atualizar perfil da divulgadora
+                transaction.update(db.collection("promoters").doc(promoterId), {
+                    emocoesStatus: 'confirmed',
+                    emocoesBenefitCode: assignedCode || '',
+                    emocoesBenefitActive: !!assignedCode,
+                    statusChangedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
             });
 
-            batch.update(db.collection("promoters").doc(promoterId), {
-                emocoesStatus: 'confirmed',
-                statusChangedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            await batch.commit();
-            console.log(`Pagamento confirmado para: ${membershipId}`);
+            console.log(`Pagamento confirmado e código automático atribuído: ${membershipId}`);
         }
     }
 

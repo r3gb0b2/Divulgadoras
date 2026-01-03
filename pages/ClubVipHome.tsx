@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { findPromotersByEmail, createVipPromoter } from '../services/promoterService';
-import { getActiveVipEvents, checkVipMembership, createInitialVipMembership } from '../services/vipService';
+// FIX: Removed non-existent import createInitialVipMembership
+import { getActiveVipEvents, checkVipMembership } from '../services/vipService';
 import { Promoter, VipEvent } from '../types';
 import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';

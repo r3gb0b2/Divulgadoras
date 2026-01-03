@@ -18,12 +18,35 @@ export const getAllVipEvents = async (): Promise<VipEvent[]> => {
 };
 
 /**
- * Inicia o fluxo de pagamento via Stripe Pix (Embedded)
+ * Adiciona códigos em lote para um evento
  */
-export const createVipStripePixPayment = async (data: any): Promise<{ qr_code: string }> => {
-    const createPix = httpsCallable(functions, 'createVipStripePix');
-    const res: any = await createPix(data);
-    return res.data;
+export const addVipCodes = async (eventId: string, codes: string[]) => {
+    const batch = firestore.batch();
+    const codesRef = firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes');
+    
+    codes.forEach(code => {
+        const trimmed = code.trim();
+        if (trimmed) {
+            const docRef = codesRef.doc(trimmed); // O ID é o próprio código para evitar duplicidade
+            batch.set(docRef, {
+                code: trimmed,
+                used: false,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+        }
+    });
+    
+    return batch.commit();
+};
+
+/**
+ * Conta quantos códigos ainda restam no estoque
+ */
+export const getVipCodeStats = async (eventId: string) => {
+    const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes')
+        .where('used', '==', false)
+        .get();
+    return snap.size;
 };
 
 export const createVipEvent = async (data: Omit<VipEvent, 'id' | 'createdAt'>): Promise<string> => {
@@ -51,17 +74,6 @@ export const checkVipMembership = async (email: string, vipEventId: string): Pro
     
     if (snap.empty) return null;
     return { id: snap.docs[0].id, ...snap.docs[0].data() } as VipMembership;
-};
-
-export const createInitialVipMembership = async (data: Partial<VipMembership>) => {
-    const docId = `${data.promoterId}_${data.vipEventId}`;
-    return firestore.collection(COLLECTION_MEMBERSHIPS).doc(docId).set({
-        ...data,
-        status: 'pending',
-        isBenefitActive: false,
-        submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
 };
 
 export const getAllVipMemberships = async (vipEventId?: string) => {

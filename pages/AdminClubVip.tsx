@@ -9,7 +9,9 @@ import {
     createVipEvent, 
     updateVipEvent, 
     deleteVipEvent,
-    refundVipMembership
+    refundVipMembership,
+    addVipCodes,
+    getVipCodeStats
 } from '../services/vipService';
 import { updatePromoter, getAllPromoters } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
@@ -20,9 +22,77 @@ import {
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
     TicketIcon, RefreshIcon, ClockIcon, UserIcon,
     BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon,
-    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon, LinkIcon, UndoIcon
+    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon, LinkIcon, UndoIcon, CogIcon
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
+
+// Modal para gerenciar códigos em lote
+const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: VipEvent, onSaved: () => void }> = ({ isOpen, onClose, event, onSaved }) => {
+    const [codesText, setCodesText] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+    const [currentStock, setCurrentStock] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (isOpen && event.id) {
+            getVipCodeStats(event.id).then(setCurrentStock);
+        }
+    }, [isOpen, event.id]);
+
+    if (!isOpen) return null;
+
+    const handleSave = async () => {
+        const codes = codesText.split('\n').map(c => c.trim()).filter(c => c.length > 0);
+        if (codes.length === 0) return alert("Insira pelo menos um código.");
+        
+        setIsSaving(true);
+        try {
+            await addVipCodes(event.id, codes);
+            alert(`${codes.length} códigos adicionados ao estoque!`);
+            setCodesText('');
+            onSaved();
+            onClose();
+        } catch (e: any) {
+            alert("Erro ao salvar: " + e.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[150] flex items-center justify-center p-6" onClick={onClose}>
+            <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-xl font-black text-white uppercase tracking-tighter">Estoque de Códigos</h2>
+                    <button onClick={onClose} className="p-2 text-gray-500 hover:text-white"><XIcon className="w-6 h-6"/></button>
+                </div>
+                
+                <div className="mb-6 p-4 bg-dark/50 rounded-2xl border border-white/5 flex justify-between items-center">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Estoque Atual:</p>
+                    <p className="text-2xl font-black text-primary">{currentStock !== null ? currentStock : '...'}</p>
+                </div>
+
+                <div className="space-y-4">
+                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Colar novos códigos (Um por linha)</label>
+                    <textarea 
+                        rows={8}
+                        value={codesText}
+                        onChange={e => setCodesText(e.target.value)}
+                        placeholder="CÓDIGO1&#10;CÓDIGO2&#10;CÓDIGO3..."
+                        className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:border-primary"
+                    />
+                    <p className="text-[9px] text-gray-600 font-bold uppercase">Códigos duplicados serão ignorados automaticamente.</p>
+                </div>
+
+                <div className="mt-8 flex gap-3">
+                    <button onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-xs">Cancelar</button>
+                    <button onClick={handleSave} disabled={isSaving} className="flex-2 py-4 bg-green-600 text-white font-black rounded-2xl uppercase text-xs shadow-lg shadow-green-900/20 disabled:opacity-50">
+                        {isSaving ? 'SALVANDO...' : 'ADICIONAR AO ESTOQUE'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const RECOVERY_TEMPLATES = [
     { s: "Seu VIP está te esperando! 🎟️", b: "Olá {{nome}}, vimos que você iniciou sua adesão ao {{evento}}, mas o pagamento não foi concluído. Seu código de cortesia já está reservado, basta finalizar o Pix abaixo!" },
@@ -72,7 +142,9 @@ const AdminClubVip: React.FC = () => {
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Partial<VipEvent> | null>(null);
+    const [eventForCodes, setEventForCodes] = useState<VipEvent | null>(null);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -253,7 +325,7 @@ const AdminClubVip: React.FC = () => {
                 .replace(/{{evento}}/g, event.name);
             const formattedSubject = template.s.replace(/{{nome}}/g, m.promoterName.split(' ')[0]).replace(/{{evento}}/g, event.name);
 
-            const createPix = httpsCallable(functions, 'createVipPixPayment');
+            const createPix = httpsCallable(functions, 'createVipAsaasPix');
             const pixRes: any = await createPix({
                 vipEventId: m.vipEventId,
                 promoterId: m.promoterId,
@@ -287,7 +359,7 @@ const AdminClubVip: React.FC = () => {
         let failCount = 0;
 
         try {
-            const createPix = httpsCallable(functions, 'createVipPixPayment');
+            const createPix = httpsCallable(functions, 'createVipAsaasPix');
             const sendRecovery = httpsCallable(functions, 'sendVipRecoveryEmail');
             
             for (const m of toProcess) {
@@ -353,6 +425,11 @@ const AdminClubVip: React.FC = () => {
             await deleteVipEvent(id);
             fetchData();
         } catch (e: any) { alert(e.message); }
+    };
+
+    const handleOpenCodes = (ev: VipEvent) => {
+        setEventForCodes(ev);
+        setIsCodesModalOpen(true);
     };
 
     return (
@@ -610,7 +687,10 @@ const AdminClubVip: React.FC = () => {
                                             <p key={i} className="text-xs text-gray-300 flex items-center gap-2"><CheckCircleIcon className="w-3 h-3 text-primary" /> {b}</p>
                                         ))}
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex flex-wrap gap-2">
+                                        <button onClick={() => handleOpenCodes(ev)} className="flex-1 py-3 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-900/50">
+                                            <CogIcon className="w-4 h-4" /> CÓDIGOS
+                                        </button>
                                         <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="flex-1 py-3 bg-gray-800 text-white font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 transition-all border border-white/5">Editar</button>
                                         <button onClick={() => handleDeleteEvent(ev.id)} className="p-3 bg-red-900/30 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-900/50"><TrashIcon className="w-4 h-4"/></button>
                                     </div>
@@ -679,6 +759,16 @@ const AdminClubVip: React.FC = () => {
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* MODAL DE CÓDIGOS EM LOTE */}
+            {isCodesModalOpen && eventForCodes && (
+                <ManageCodesModal 
+                    isOpen={isCodesModalOpen} 
+                    onClose={() => setIsCodesModalOpen(false)} 
+                    event={eventForCodes} 
+                    onSaved={fetchData} 
+                />
             )}
         </div>
     );
