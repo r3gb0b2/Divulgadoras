@@ -48,16 +48,17 @@ const asaasFetch = async (endpoint, options = {}) => {
  * Gera um Pix via Asaas
  */
 export const createVipAsaasPix = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { email, name, whatsapp, amount, vipEventId, promoterId, vipEventName } = data;
+    const { email, name, whatsapp, taxId, amount, vipEventId, promoterId, vipEventName } = data;
 
     try {
-        // 1. Criar ou buscar cliente
+        // 1. Criar ou buscar cliente (Agora com cpfCnpj)
         const customerRes = await asaasFetch('/customers', {
             method: 'POST',
             body: JSON.stringify({
                 name,
                 email,
                 mobilePhone: whatsapp,
+                cpfCnpj: taxId,
                 externalReference: promoterId
             })
         });
@@ -91,6 +92,7 @@ export const createVipAsaasPix = functions.region("southamerica-east1").https.on
             promoterId,
             promoterEmail: email,
             promoterName: name,
+            promoterTaxId: taxId,
             vipEventId,
             vipEventName,
             amount

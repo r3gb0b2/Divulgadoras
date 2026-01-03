@@ -25,6 +25,7 @@ const ClubVipHome: React.FC = () => {
     const [name, setName] = useState('');
     const [whatsapp, setWhatsapp] = useState('');
     const [instagram, setInstagram] = useState('');
+    const [taxId, setTaxId] = useState(''); // Novo estado para CPF/CNPJ
     
     const [promoter, setPromoter] = useState<Promoter | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -91,7 +92,7 @@ const ClubVipHome: React.FC = () => {
 
     const handleProceedToAsaas = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name.trim() || !whatsapp.trim() || !instagram.trim() || !selectedEvent) return;
+        if (!name.trim() || !whatsapp.trim() || !instagram.trim() || !taxId.trim() || !selectedEvent) return;
         
         setIsLoading(true);
         setError(null);
@@ -99,6 +100,11 @@ const ClubVipHome: React.FC = () => {
             let pId = promoter?.id;
             const sanitizedWhatsapp = whatsapp.replace(/\D/g, '');
             const sanitizedInstagram = instagram.replace('@', '').trim();
+            const sanitizedTaxId = taxId.replace(/\D/g, '');
+
+            if (sanitizedTaxId.length !== 11 && sanitizedTaxId.length !== 14) {
+                throw new Error("CPF ou CNPJ inválido.");
+            }
 
             if (!pId) {
                 pId = await createVipPromoter({ name, email, whatsapp: sanitizedWhatsapp });
@@ -119,6 +125,7 @@ const ClubVipHome: React.FC = () => {
                 email: email.toLowerCase().trim(),
                 name: name.trim(),
                 whatsapp: sanitizedWhatsapp,
+                taxId: sanitizedTaxId, // Enviando o documento
                 amount: selectedEvent.price
             });
             
@@ -221,8 +228,18 @@ const ClubVipHome: React.FC = () => {
                         <form onSubmit={handleProceedToAsaas} className="space-y-5 animate-fadeIn">
                             <h2 className="text-2xl font-black text-white text-center uppercase mb-6">Confirme seus Dados</h2>
                             <div className="relative"><UserIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" /><input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Nome Completo" /></div>
-                            <div className="relative"><PhoneIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" /><input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="WhatsApp" /></div>
-                            <div className="relative"><InstagramIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" /><input type="text" required value={instagram} onChange={e => setInstagram(e.target.value)} className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Instagram" /></div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="relative"><PhoneIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" /><input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="WhatsApp" /></div>
+                                <div className="relative"><InstagramIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" /><input type="text" required value={instagram} onChange={e => setInstagram(e.target.value)} className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Instagram" /></div>
+                            </div>
+
+                            <div className="relative">
+                                <CreditCardIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" />
+                                <input type="tel" required value={taxId} onChange={e => setTaxId(e.target.value)} className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="CPF ou CNPJ do Titular" />
+                                <p className="text-[10px] text-gray-500 font-bold uppercase mt-2 ml-4">Exigência do Banco Central para emissão do Pix</p>
+                            </div>
+
                             <button type="submit" disabled={isLoading} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] shadow-2xl shadow-green-900/30 uppercase text-sm tracking-widest mt-4">
                                 {isLoading ? 'GERANDO PIX...' : 'GERAR QR CODE PIX'}
                             </button>
