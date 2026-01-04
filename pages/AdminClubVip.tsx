@@ -22,7 +22,7 @@ import {
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, 
     TicketIcon, RefreshIcon, ClockIcon, UserIcon,
     BuildingOfficeIcon, PlusIcon, TrashIcon, PencilIcon, AlertTriangleIcon,
-    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon, LinkIcon, UndoIcon, CogIcon
+    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon, LinkIcon, UndoIcon, CogIcon, MapPinIcon
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
 
@@ -107,7 +107,7 @@ const RECOVERY_TEMPLATES = [
     { s: "VIP: Sua participação confirmada? 🎫", b: "Oi {{nome}}! Ainda não identificamos seu pagamento para o {{evento}}. Queremos muito você na nossa equipe, finalize sua adesão no link abaixo:" },
     { s: "Última chamada para o VIP! 📣", b: "Olá {{nome}}, esta é a última oportunidade de garantir o valor promocional para o {{evento}}. Geramos um novo Pix final para você." },
     { s: "Problemas com o pagamento? 🛠️", b: "Olá {{nome}}, notamos que seu Pix não foi concluído. Se precisar de suporte, responda este e-mail. Caso queira tentar novamente, aqui está o código:" },
-    { s: "Seu lugar está garantido! (Por enquanto) ✋", b: "Ei {{nome}}, seguramos sua vaga VIP no {{evento}} por mais um pouco. But corra, o sistema libera para a fila de espera em breve!" },
+    { s: "Seu lugar está garantido! (Por enquanto) ✋", b: "Ei {{nome}}, seguramos sua vaga VIP no {{evento}} por mais um pouco. Mas corra, o sistema libera para a fila de espera em breve!" },
     { s: "O {{evento}} te espera! ✨", b: "Olá {{nome}}! Não perca a chance de viver essa experiência com benefícios exclusivos. Finalize sua adesão agora com o Pix abaixo:" },
     { s: "Aviso de pendência: {{evento}} 📁", b: "Prezada {{nome}}, consta em nosso sistema uma adesão VIP pendente de pagamento. Para ativar seus benefícios, utilize o QR Code atualizado abaixo." },
     { s: "Copy VIP exclusiva para você 💎", b: "Olá {{nome}}, como você é da nossa base, liberamos este acesso especial para o {{evento}}. O Pix abaixo garante seu lugar imediatamente." },
@@ -355,7 +355,6 @@ const AdminClubVip: React.FC = () => {
             const formattedSubject = template.s.replace(/{{nome}}/g, m.promoterName.split(' ')[0]).replace(/{{evento}}/g, event.name);
 
             const createPix = httpsCallable(functions, 'createVipAsaasPix');
-            /* FIX: Corrected function call to use 'createPix' instead of undefined 'createAsaasPix' */
             const pixRes: any = await createPix({
                 vipEventId: m.vipEventId,
                 vipEventName: event.name,
@@ -394,7 +393,9 @@ const AdminClubVip: React.FC = () => {
                 benefits: editingEvent.benefits || [],
                 externalSlug: editingEvent.externalSlug || '',
                 pixelId: editingEvent.pixelId || '',
-                pixKey: editingEvent.pixKey || ''
+                pixKey: editingEvent.pixKey || '',
+                eventTime: editingEvent.eventTime || '',
+                eventLocation: editingEvent.eventLocation || ''
             };
             if (editingEvent.id) await updateVipEvent(editingEvent.id, data);
             else await createVipEvent(data as any);
@@ -726,6 +727,17 @@ const AdminClubVip: React.FC = () => {
                                 <div className="space-y-1">
                                     <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Preço (R$)</label>
                                     <input type="number" step="0.01" value={editingEvent?.price || ''} onChange={e => setEditingEvent({...editingEvent!, price: Number(e.target.value)})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" required />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Horário (Ex: 22h às 05h)</label>
+                                    <input type="text" value={editingEvent?.eventTime || ''} onChange={e => setEditingEvent({...editingEvent!, eventTime: e.target.value})} placeholder="Ex: 22h às 05h" className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Local (Nome ou Endereço)</label>
+                                    <input type="text" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} placeholder="Ex: Marina Park" className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
                                 </div>
                             </div>
 

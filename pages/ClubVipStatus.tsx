@@ -48,7 +48,16 @@ const ClubVipStatus: React.FC = () => {
                 }
                 setMemberships([]);
             } else {
-                setMemberships(userMemb);
+                // Denormaliza dados do evento para facilitar o ingresso
+                const enrichedMemb = userMemb.map(m => {
+                    const ev = allEvents.find(e => e.id === m.vipEventId);
+                    return {
+                        ...m,
+                        eventTime: ev?.eventTime,
+                        eventLocation: ev?.eventLocation
+                    };
+                });
+                setMemberships(enrichedMemb);
                 localStorage.setItem('saved_promoter_email', trimmed);
             }
         } catch (err: any) {
@@ -79,7 +88,7 @@ const ClubVipStatus: React.FC = () => {
         
         setIsDownloadingPDF(membership.id);
         
-        // Aguarda um pequeno delay para garantir que o componente invisível renderizou o QR Code
+        // Aguarda renderização do elemento invisível
         setTimeout(async () => {
             const element = document.getElementById(`ticket-content-${membership.id}`);
             if (!element) {
@@ -89,15 +98,22 @@ const ClubVipStatus: React.FC = () => {
 
             const options = {
                 margin: 0,
-                filename: `INGRESSO_VIP_${membership.vipEventName.replace(/\s+/g, '_')}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
+                filename: `CREDENTIAL_VIP_${membership.vipEventName.replace(/\s+/g, '_')}.pdf`,
+                image: { type: 'jpeg', quality: 1.0 },
                 html2canvas: { 
-                    scale: 2, 
+                    scale: 3, 
                     useCORS: true, 
                     backgroundColor: '#000000',
-                    logging: false 
+                    logging: false,
+                    letterRendering: true
                 },
-                jsPDF: { unit: 'mm', format: [100, 150], orientation: 'portrait' }
+                jsPDF: { 
+                    unit: 'mm', 
+                    format: [110, 180], // Formato customizado para caber perfeitamente em 1 página
+                    orientation: 'portrait',
+                    compress: true
+                },
+                pagebreak: { mode: 'avoid-all' } // Evita quebras de página
             };
 
             try {
@@ -109,14 +125,14 @@ const ClubVipStatus: React.FC = () => {
             } finally {
                 setIsDownloadingPDF(null);
             }
-        }, 800);
+        }, 1000);
     };
 
     return (
         <div className="max-w-xl mx-auto py-10 px-4">
             
             {/* CONTAINER PARA EXPORTAÇÃO (INVISÍVEL) */}
-            <div className="fixed left-[-9999px] top-0 pointer-events-none opacity-0" aria-hidden="true">
+            <div className="fixed left-[-9999px] top-0 pointer-events-none opacity-0" aria-hidden="true" style={{ width: '380px' }}>
                 {memberships.map(m => (
                     <div key={`export-${m.id}`}>
                         <VipTicket membership={m} isExporting={true} />

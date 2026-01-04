@@ -37,12 +37,15 @@ export interface VipEvent {
   name: string;
   price: number;
   isActive: boolean;
-  isSoldOut?: boolean; // Novo campo
+  isSoldOut?: boolean;
   description: string;
   benefits: string[];
   pixKey: string;
   externalSlug: string; 
   pixelId?: string;
+  /* Novos campos para o ingresso */
+  eventTime?: string;
+  eventLocation?: string;
   createdAt: Timestamp | FieldValue;
 }
 
@@ -55,7 +58,6 @@ export interface VipMembership {
   promoterEmail: string;
   promoterWhatsapp?: string;
   promoterInstagram?: string;
-  /* Added promoterTaxId to resolve property access error in AdminClubVip.tsx */
   promoterTaxId?: string;
   organizationId: string;
   status: 'pending' | 'confirmed' | 'rejected' | 'refunded';
@@ -66,6 +68,9 @@ export interface VipMembership {
   submittedAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
   refundedAt?: Timestamp | FieldValue;
+  /* Dados do evento denormalizados para o ingresso */
+  eventTime?: string;
+  eventLocation?: string;
 }
 
 export interface Promoter {
