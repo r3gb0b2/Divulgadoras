@@ -8,10 +8,8 @@
     
     <script>
       // Redirecionamento Cirúrgico para o Club VIP
-      // Isso permite que o link equipecerta.app/clubvip (limpo) funcione no Instagram
       (function() {
         var path = window.location.pathname;
-        // Se o caminho for /clubvip ou /clubvip/ e não houver hash
         if ((path === '/clubvip' || path === '/clubvip/') && !window.location.hash) {
           window.location.replace('/#/clubvip');
         }
@@ -67,7 +65,6 @@
         overscroll-behavior-y: none;
       }
       
-      /* Previne o crash ao segurar imagens/vídeos no iOS/Android */
       img, video {
         -webkit-touch-callout: none !important;
         -webkit-user-select: none !important;
@@ -87,8 +84,9 @@
     </style>
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-    <!-- Carregamento robusto do SheetJS (Excel) -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- html2pdf para geração de ingressos em PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

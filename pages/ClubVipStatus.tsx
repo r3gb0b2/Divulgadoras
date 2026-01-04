@@ -6,8 +6,8 @@ import { findPromotersByEmail } from '../services/promoterService';
 import { VipMembership, VipEvent } from '../types';
 import { 
     ArrowLeftIcon, SearchIcon, SparklesIcon, CheckCircleIcon, 
-    ClockIcon, DocumentDuplicateIcon, LogoutIcon, TicketIcon, 
-    AlertTriangleIcon, DownloadIcon, EyeIcon, RefreshIcon 
+    ClockIcon, LogoutIcon, TicketIcon, 
+    AlertTriangleIcon, DownloadIcon, RefreshIcon 
 } from '../components/Icons';
 import VipTicket from '../components/VipTicket';
 
@@ -20,12 +20,10 @@ const ClubVipStatus: React.FC = () => {
     const [searched, setSearched] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
-    // Estado para exibir o ingresso
     const [showTicketFor, setShowTicketFor] = useState<VipMembership | null>(null);
-    const [isDownloadingQR, setIsDownloadingQR] = useState<string | null>(null);
+    const [isDownloadingPDF, setIsDownloadingPDF] = useState<string | null>(null);
     
-    // Ref para gerador de QR code oculto (download direto)
-    const hiddenQrRef = useRef<HTMLDivElement>(null);
+    const exportRef = useRef<HTMLDivElement>(null);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -76,44 +74,55 @@ const ClubVipStatus: React.FC = () => {
         setError(null);
     };
 
-    const handleDownloadQR = (membership: VipMembership) => {
-        if (!membership.benefitCode || !hiddenQrRef.current) return;
+    const handleDownloadPDF = async (membership: VipMembership) => {
+        if (isDownloadingPDF) return;
         
-        setIsDownloadingQR(membership.id);
+        setIsDownloadingPDF(membership.id);
         
-        // Limpa e gera o QR Code no elemento oculto
-        hiddenQrRef.current.innerHTML = '';
-        const qrcode = new (window as any).QRCode(hiddenQrRef.current, {
-            text: membership.benefitCode,
-            width: 512,
-            height: 512,
-            colorDark: "#000000",
-            colorLight: "#ffffff",
-            correctLevel: (window as any).QRCode.CorrectLevel.H
-        });
-
-        // Aguarda renderização para capturar imagem
-        setTimeout(() => {
-            const img = hiddenQrRef.current?.querySelector('img');
-            const canvas = hiddenQrRef.current?.querySelector('canvas');
-            const dataUrl = img?.src || canvas?.toDataURL("image/png");
-
-            if (dataUrl) {
-                const link = document.createElement('a');
-                link.href = dataUrl;
-                link.download = `QR_VIP_${membership.vipEventName.replace(/\s+/g, '_')}.png`;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
+        // Aguarda um pequeno delay para garantir que o componente invisível renderizou o QR Code
+        setTimeout(async () => {
+            const element = document.getElementById(`ticket-content-${membership.id}`);
+            if (!element) {
+                setIsDownloadingPDF(null);
+                return;
             }
-            setIsDownloadingQR(null);
-        }, 500);
+
+            const options = {
+                margin: 0,
+                filename: `INGRESSO_VIP_${membership.vipEventName.replace(/\s+/g, '_')}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { 
+                    scale: 2, 
+                    useCORS: true, 
+                    backgroundColor: '#000000',
+                    logging: false 
+                },
+                jsPDF: { unit: 'mm', format: [100, 150], orientation: 'portrait' }
+            };
+
+            try {
+                const html2pdf = (window as any).html2pdf;
+                await html2pdf().set(options).from(element).save();
+            } catch (err) {
+                console.error("Erro ao gerar PDF:", err);
+                alert("Ocorreu um erro ao gerar o PDF. Tente tirar um print da tela.");
+            } finally {
+                setIsDownloadingPDF(null);
+            }
+        }, 800);
     };
 
     return (
         <div className="max-w-xl mx-auto py-10 px-4">
-            {/* Elemento oculto para geração de QR Code para download */}
-            <div ref={hiddenQrRef} className="hidden"></div>
+            
+            {/* CONTAINER PARA EXPORTAÇÃO (INVISÍVEL) */}
+            <div className="fixed left-[-9999px] top-0 pointer-events-none opacity-0" aria-hidden="true">
+                {memberships.map(m => (
+                    <div key={`export-${m.id}`}>
+                        <VipTicket membership={m} isExporting={true} />
+                    </div>
+                ))}
+            </div>
 
             <div className="flex justify-between items-center mb-8">
                 <button onClick={() => navigate('/clubvip')} className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
@@ -197,22 +206,21 @@ const ClubVipStatus: React.FC = () => {
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                                                 <button 
                                                     onClick={() => setShowTicketFor(m)}
-                                                    className="w-full py-4 bg-primary text-white font-black rounded-2xl text-center shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95"
+                                                    className="w-full py-4 bg-gray-800 text-white font-black rounded-2xl text-center border border-white/5 shadow-lg hover:bg-gray-700 transition-all uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95"
                                                 >
-                                                    <TicketIcon className="w-4 h-4" /> VER INGRESSO
+                                                    <TicketIcon className="w-4 h-4" /> VISUALIZAR
                                                 </button>
                                                 <button 
-                                                    onClick={() => handleDownloadQR(m)}
-                                                    disabled={isDownloadingQR === m.id}
-                                                    className="w-full py-4 bg-white/10 text-white font-black rounded-2xl text-center border border-white/10 hover:bg-white/20 transition-all uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95"
+                                                    onClick={() => handleDownloadPDF(m)}
+                                                    disabled={isDownloadingPDF === m.id}
+                                                    className="w-full py-4 bg-primary text-white font-black rounded-2xl text-center shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
                                                 >
-                                                    {/* FIX: RefreshIcon was missing from imports, now added above */}
-                                                    {isDownloadingQR === m.id ? (
+                                                    {isDownloadingPDF === m.id ? (
                                                         <RefreshIcon className="w-4 h-4 animate-spin" />
                                                     ) : (
                                                         <DownloadIcon className="w-4 h-4" />
                                                     )}
-                                                    BAIXAR QR CODE
+                                                    BAIXAR PDF
                                                 </button>
                                             </div>
                                         )}
