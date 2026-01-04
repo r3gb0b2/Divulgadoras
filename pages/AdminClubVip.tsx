@@ -11,7 +11,8 @@ import {
     deleteVipEvent,
     refundVipMembership,
     addVipCodes,
-    getVipCodeStats
+    getVipCodeStats,
+    getVipEventCodes
 } from '../services/vipService';
 import { updatePromoter, getAllPromoters } from '../services/promoterService';
 import { getOrganizations } from '../services/organizationService';
@@ -27,7 +28,7 @@ import {
 import firebase from 'firebase/compat/app';
 
 // Modal para gerenciar códigos em lote
-const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: VipEvent, onSaved: () => void }> = ({ isOpen, onClose, event, onSaved }) => {
+const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: VipEvent, onSaved: () => void, onDownloadStock: (event: VipEvent) => void }> = ({ isOpen, onClose, event, onSaved, onDownloadStock }) => {
     const [codesText, setCodesText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [currentStock, setCurrentStock] = useState<number | null>(null);
@@ -62,13 +63,24 @@ const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: 
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[150] flex items-center justify-center p-6" onClick={onClose}>
             <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-black text-white uppercase tracking-tighter">Estoque de Códigos</h2>
+                    <div>
+                        <h2 className="text-xl font-black text-white uppercase tracking-tighter">Estoque de Códigos</h2>
+                        <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">{event.name}</p>
+                    </div>
                     <button onClick={onClose} className="p-2 text-gray-500 hover:text-white"><XIcon className="w-6 h-6"/></button>
                 </div>
                 
                 <div className="mb-6 p-4 bg-dark/50 rounded-2xl border border-white/5 flex justify-between items-center">
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Estoque Disponível:</p>
-                    <p className="text-2xl font-black text-primary">{currentStock !== null ? currentStock : '...'}</p>
+                    <div>
+                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Estoque Disponível:</p>
+                        <p className="text-2xl font-black text-primary">{currentStock !== null ? currentStock : '...'}</p>
+                    </div>
+                    <button 
+                        onClick={() => onDownloadStock(event)}
+                        className="px-4 py-2 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-900/50"
+                    >
+                        <DownloadIcon className="w-4 h-4" /> Baixar Completo
+                    </button>
                 </div>
 
                 <div className="space-y-4">
@@ -274,6 +286,31 @@ const AdminClubVip: React.FC = () => {
         const wb = window.XLSX.utils.book_new();
         window.XLSX.utils.book_append_sheet(wb, ws, "Membros VIP");
         window.XLSX.writeFile(wb, `membros_vip_${mode === 'codes' ? 'codigos' : 'completo'}_${new Date().getTime()}.xlsx`);
+    };
+
+    const handleDownloadEventStock = async (event: VipEvent) => {
+        setIsBulkProcessing(true);
+        try {
+            const codes = await getVipEventCodes(event.id);
+            if (codes.length === 0) return alert("Nenhum código cadastrado para este evento.");
+
+            const jsonData = codes.map((c: any) => ({
+                'CÓDIGO': c.code,
+                'STATUS': c.used ? 'USADO' : 'DISPONÍVEL',
+                'USADO POR (ID)': c.usedBy || '-',
+                'DATA USO': c.usedAt ? c.usedAt.toDate().toLocaleString('pt-BR') : '-',
+                'CRIADO EM': c.createdAt ? c.createdAt.toDate().toLocaleString('pt-BR') : '-'
+            }));
+
+            const ws = window.XLSX.utils.json_to_sheet(jsonData);
+            const wb = window.XLSX.utils.book_new();
+            window.XLSX.utils.book_append_sheet(wb, ws, "Estoque de Códigos");
+            window.XLSX.writeFile(wb, `estoque_vip_${event.name.replace(/\s+/g, '_').toLowerCase()}.xlsx`);
+        } catch (e: any) {
+            alert("Erro ao baixar estoque: " + e.message);
+        } finally {
+            setIsBulkProcessing(false);
+        }
     };
 
     const handleManualActivateSingle = async (membership: VipMembership) => {
@@ -784,6 +821,7 @@ const AdminClubVip: React.FC = () => {
                     onClose={() => setIsCodesModalOpen(false)} 
                     event={eventForCodes} 
                     onSaved={fetchData} 
+                    onDownloadStock={handleDownloadEventStock}
                 />
             )}
         </div>

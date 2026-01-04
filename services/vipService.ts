@@ -40,6 +40,16 @@ export const addVipCodes = async (eventId: string, codes: string[]) => {
 };
 
 /**
+ * Busca todos os códigos do estoque (usados e disponíveis)
+ */
+export const getVipEventCodes = async (eventId: string) => {
+    const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes')
+        .orderBy('createdAt', 'desc')
+        .get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+/**
  * Conta quantos códigos ainda restam no estoque
  */
 export const getVipCodeStats = async (eventId: string) => {

@@ -85,7 +85,7 @@ const ClubVipStatus: React.FC = () => {
         
         setIsDownloadingPDF(membership.id);
         
-        // Aguarda renderização do elemento invisível e do QR Code
+        // Pequena pausa para garantir que o QR Code e o SVG da logo renderizaram
         setTimeout(async () => {
             const element = document.getElementById(`ticket-content-${membership.id}`);
             if (!element) {
@@ -93,22 +93,23 @@ const ClubVipStatus: React.FC = () => {
                 return;
             }
 
-            // O pulo do gato: jsPDF com unit 'px' e dimensões batendo com o elemento
             const options = {
                 margin: 0,
-                filename: `CREDENTIAL_${membership.promoterName.split(' ')[0].toUpperCase()}_${membership.vipEventName.replace(/\s+/g, '_')}.pdf`,
+                filename: `VIP_${membership.promoterName.split(' ')[0].toUpperCase()}_${membership.vipEventName.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 1.0 },
                 html2canvas: { 
-                    scale: 2, 
+                    scale: 3, // Alta resolução
                     useCORS: true, 
-                    backgroundColor: '#0a0a0c', // Fundo escuro real do ticket
+                    backgroundColor: '#000000',
                     logging: false,
                     scrollY: 0,
-                    scrollX: 0
+                    scrollX: 0,
+                    windowWidth: 400,
+                    windowHeight: 700
                 },
                 jsPDF: { 
                     unit: 'px', 
-                    format: [400, 700], // TAMANHO EXATO DO ELEMENTO DEFINIDO NO VIPTICKET
+                    format: [400, 700], // Mesmas dimensões do elemento no VipTicket
                     orientation: 'portrait',
                     hotfixes: ['px_scaling']
                 }
@@ -129,10 +130,10 @@ const ClubVipStatus: React.FC = () => {
     return (
         <div className="max-w-xl mx-auto py-10 px-4">
             
-            {/* CONTAINER PARA EXPORTAÇÃO (INVISÍVEL MAS RENDERIZADO) */}
-            <div className="fixed left-[-2000px] top-0 pointer-events-none" aria-hidden="true">
+            {/* CONTAINER PARA EXPORTAÇÃO (FORA DA TELA) */}
+            <div className="fixed left-[-2000px] top-0 pointer-events-none" aria-hidden="true" style={{ width: '400px' }}>
                 {memberships.map(m => (
-                    <div key={`export-${m.id}`} style={{ width: '400px', height: '700px' }}>
+                    <div key={`export-${m.id}`}>
                         <VipTicket membership={m} isExporting={true} />
                     </div>
                 ))}
