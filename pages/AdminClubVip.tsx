@@ -67,7 +67,7 @@ const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: 
                 </div>
                 
                 <div className="mb-6 p-4 bg-dark/50 rounded-2xl border border-white/5 flex justify-between items-center">
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Estoque Atual:</p>
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Estoque Disponível:</p>
                     <p className="text-2xl font-black text-primary">{currentStock !== null ? currentStock : '...'}</p>
                 </div>
 
@@ -107,7 +107,7 @@ const RECOVERY_TEMPLATES = [
     { s: "VIP: Sua participação confirmada? 🎫", b: "Oi {{nome}}! Ainda não identificamos seu pagamento para o {{evento}}. Queremos muito você na nossa equipe, finalize sua adesão no link abaixo:" },
     { s: "Última chamada para o VIP! 📣", b: "Olá {{nome}}, esta é a última oportunidade de garantir o valor promocional para o {{evento}}. Geramos um novo Pix final para você." },
     { s: "Problemas com o pagamento? 🛠️", b: "Olá {{nome}}, notamos que seu Pix não foi concluído. Se precisar de suporte, responda este e-mail. Caso queira tentar novamente, aqui está o código:" },
-    { s: "Seu lugar está garantido! (Por enquanto) ✋", b: "Ei {{nome}}, seguramos sua vaga VIP no {{evento}} por mais um pouco. Mas corra, o sistema libera para a fila de espera em breve!" },
+    { s: "Seu lugar está garantido! (Por enquanto) ✋", b: "Ei {{nome}}, seguramos sua vaga VIP no {{evento}} por mais um pouco. But corra, o sistema libera para a fila de espera em breve!" },
     { s: "O {{evento}} te espera! ✨", b: "Olá {{nome}}! Não perca a chance de viver essa experiência com benefícios exclusivos. Finalize sua adesão agora com o Pix abaixo:" },
     { s: "Aviso de pendência: {{evento}} 📁", b: "Prezada {{nome}}, consta em nosso sistema uma adesão VIP pendente de pagamento. Para ativar seus benefícios, utilize o QR Code atualizado abaixo." },
     { s: "Copy VIP exclusiva para você 💎", b: "Olá {{nome}}, como você é da nossa base, liberamos este acesso especial para o {{evento}}. O Pix abaixo garante seu lugar imediatamente." },
@@ -130,6 +130,7 @@ const AdminClubVip: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'members' | 'events' | 'recovery'>('members');
     const [memberships, setMemberships] = useState<VipMembership[]>([]);
     const [vipEvents, setVipEvents] = useState<VipEvent[]>([]);
+    const [eventStats, setEventStats] = useState<Record<string, { total: number, available: number }>>({});
     const [organizations, setOrganizations] = useState<Record<string, string>>({});
     
     const [isLoading, setIsLoading] = useState(true);
@@ -165,6 +166,17 @@ const AdminClubVip: React.FC = () => {
             setOrganizations(orgMap);
             setVipEvents(eventsData);
             setMemberships(membersData);
+
+            // Carrega estatísticas de códigos para todos os eventos
+            const stats: Record<string, { total: number, available: number }> = {};
+            for (const ev of eventsData) {
+                const available = await getVipCodeStats(ev.id);
+                // Busca total (usados + não usados)
+                const totalSnap = await firestore.collection('vipEvents').doc(ev.id).collection('availableCodes').get();
+                stats[ev.id] = { total: totalSnap.size, available };
+            }
+            setEventStats(stats);
+
         } catch (e) {
             console.error("Erro ao carregar dados VIP:", e);
         } finally {
@@ -264,10 +276,6 @@ const AdminClubVip: React.FC = () => {
         window.XLSX.writeFile(wb, `membros_vip_${mode === 'codes' ? 'codigos' : 'completo'}_${new Date().getTime()}.xlsx`);
     };
 
-    /**
-     * ATIVAÇÃO CENTRALIZADA (NOVA LÓGICA)
-     * Chama a Cloud Function que atribui o código do estoque automaticamente
-     */
     const handleManualActivateSingle = async (membership: VipMembership) => {
         if (membership.status !== 'confirmed' && membership.status !== 'pending') {
              if(!window.confirm("Esta adesão não está marcada como PAGA. Deseja forçar a ativação com um cupom do estoque?")) return;
@@ -347,6 +355,7 @@ const AdminClubVip: React.FC = () => {
             const formattedSubject = template.s.replace(/{{nome}}/g, m.promoterName.split(' ')[0]).replace(/{{evento}}/g, event.name);
 
             const createPix = httpsCallable(functions, 'createVipAsaasPix');
+            /* FIX: Corrected function call to use 'createPix' instead of undefined 'createAsaasPix' */
             const pixRes: any = await createPix({
                 vipEventId: m.vipEventId,
                 vipEventName: event.name,
@@ -645,33 +654,52 @@ const AdminClubVip: React.FC = () => {
                     {/* ABA EVENTOS */}
                     {activeTab === 'events' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {vipEvents.map(ev => (
-                                <div key={ev.id} className="bg-dark/40 p-6 rounded-3xl border border-white/5 flex flex-col group hover:border-primary transition-all">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className="min-w-0 flex-grow">
-                                            <h3 className="text-xl font-black text-white uppercase truncate">{ev.name}</h3>
-                                            <p className="text-primary font-black text-lg mt-1">R$ {ev.price.toFixed(2)}</p>
+                            {vipEvents.map(ev => {
+                                const stats = eventStats[ev.id] || { total: 0, available: 0 };
+                                const issued = stats.total - stats.available;
+                                
+                                return (
+                                    <div key={ev.id} className="bg-dark/40 p-6 rounded-3xl border border-white/5 flex flex-col group hover:border-primary transition-all">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div className="min-w-0 flex-grow">
+                                                <h3 className="text-xl font-black text-white uppercase truncate">{ev.name}</h3>
+                                                <p className="text-primary font-black text-lg mt-1">R$ {ev.price.toFixed(2)}</p>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-2">
+                                                <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
+                                                {(ev.isSoldOut || (stats.total > 0 && stats.available === 0)) && (
+                                                    <span className="px-2 py-0.5 bg-red-600 text-white text-[8px] font-black rounded uppercase tracking-widest shadow-lg animate-pulse">ESGOTADO</span>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="flex flex-col items-end gap-2">
-                                            <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
-                                            {ev.isSoldOut && <span className="px-2 py-0.5 bg-red-600 text-white text-[8px] font-black rounded uppercase">ESGOTADO</span>}
+
+                                        <div className="grid grid-cols-2 gap-3 mb-6">
+                                            <div className="bg-white/5 p-3 rounded-2xl border border-white/5 text-center">
+                                                <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Cód. Totais</p>
+                                                <p className="text-xl font-black text-white">{stats.total}</p>
+                                            </div>
+                                            <div className="bg-white/5 p-3 rounded-2xl border border-white/5 text-center">
+                                                <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Emitidos</p>
+                                                <p className="text-xl font-black text-primary">{issued}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex-grow space-y-2 mb-6">
+                                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Benefícios:</p>
+                                            {ev.benefits.map((b, i) => (
+                                                <p key={i} className="text-xs text-gray-300 flex items-center gap-2"><CheckCircleIcon className="w-3 h-3 text-primary" /> {b}</p>
+                                            ))}
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <button onClick={() => handleOpenCodes(ev)} className="flex-1 py-3 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-900/50">
+                                                <CogIcon className="w-4 h-4" /> CÓDIGOS
+                                            </button>
+                                            <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="flex-1 py-3 bg-gray-800 text-white font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 transition-all border border-white/5">Editar</button>
+                                            <button onClick={() => handleDeleteEvent(ev.id)} className="p-3 bg-red-900/30 text-red-400 rounded-xl border border-red-500/20 hover:bg-red-900/50 transition-all shadow-lg"><TrashIcon className="w-4 h-4"/></button>
                                         </div>
                                     </div>
-                                    <div className="flex-grow space-y-2 mb-6">
-                                        <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">Benefícios:</p>
-                                        {ev.benefits.map((b, i) => (
-                                            <p key={i} className="text-xs text-gray-300 flex items-center gap-2"><CheckCircleIcon className="w-3 h-3 text-primary" /> {b}</p>
-                                        ))}
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        <button onClick={() => handleOpenCodes(ev)} className="flex-1 py-3 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-900/50">
-                                            <CogIcon className="w-4 h-4" /> CÓDIGOS
-                                        </button>
-                                        <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="flex-1 py-3 bg-gray-800 text-white font-black text-[10px] uppercase rounded-xl hover:bg-gray-700 transition-all border border-white/5">Editar</button>
-                                        <button onClick={() => handleDeleteEvent(ev.id)} className="p-3 bg-red-900/30 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-900/50"><TrashIcon className="w-4 h-4"/></button>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                             {vipEvents.length === 0 && (
                                 <div className="col-span-full py-20 text-center text-gray-500 font-black uppercase text-xs tracking-widest">Nenhuma oferta VIP cadastrada.</div>
                             )}

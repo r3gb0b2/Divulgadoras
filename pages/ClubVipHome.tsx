@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { findPromotersByEmail, createVipPromoter } from '../services/promoterService';
-// FIX: Removed non-existent import createInitialVipMembership
 import { getActiveVipEvents, checkVipMembership } from '../services/vipService';
 import { Promoter, VipEvent } from '../types';
 import { firestore, functions } from '../firebase/config';
@@ -26,7 +25,7 @@ const ClubVipHome: React.FC = () => {
     const [name, setName] = useState('');
     const [whatsapp, setWhatsapp] = useState('');
     const [instagram, setInstagram] = useState('');
-    const [taxId, setTaxId] = useState(''); // Novo estado para CPF/CNPJ
+    const [taxId, setTaxId] = useState(''); 
     
     const [promoter, setPromoter] = useState<Promoter | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -43,7 +42,6 @@ const ClubVipHome: React.FC = () => {
         });
     }, []);
 
-    // Observer para detecção automática de pagamento via Firestore
     useEffect(() => {
         if (step === 'payment' && promoter && selectedEvent) {
             const membershipId = `${promoter.id}_${selectedEvent.id}`;
@@ -126,7 +124,7 @@ const ClubVipHome: React.FC = () => {
                 email: email.toLowerCase().trim(),
                 name: name.trim(),
                 whatsapp: sanitizedWhatsapp,
-                taxId: sanitizedTaxId, // Enviando o documento
+                taxId: sanitizedTaxId,
                 amount: selectedEvent.price
             });
             
@@ -179,11 +177,18 @@ const ClubVipHome: React.FC = () => {
                                         key={ev.id} 
                                         disabled={ev.isSoldOut}
                                         onClick={() => { setSelectedEvent(ev); setStep('benefits'); }} 
-                                        className="bg-dark/60 p-8 rounded-[2rem] border border-white/5 hover:border-primary flex justify-between items-center group shadow-lg transition-all"
+                                        className={`bg-dark/60 p-8 rounded-[2rem] border border-white/5 flex justify-between items-center group shadow-lg transition-all ${ev.isSoldOut ? 'opacity-50 grayscale cursor-not-allowed' : 'hover:border-primary'}`}
                                     >
                                         <div className="text-left">
-                                            <p className="font-black text-xl text-white uppercase group-hover:text-primary transition-colors">{ev.name}</p>
-                                            <p className="text-[10px] text-gray-500 font-black uppercase mt-1">Adesão Online</p>
+                                            <div className="flex items-center gap-3">
+                                                <p className="font-black text-xl text-white uppercase group-hover:text-primary transition-colors">{ev.name}</p>
+                                                {ev.isSoldOut && (
+                                                    <span className="px-2 py-0.5 bg-red-600 text-white text-[9px] font-black rounded uppercase tracking-widest">ESGOTADO</span>
+                                                )}
+                                            </div>
+                                            <p className="text-[10px] text-gray-500 font-black uppercase mt-1">
+                                                {ev.isSoldOut ? 'Aguarde novas vagas' : 'Adesão Online'}
+                                            </p>
                                         </div>
                                         <p className="text-primary font-black text-2xl">R$ {ev.price.toFixed(2).replace('.', ',')}</p>
                                     </button>

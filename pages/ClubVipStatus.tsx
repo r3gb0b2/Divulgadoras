@@ -4,7 +4,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getAllVipMemberships, getActiveVipEvents } from '../services/vipService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { VipMembership, VipEvent, Promoter } from '../types';
-import { ArrowLeftIcon, SearchIcon, SparklesIcon, CheckCircleIcon, ClockIcon, DocumentDuplicateIcon, ExternalLinkIcon, LogoutIcon, TicketIcon } from '../components/Icons';
+/* Added AlertTriangleIcon to imports to fix "Cannot find name 'AlertTriangleIcon'" error */
+import { ArrowLeftIcon, SearchIcon, SparklesIcon, CheckCircleIcon, ClockIcon, DocumentDuplicateIcon, ExternalLinkIcon, LogoutIcon, TicketIcon, AlertTriangleIcon } from '../components/Icons';
 import VipTicket from '../components/VipTicket';
 
 const ClubVipStatus: React.FC = () => {
@@ -70,6 +71,7 @@ const ClubVipStatus: React.FC = () => {
         setMemberships([]);
         setSearched(false);
         setEmail('');
+        setError(null);
     };
 
     const handleCopy = (text: string) => {
@@ -83,7 +85,7 @@ const ClubVipStatus: React.FC = () => {
                 <button onClick={() => navigate('/clubvip')} className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
                     <ArrowLeftIcon className="w-4 h-4" /> <span>Voltar ao Clube</span>
                 </button>
-                {searched && memberships.length > 0 && (
+                {searched && (
                     <button onClick={handleLogout} className="flex items-center gap-2 text-[10px] font-black text-red-500/70 uppercase tracking-widest hover:text-red-400 transition-colors">
                         <LogoutIcon className="w-4 h-4" /> TROCAR CONTA
                     </button>
@@ -114,6 +116,13 @@ const ClubVipStatus: React.FC = () => {
                         <h1 className="text-3xl font-black text-white uppercase tracking-tighter">MEUS BENEFÍCIOS</h1>
                         <p className="text-[10px] text-gray-500 font-mono mt-2 bg-gray-800/50 inline-block px-3 py-1 rounded-full uppercase">{email}</p>
                     </div>
+
+                    {error && (
+                        <div className="bg-red-900/20 border border-red-500/50 p-8 rounded-[2rem] text-center space-y-4">
+                            <AlertTriangleIcon className="w-12 h-12 text-red-500 mx-auto" />
+                            <p className="text-white font-bold">{error}</p>
+                        </div>
+                    )}
 
                     <div className="space-y-6">
                         {memberships.map(m => (
