@@ -4,7 +4,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getAllVipMemberships, getActiveVipEvents } from '../services/vipService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { VipMembership, VipEvent, Promoter } from '../types';
-import { ArrowLeftIcon, SearchIcon, SparklesIcon, CheckCircleIcon, ClockIcon, DocumentDuplicateIcon, ExternalLinkIcon, LogoutIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, SparklesIcon, CheckCircleIcon, ClockIcon, DocumentDuplicateIcon, ExternalLinkIcon, LogoutIcon, TicketIcon } from '../components/Icons';
+import VipTicket from '../components/VipTicket';
 
 const ClubVipStatus: React.FC = () => {
     const navigate = useNavigate();
@@ -15,6 +16,9 @@ const ClubVipStatus: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [searched, setSearched] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    
+    // Estado para exibir o ingresso
+    const [showTicketFor, setShowTicketFor] = useState<VipMembership | null>(null);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -112,76 +116,74 @@ const ClubVipStatus: React.FC = () => {
                     </div>
 
                     <div className="space-y-6">
-                        {memberships.map(m => {
-                            const event = vipEventsMap[m.vipEventId];
-                            const directLink = event?.externalSlug && m.benefitCode 
-                                ? `https://stingressos.com.br/eventos/${event.externalSlug}?cupom=${m.benefitCode}`
-                                : null;
-
-                            return (
-                                <div key={m.id} className="bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-8 border border-white/5 shadow-2xl">
-                                    <div className="flex items-center gap-4 mb-6">
-                                        <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center text-primary shadow-lg border border-primary/20">
-                                            <SparklesIcon className="w-8 h-8" />
-                                        </div>
-                                        <div className="text-left">
-                                            <h2 className="text-xl font-black text-white uppercase tracking-tight leading-none">{m.vipEventName}</h2>
-                                            <p className="text-[8px] text-primary font-black uppercase tracking-[0.3em] mt-2">Membro Clube VIP</p>
-                                        </div>
+                        {memberships.map(m => (
+                            <div key={m.id} className="bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-8 border border-white/5 shadow-2xl">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center text-primary shadow-lg border border-primary/20">
+                                        <SparklesIcon className="w-8 h-8" />
                                     </div>
-
-                                    <div className="space-y-6">
-                                        {m.isBenefitActive ? (
-                                            <div className="p-5 bg-green-500/10 rounded-2xl border border-green-500/30 text-center">
-                                                <CheckCircleIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                                                <p className="text-green-400 font-black uppercase tracking-widest text-xs">INGRESSO PROMOCIONAL DISPONÍVEL! 🚀</p>
-                                            </div>
-                                        ) : (
-                                            <div className="p-5 bg-orange-500/10 rounded-2xl border border-orange-500/30 text-center">
-                                                <ClockIcon className="w-8 h-8 text-orange-500 mx-auto mb-2" />
-                                                <p className="text-white font-black uppercase tracking-widest text-xs">LIBERAÇÃO EM ANDAMENTO</p>
-                                                <p className="text-[10px] text-orange-300 uppercase font-bold mt-2 leading-tight">
-                                                    Pagamento identificado com sucesso!<br/>
-                                                    O processo de geração e envio do seu código exclusivo é manual e <b>pode levar algumas horas</b> para chegar no seu e-mail.
-                                                </p>
-                                            </div>
-                                        )}
-
-                                        <div className="bg-dark/60 p-6 rounded-3xl border border-white/5 space-y-4">
-                                            <div>
-                                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center mb-2">Código Promocional</p>
-                                                <div 
-                                                    onClick={() => m.isBenefitActive && m.benefitCode && handleCopy(m.benefitCode)}
-                                                    className={`p-4 bg-black/40 rounded-2xl border border-primary/20 text-center select-all flex items-center justify-between transition-all group/code ${m.isBenefitActive ? 'cursor-pointer hover:bg-black/60' : ''}`}
-                                                    title={m.isBenefitActive ? "Clique para copiar" : ""}
-                                                >
-                                                    <p className="text-2xl font-black text-primary font-mono group-hover/code:scale-105 transition-transform">{m.isBenefitActive ? (m.benefitCode || '---') : '******'}</p>
-                                                    {m.isBenefitActive && (
-                                                        <div className="p-2 text-gray-600 hover:text-white">
-                                                            <DocumentDuplicateIcon className="w-5 h-5"/>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                {m.isBenefitActive && <p className="text-[8px] text-gray-500 uppercase font-black text-center mt-2 tracking-widest">Clique no código para copiar</p>}
-                                            </div>
-
-                                            {m.isBenefitActive && directLink && (
-                                                <a 
-                                                    href={directLink} 
-                                                    target="_blank" 
-                                                    rel="noreferrer"
-                                                    className="block w-full py-5 bg-green-600 text-white font-black rounded-2xl text-center shadow-lg shadow-green-900/20 hover:bg-green-500 transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2"
-                                                >
-                                                    <ExternalLinkIcon className="w-5 h-5" /> RESGATAR AGORA
-                                                </a>
-                                            )}
-                                        </div>
+                                    <div className="text-left">
+                                        <h2 className="text-xl font-black text-white uppercase tracking-tight leading-none">{m.vipEventName}</h2>
+                                        <p className="text-[8px] text-primary font-black uppercase tracking-[0.3em] mt-2">Membro Clube VIP</p>
                                     </div>
                                 </div>
-                            );
-                        })}
+
+                                <div className="space-y-6">
+                                    {m.isBenefitActive ? (
+                                        <div className="p-5 bg-green-500/10 rounded-2xl border border-green-500/30 text-center">
+                                            <CheckCircleIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                                            <p className="text-green-400 font-black uppercase tracking-widest text-xs">INGRESSO DISPONÍVEL! 🚀</p>
+                                        </div>
+                                    ) : (
+                                        <div className="p-5 bg-orange-500/10 rounded-2xl border border-orange-500/30 text-center">
+                                            <ClockIcon className="w-8 h-8 text-orange-500 mx-auto mb-2" />
+                                            <p className="text-white font-black uppercase tracking-widest text-xs">LIBERAÇÃO EM ANDAMENTO</p>
+                                            <p className="text-[10px] text-orange-300 uppercase font-bold mt-2 leading-tight">
+                                                Seu pagamento foi confirmado!<br/>
+                                                O seu ingresso oficial será gerado automaticamente em poucos minutos.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="bg-dark/60 p-6 rounded-3xl border border-white/5 space-y-4">
+                                        <div>
+                                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center mb-2">Código do Ingresso</p>
+                                            <div 
+                                                onClick={() => m.isBenefitActive && m.benefitCode && handleCopy(m.benefitCode)}
+                                                className={`p-4 bg-black/40 rounded-2xl border border-primary/20 text-center select-all flex items-center justify-between transition-all group/code ${m.isBenefitActive ? 'cursor-pointer hover:bg-black/60' : ''}`}
+                                                title={m.isBenefitActive ? "Clique para copiar" : ""}
+                                            >
+                                                <p className="text-2xl font-black text-primary font-mono group-hover/code:scale-105 transition-transform">{m.isBenefitActive ? (m.benefitCode || '---') : '******'}</p>
+                                                {m.isBenefitActive && (
+                                                    <div className="p-2 text-gray-600 hover:text-white">
+                                                        <DocumentDuplicateIcon className="w-5 h-5"/>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {m.isBenefitActive && (
+                                            <button 
+                                                onClick={() => setShowTicketFor(m)}
+                                                className="w-full py-5 bg-primary text-white font-black rounded-2xl text-center shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2 active:scale-95"
+                                            >
+                                                <TicketIcon className="w-5 h-5" /> GERAR INGRESSO DIGITAL
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
+            )}
+
+            {/* MODAL DO INGRESSO */}
+            {showTicketFor && (
+                <VipTicket 
+                    membership={showTicketFor} 
+                    onClose={() => setShowTicketFor(null)} 
+                />
             )}
         </div>
     );
