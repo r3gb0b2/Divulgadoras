@@ -54,8 +54,8 @@ const VipPublicDashboard: React.FC = () => {
         const pending = filteredMemberships.filter(m => m.status === 'pending');
         const refunded = filteredMemberships.filter(m => m.status === 'refunded');
         
-        // Valor da taxa fixa por transação (Ajustado para 2.00)
-        const FIXED_FEE = 2.00;
+        // Valor da taxa fixa por transação (Ajustado para 4.00 conforme solicitado)
+        const FIXED_FEE = 4.00;
 
         // Faturamento Bruto (Valor real que entrou)
         const totalRevenueGross = confirmed.reduce((acc, curr) => {
@@ -63,7 +63,7 @@ const VipPublicDashboard: React.FC = () => {
             return acc + (event?.price || 0);
         }, 0);
 
-        // Total de Taxas (2.00 por venda ativa)
+        // Total de Taxas (4.00 por venda ativa)
         const totalFees = confirmed.length * FIXED_FEE;
 
         // Faturamento Líquido (O que sobra após a taxa do PagSeguro/MercadoPago)
@@ -160,7 +160,7 @@ const VipPublicDashboard: React.FC = () => {
                         <h2 className="text-4xl font-black text-red-400 tracking-tighter">
                             - R$ {stats.totalFees.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                         </h2>
-                        <p className="text-[9px] text-gray-600 font-bold uppercase mt-2">R$ 2,00 por transação gateway</p>
+                        <p className="text-[9px] text-gray-600 font-bold uppercase mt-2">R$ 4,00 por transação gateway</p>
                     </div>
 
                     <div className="bg-primary/10 backdrop-blur-xl p-8 rounded-[2.5rem] border border-primary/20 shadow-2xl ring-1 ring-primary/30">
@@ -262,7 +262,7 @@ const VipPublicDashboard: React.FC = () => {
 
                         <div className="mt-10 p-6 bg-red-900/10 border border-red-500/20 rounded-3xl text-center">
                             <p className="text-[10px] font-black text-red-300 uppercase leading-relaxed">
-                                Regra aplicada: Faturamento bruto deduzindo R$ 2,00 por PIX confirmado. Adesões estornadas são 100% excluídas dos totais financeiros.
+                                Regra aplicada: Faturamento bruto deduzindo R$ 4,00 por PIX confirmado. Adesões estornadas são 100% excluídas dos totais financeiros.
                             </p>
                         </div>
                     </div>
