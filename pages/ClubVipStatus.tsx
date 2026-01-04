@@ -1,11 +1,14 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getAllVipMemberships, getActiveVipEvents } from '../services/vipService';
 import { findPromotersByEmail } from '../services/promoterService';
-import { VipMembership, VipEvent, Promoter } from '../types';
-/* Added AlertTriangleIcon to imports to fix "Cannot find name 'AlertTriangleIcon'" error */
-import { ArrowLeftIcon, SearchIcon, SparklesIcon, CheckCircleIcon, ClockIcon, DocumentDuplicateIcon, ExternalLinkIcon, LogoutIcon, TicketIcon, AlertTriangleIcon } from '../components/Icons';
+import { VipMembership, VipEvent } from '../types';
+import { 
+    ArrowLeftIcon, SearchIcon, SparklesIcon, CheckCircleIcon, 
+    ClockIcon, DocumentDuplicateIcon, LogoutIcon, TicketIcon, 
+    AlertTriangleIcon, DownloadIcon, EyeIcon, RefreshIcon 
+} from '../components/Icons';
 import VipTicket from '../components/VipTicket';
 
 const ClubVipStatus: React.FC = () => {
@@ -13,13 +16,16 @@ const ClubVipStatus: React.FC = () => {
     const location = useLocation();
     const [email, setEmail] = useState('');
     const [memberships, setMemberships] = useState<VipMembership[]>([]);
-    const [vipEventsMap, setVipEventsMap] = useState<Record<string, VipEvent>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [searched, setSearched] = useState(false);
     const [error, setError] = useState<string | null>(null);
     
     // Estado para exibir o ingresso
     const [showTicketFor, setShowTicketFor] = useState<VipMembership | null>(null);
+    const [isDownloadingQR, setIsDownloadingQR] = useState<string | null>(null);
+    
+    // Ref para gerador de QR code oculto (download direto)
+    const hiddenQrRef = useRef<HTMLDivElement>(null);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -47,10 +53,6 @@ const ClubVipStatus: React.FC = () => {
                 setMemberships(userMemb);
                 localStorage.setItem('saved_promoter_email', trimmed);
             }
-
-            const eventMap = allEvents.reduce((acc, ev) => ({ ...acc, [ev.id]: ev }), {} as Record<string, VipEvent>);
-            setVipEventsMap(eventMap);
-
         } catch (err: any) {
             setError("Erro ao sincronizar dados. Tente novamente.");
         } finally {
@@ -74,13 +76,45 @@ const ClubVipStatus: React.FC = () => {
         setError(null);
     };
 
-    const handleCopy = (text: string) => {
-        navigator.clipboard.writeText(text);
-        alert("Código copiado!");
+    const handleDownloadQR = (membership: VipMembership) => {
+        if (!membership.benefitCode || !hiddenQrRef.current) return;
+        
+        setIsDownloadingQR(membership.id);
+        
+        // Limpa e gera o QR Code no elemento oculto
+        hiddenQrRef.current.innerHTML = '';
+        const qrcode = new (window as any).QRCode(hiddenQrRef.current, {
+            text: membership.benefitCode,
+            width: 512,
+            height: 512,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: (window as any).QRCode.CorrectLevel.H
+        });
+
+        // Aguarda renderização para capturar imagem
+        setTimeout(() => {
+            const img = hiddenQrRef.current?.querySelector('img');
+            const canvas = hiddenQrRef.current?.querySelector('canvas');
+            const dataUrl = img?.src || canvas?.toDataURL("image/png");
+
+            if (dataUrl) {
+                const link = document.createElement('a');
+                link.href = dataUrl;
+                link.download = `QR_VIP_${membership.vipEventName.replace(/\s+/g, '_')}.png`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+            setIsDownloadingQR(null);
+        }, 500);
     };
 
     return (
         <div className="max-w-xl mx-auto py-10 px-4">
+            {/* Elemento oculto para geração de QR Code para download */}
+            <div ref={hiddenQrRef} className="hidden"></div>
+
             <div className="flex justify-between items-center mb-8">
                 <button onClick={() => navigate('/clubvip')} className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
                     <ArrowLeftIcon className="w-4 h-4" /> <span>Voltar ao Clube</span>
@@ -98,7 +132,7 @@ const ClubVipStatus: React.FC = () => {
                         <SearchIcon className="w-8 h-8" />
                     </div>
                     <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-tighter">CONSULTA <span className="text-primary">VIP</span></h1>
-                    <p className="text-gray-400 text-sm mb-8 font-medium">Veja o status das suas adesões.</p>
+                    <p className="text-gray-400 text-sm mb-8 font-medium">Acesse seu ingresso digital e benefícios.</p>
                     <form onSubmit={(e) => { e.preventDefault(); performSearch(email); }} className="space-y-4">
                         <input 
                             type="email" value={email} onChange={(e) => setEmail(e.target.value)} 
@@ -126,7 +160,7 @@ const ClubVipStatus: React.FC = () => {
 
                     <div className="space-y-6">
                         {memberships.map(m => (
-                            <div key={m.id} className="bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-8 border border-white/5 shadow-2xl">
+                            <div key={m.id} className="bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-8 border border-white/5 shadow-2xl overflow-hidden relative">
                                 <div className="flex items-center gap-4 mb-6">
                                     <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center text-primary shadow-lg border border-primary/20">
                                         <SparklesIcon className="w-8 h-8" />
@@ -141,43 +175,46 @@ const ClubVipStatus: React.FC = () => {
                                     {m.isBenefitActive ? (
                                         <div className="p-5 bg-green-500/10 rounded-2xl border border-green-500/30 text-center">
                                             <CheckCircleIcon className="w-8 h-8 text-green-500 mx-auto mb-2" />
-                                            <p className="text-green-400 font-black uppercase tracking-widest text-xs">INGRESSO DISPONÍVEL! 🚀</p>
+                                            <p className="text-green-400 font-black uppercase tracking-widest text-xs">ACESSO LIBERADO! 🚀</p>
                                         </div>
                                     ) : (
                                         <div className="p-5 bg-orange-500/10 rounded-2xl border border-orange-500/30 text-center">
                                             <ClockIcon className="w-8 h-8 text-orange-500 mx-auto mb-2" />
                                             <p className="text-white font-black uppercase tracking-widest text-xs">LIBERAÇÃO EM ANDAMENTO</p>
                                             <p className="text-[10px] text-orange-300 uppercase font-bold mt-2 leading-tight">
-                                                Seu pagamento foi confirmado!<br/>
-                                                O seu ingresso oficial será gerado automaticamente em poucos minutos.
+                                                Pagamento confirmado! Seu ingresso digital<br/>está sendo gerado agora.
                                             </p>
                                         </div>
                                     )}
 
-                                    <div className="bg-dark/60 p-6 rounded-3xl border border-white/5 space-y-4">
-                                        <div>
-                                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center mb-2">Código do Ingresso</p>
-                                            <div 
-                                                onClick={() => m.isBenefitActive && m.benefitCode && handleCopy(m.benefitCode)}
-                                                className={`p-4 bg-black/40 rounded-2xl border border-primary/20 text-center select-all flex items-center justify-between transition-all group/code ${m.isBenefitActive ? 'cursor-pointer hover:bg-black/60' : ''}`}
-                                                title={m.isBenefitActive ? "Clique para copiar" : ""}
-                                            >
-                                                <p className="text-2xl font-black text-primary font-mono group-hover/code:scale-105 transition-transform">{m.isBenefitActive ? (m.benefitCode || '---') : '******'}</p>
-                                                {m.isBenefitActive && (
-                                                    <div className="p-2 text-gray-600 hover:text-white">
-                                                        <DocumentDuplicateIcon className="w-5 h-5"/>
-                                                    </div>
-                                                )}
-                                            </div>
+                                    <div className="bg-dark/60 p-6 rounded-3xl border border-white/5 space-y-5">
+                                        <div className="text-center">
+                                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-3">Seu Código Exclusivo</p>
+                                            <p className="text-3xl font-black text-primary font-mono tracking-tighter">{m.isBenefitActive ? (m.benefitCode || '---') : '******'}</p>
                                         </div>
 
                                         {m.isBenefitActive && (
-                                            <button 
-                                                onClick={() => setShowTicketFor(m)}
-                                                className="w-full py-5 bg-primary text-white font-black rounded-2xl text-center shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2 active:scale-95"
-                                            >
-                                                <TicketIcon className="w-5 h-5" /> GERAR INGRESSO DIGITAL
-                                            </button>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                                <button 
+                                                    onClick={() => setShowTicketFor(m)}
+                                                    className="w-full py-4 bg-primary text-white font-black rounded-2xl text-center shadow-lg shadow-primary/20 hover:bg-primary-dark transition-all uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95"
+                                                >
+                                                    <TicketIcon className="w-4 h-4" /> VER INGRESSO
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleDownloadQR(m)}
+                                                    disabled={isDownloadingQR === m.id}
+                                                    className="w-full py-4 bg-white/10 text-white font-black rounded-2xl text-center border border-white/10 hover:bg-white/20 transition-all uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95"
+                                                >
+                                                    {/* FIX: RefreshIcon was missing from imports, now added above */}
+                                                    {isDownloadingQR === m.id ? (
+                                                        <RefreshIcon className="w-4 h-4 animate-spin" />
+                                                    ) : (
+                                                        <DownloadIcon className="w-4 h-4" />
+                                                    )}
+                                                    BAIXAR QR CODE
+                                                </button>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
