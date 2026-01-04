@@ -22,8 +22,6 @@ const ClubVipStatus: React.FC = () => {
     
     const [showTicketFor, setShowTicketFor] = useState<VipMembership | null>(null);
     const [isDownloadingPDF, setIsDownloadingPDF] = useState<string | null>(null);
-    
-    const exportRef = useRef<HTMLDivElement>(null);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
@@ -48,7 +46,6 @@ const ClubVipStatus: React.FC = () => {
                 }
                 setMemberships([]);
             } else {
-                // Denormaliza dados do evento para facilitar o ingresso
                 const enrichedMemb = userMemb.map(m => {
                     const ev = allEvents.find(e => e.id === m.vipEventId);
                     return {
@@ -88,7 +85,7 @@ const ClubVipStatus: React.FC = () => {
         
         setIsDownloadingPDF(membership.id);
         
-        // Aguarda renderização do elemento invisível
+        // Aguarda renderização do elemento invisível e do QR Code
         setTimeout(async () => {
             const element = document.getElementById(`ticket-content-${membership.id}`);
             if (!element) {
@@ -96,24 +93,25 @@ const ClubVipStatus: React.FC = () => {
                 return;
             }
 
+            // O pulo do gato: jsPDF com unit 'px' e dimensões batendo com o elemento
             const options = {
                 margin: 0,
-                filename: `CREDENTIAL_VIP_${membership.vipEventName.replace(/\s+/g, '_')}.pdf`,
+                filename: `CREDENTIAL_${membership.promoterName.split(' ')[0].toUpperCase()}_${membership.vipEventName.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 1.0 },
                 html2canvas: { 
-                    scale: 3, 
+                    scale: 2, 
                     useCORS: true, 
-                    backgroundColor: '#000000',
+                    backgroundColor: '#0a0a0c', // Fundo escuro real do ticket
                     logging: false,
-                    letterRendering: true
+                    scrollY: 0,
+                    scrollX: 0
                 },
                 jsPDF: { 
-                    unit: 'mm', 
-                    format: [110, 180], // Formato customizado para caber perfeitamente em 1 página
+                    unit: 'px', 
+                    format: [400, 700], // TAMANHO EXATO DO ELEMENTO DEFINIDO NO VIPTICKET
                     orientation: 'portrait',
-                    compress: true
-                },
-                pagebreak: { mode: 'avoid-all' } // Evita quebras de página
+                    hotfixes: ['px_scaling']
+                }
             };
 
             try {
@@ -121,20 +119,20 @@ const ClubVipStatus: React.FC = () => {
                 await html2pdf().set(options).from(element).save();
             } catch (err) {
                 console.error("Erro ao gerar PDF:", err);
-                alert("Ocorreu um erro ao gerar o PDF. Tente tirar um print da tela.");
+                alert("Falha ao gerar PDF. Sugerimos tirar um print do ingresso.");
             } finally {
                 setIsDownloadingPDF(null);
             }
-        }, 1000);
+        }, 1200);
     };
 
     return (
         <div className="max-w-xl mx-auto py-10 px-4">
             
-            {/* CONTAINER PARA EXPORTAÇÃO (INVISÍVEL) */}
-            <div className="fixed left-[-9999px] top-0 pointer-events-none opacity-0" aria-hidden="true" style={{ width: '380px' }}>
+            {/* CONTAINER PARA EXPORTAÇÃO (INVISÍVEL MAS RENDERIZADO) */}
+            <div className="fixed left-[-2000px] top-0 pointer-events-none" aria-hidden="true">
                 {memberships.map(m => (
-                    <div key={`export-${m.id}`}>
+                    <div key={`export-${m.id}`} style={{ width: '400px', height: '700px' }}>
                         <VipTicket membership={m} isExporting={true} />
                     </div>
                 ))}

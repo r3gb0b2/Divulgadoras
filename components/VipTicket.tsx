@@ -26,50 +26,54 @@ const VipTicket: React.FC<VipTicketProps> = ({ membership, onClose, isExporting 
         }
     }, [membership.benefitCode]);
 
+    // O segredo para 1 página é ter um container com altura e largura travadas durante a exportação
+    const ticketStyle = isExporting 
+        ? { width: '400px', height: '700px', margin: '0' } 
+        : { width: '100%', maxWidth: '380px' };
+
     const content = (
         <div 
             id={`ticket-content-${membership.id}`} 
-            className="relative bg-[#000000] border border-white/10 rounded-[3rem] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] w-full max-w-[380px] mx-auto"
-            style={{ minHeight: '620px' }}
+            className="relative bg-[#0a0a0c] border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl flex flex-col"
+            style={ticketStyle}
         >
-            {/* PARTE SUPERIOR (LOGO E CABEÇALHO) */}
-            <div className="bg-gradient-to-br from-primary via-primary-dark to-black p-10 text-center relative border-b border-white/5">
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
+            {/* CABEÇALHO COM LOGO E GRADIENTE */}
+            <div className="bg-gradient-to-br from-primary via-primary-dark to-[#0a0a0c] p-8 text-center relative border-b border-white/5">
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10"></div>
                 <div className="relative z-10">
-                    {/* Logo Interna */}
                     <div className="flex justify-center mb-6">
-                        <LogoIcon className="h-10 text-white brightness-200" />
+                        <LogoIcon className="h-10 text-white brightness-125" />
                     </div>
 
-                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full border border-white/10 mb-6">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/10 rounded-full border border-white/10 mb-4">
                         <SparklesIcon className="w-3 h-3 text-accent animate-pulse" />
                         <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Credential VIP Official</span>
                     </div>
                     <h1 className="text-3xl font-black text-white uppercase tracking-tighter leading-none mb-2">
                         {membership.vipEventName}
                     </h1>
-                    <p className="text-primary-light text-[10px] font-bold uppercase tracking-widest opacity-80">Acesso Exclusivo Credenciado</p>
+                    <p className="text-primary-light text-[10px] font-bold uppercase tracking-widest opacity-80">Equipe Certa • Acesso Exclusivo</p>
                 </div>
             </div>
 
-            {/* RECORTE LATERAL (CÍRCULOS) */}
-            <div className="absolute left-[-20px] top-[45%] w-10 h-10 bg-black rounded-full border-r border-white/10 z-20 shadow-inner"></div>
-            <div className="absolute right-[-20px] top-[45%] w-10 h-10 bg-black rounded-full border-l border-white/10 z-20 shadow-inner"></div>
-            
-            {/* LINHA PONTILHADA */}
-            <div className="border-t-2 border-dashed border-white/10 w-full absolute top-[48%] opacity-30"></div>
+            {/* DIVISOR ESTILIZADO */}
+            <div className="relative h-4">
+                <div className="absolute left-[-20px] top-[-10px] w-10 h-10 bg-[#0a0a0c] rounded-full border border-white/10 z-20"></div>
+                <div className="absolute right-[-20px] top-[-10px] w-10 h-10 bg-[#0a0a0c] rounded-full border border-white/10 z-20"></div>
+                <div className="border-t-2 border-dashed border-white/10 w-full absolute top-[10px] opacity-20"></div>
+            </div>
 
-            {/* PARTE INFERIOR (DADOS E QR) */}
-            <div className="p-8 pt-14 space-y-8 text-center">
+            {/* ÁREA DO QR CODE E DADOS */}
+            <div className="p-8 flex-grow flex flex-col justify-between text-center">
                 
                 <div className="space-y-1">
-                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.4em]">Titular da Credencial</p>
+                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.4em]">Titular</p>
                     <h2 className="text-2xl font-black text-white uppercase truncate px-2">{membership.promoterName}</h2>
                 </div>
 
-                <div className="flex justify-center">
-                    <div className="p-4 bg-white/5 rounded-[2rem] border border-white/10 shadow-2xl relative group">
-                        <div className="absolute -inset-1 bg-gradient-to-r from-primary/50 to-accent/50 rounded-[2rem] blur opacity-20"></div>
+                <div className="flex justify-center my-6">
+                    <div className="p-5 bg-white/5 rounded-[2.5rem] border border-white/10 shadow-2xl relative">
+                        <div className="absolute -inset-1 bg-gradient-to-r from-primary/30 to-accent/30 rounded-[2.5rem] blur opacity-30"></div>
                         <div ref={qrRef} className="bg-transparent relative z-10"></div>
                         <div className="mt-4 pt-3 border-t border-white/5 relative z-10">
                             <p className="text-xs font-mono font-black text-primary tracking-[0.4em]">{membership.benefitCode}</p>
@@ -77,45 +81,38 @@ const VipTicket: React.FC<VipTicketProps> = ({ membership, onClose, isExporting 
                     </div>
                 </div>
 
-                {/* INFO DO EVENTO (HORARIO E LOCAL) */}
-                <div className="grid grid-cols-2 gap-4 py-2 border-y border-white/5">
+                {/* INFO DA FESTA */}
+                <div className="grid grid-cols-2 gap-4 py-4 border-y border-white/5 bg-white/[0.02] rounded-2xl mb-4">
                     <div className="text-center border-r border-white/5">
                         <p className="text-[8px] font-black text-gray-600 uppercase mb-1 tracking-widest">Horário</p>
                         <div className="flex items-center justify-center gap-1.5 text-gray-300">
                             <ClockIcon className="w-3 h-3 text-primary" />
-                            <span className="text-[10px] font-bold uppercase truncate">{membership.eventTime || 'A definir'}</span>
+                            <span className="text-[10px] font-black uppercase truncate">{membership.eventTime || '22h às 05h'}</span>
                         </div>
                     </div>
                     <div className="text-center">
                         <p className="text-[8px] font-black text-gray-600 uppercase mb-1 tracking-widest">Local</p>
                         <div className="flex items-center justify-center gap-1.5 text-gray-300">
                             <MapPinIcon className="w-3 h-3 text-primary" />
-                            <span className="text-[10px] font-bold uppercase truncate">{membership.eventLocation || 'Ver no site'}</span>
+                            <span className="text-[10px] font-black uppercase truncate">{membership.eventLocation || 'Ver no Site'}</span>
                         </div>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6 pt-2">
+                <div className="grid grid-cols-2 gap-6">
                     <div className="text-left">
-                        <p className="text-[8px] font-black text-gray-600 uppercase mb-1 tracking-widest">Emitido em</p>
-                        <div className="flex items-center gap-2 text-gray-300">
-                            <CalendarIcon className="w-3.5 h-3.5 text-primary" />
-                            <span className="text-xs font-bold uppercase">{new Date().toLocaleDateString('pt-BR')}</span>
-                        </div>
+                        <p className="text-[8px] font-black text-gray-600 uppercase mb-1 tracking-widest">Emissão</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase">{new Date().toLocaleDateString('pt-BR')}</p>
                     </div>
                     <div className="text-right">
                         <p className="text-[8px] font-black text-gray-600 uppercase mb-1 tracking-widest">Validação</p>
-                        <div className="flex items-center justify-end gap-2 text-green-400">
-                            <CheckCircleIcon className="w-3.5 h-3.5" />
-                            <span className="text-xs font-black uppercase tracking-tighter">Confirmada</span>
-                        </div>
+                        <p className="text-[10px] font-black text-green-400 uppercase tracking-tighter">CONFIRMADA ✅</p>
                     </div>
                 </div>
 
-                <div className="pt-2">
-                    <p className="text-[9px] text-gray-600 uppercase font-black leading-relaxed tracking-wider">
-                        Esta credencial é pessoal e intransferível.<br/>
-                        Proibida a venda ou compartilhamento.
+                <div className="mt-6">
+                    <p className="text-[8px] text-gray-600 uppercase font-black leading-relaxed tracking-[0.2em]">
+                        Documento Oficial e Intransferível
                     </p>
                 </div>
             </div>
@@ -137,8 +134,8 @@ const VipTicket: React.FC<VipTicketProps> = ({ membership, onClose, isExporting 
                 {content}
 
                 <div className="mt-8 flex flex-col items-center gap-4">
-                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] animate-pulse">
-                        Apresente o QR Code na entrada
+                    <p className="text-gray-500 text-[10px] font-black uppercase tracking-[0.2em] animate-pulse text-center leading-relaxed">
+                        DICA: Tire um print para acesso rápido<br/>ou use o PDF para imprimir.
                     </p>
                 </div>
             </div>
