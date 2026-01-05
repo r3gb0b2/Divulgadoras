@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -26,6 +25,7 @@ import {
     WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, MegaphoneIcon, DocumentDuplicateIcon, FilterIcon, ExternalLinkIcon, MailIcon, LinkIcon, UndoIcon, CogIcon, MapPinIcon
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
+import VipTicket from '../components/VipTicket';
 
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
@@ -137,6 +137,9 @@ const AdminClubVip: React.FC = () => {
     const [editingEvent, setEditingEvent] = useState<Partial<VipEvent> | null>(null);
     const [eventForCodes, setEventForCodes] = useState<VipEvent | null>(null);
 
+    // Estado para download de PDF
+    const [isDownloadingPdfId, setIsDownloadingPdfId] = useState<string | null>(null);
+
     const isSuperAdmin = adminData?.role === 'superadmin';
 
     const fetchData = useCallback(async () => {
@@ -213,72 +216,97 @@ const AdminClubVip: React.FC = () => {
         alert(msg);
     };
 
-    const handleDownloadXLSX = (mode: 'codes' | 'full') => {
-        const listToExport = selectedIds.size > 0 
-            ? filteredMembers.filter(m => selectedIds.has(m.id))
-            : filteredMembers;
-
-        if (listToExport.length === 0) return alert("Nenhum dado para exportar.");
+    const handleAdminDownloadTicket = async (membership: VipMembership) => {
+        if (isDownloadingPdfId) return;
         
-        let ws;
-        if (mode === 'codes') {
-            const aoaData = listToExport
-                .filter(m => m.benefitCode && m.benefitCode.trim() !== '')
-                .map(m => [m.benefitCode]);
+        setIsDownloadingPdfId(membership.id);
+        
+        // Timeout para garantir que o componente off-screen foi renderizado
+        setTimeout(async () => {
+            const element = document.getElementById(`ticket-content-${membership.id}`);
+            if (!element) {
+                alert("Erro ao preparar o documento para captura.");
+                setIsDownloadingPdfId(null);
+                return;
+            }
 
-            if (aoaData.length === 0) return alert("Nenhum código gerado para exportar.");
-            // @ts-ignore
-            ws = window.XLSX.utils.aoa_to_sheet(aoaData);
-        } else {
-            const jsonData = listToExport.map(m => ({
-                'NOME': m.promoterName,
-                'E-MAIL': m.promoterEmail,
-                'WHATSAPP': m.promoterWhatsapp || '',
-                'INSTAGRAM': m.promoterInstagram || '',
-                'CÓDIGO VIP': m.benefitCode || '',
-                'EVENTO': m.vipEventName,
-                'STATUS PGTO': m.status === 'confirmed' ? 'PAGO' : m.status === 'refunded' ? 'ESTORNADO' : 'PENDENTE',
-                'ATIVAÇÃO': m.isBenefitActive ? 'SIM' : 'NÃO',
-                'DATA ADESÃO': m.submittedAt ? (m.submittedAt as any).toDate().toLocaleString('pt-BR') : ''
-            }));
-            // @ts-ignore
-            ws = window.XLSX.utils.json_to_sheet(jsonData);
-        }
+            const options = {
+                margin: 0,
+                filename: `VIP_ADMIN_${membership.promoterName.split(' ')[0].toUpperCase()}_${membership.vipEventName.replace(/\s+/g, '_')}.pdf`,
+                image: { type: 'jpeg', quality: 1.0 },
+                html2canvas: { 
+                    scale: 3, 
+                    useCORS: true, 
+                    backgroundColor: '#000000',
+                    logging: false,
+                    scrollY: 0,
+                    scrollX: 0,
+                    windowWidth: 400,
+                    windowHeight: 700
+                },
+                jsPDF: { 
+                    unit: 'px', 
+                    format: [400, 700],
+                    orientation: 'portrait',
+                    hotfixes: ['px_scaling']
+                }
+            };
 
-        // @ts-ignore
-        const wb = window.XLSX.utils.book_new();
-        // @ts-ignore
-        window.XLSX.utils.book_append_sheet(wb, ws, "Membros VIP");
-        // @ts-ignore
-        window.XLSX.writeFile(wb, `membros_vip_${mode === 'codes' ? 'codigos' : 'completo'}_${new Date().getTime()}.xlsx`);
+            try {
+                // @ts-ignore
+                const html2pdf = window.html2pdf;
+                await html2pdf().set(options).from(element).save();
+            } catch (err) {
+                console.error("Erro ao gerar PDF:", err);
+                alert("Falha ao gerar PDF.");
+            } finally {
+                setIsDownloadingPdfId(null);
+            }
+        }, 1200);
     };
 
+    // FIX: Added handleDownloadEventStock to download event codes as CSV.
+    /**
+     * Gera e baixa um arquivo CSV contendo todos os códigos de um evento.
+     */
     const handleDownloadEventStock = async (event: VipEvent) => {
-        setIsBulkProcessing(true);
+        setIsProcessingId(event.id);
         try {
-            const codes = await getVipEventCodes(event.id);
-            if (codes.length === 0) return alert("Nenhum código cadastrado para este evento.");
+            const codesData = await getVipEventCodes(event.id);
+            if (codesData.length === 0) {
+                alert("Nenhum código encontrado no estoque para este evento.");
+                return;
+            }
 
-            const jsonData = codes.map((c: any) => ({
-                'CÓDIGO': c.code,
-                'STATUS': c.used ? 'USADO' : 'DISPONÍVEL',
-                'USADO POR (ID)': c.usedBy || '-',
-                'DATA USO': c.usedAt ? (c.usedAt as any).toDate().toLocaleString('pt-BR') : '-',
-                'CRIADO EM': c.createdAt ? (c.createdAt as any).toDate().toLocaleString('pt-BR') : '-'
-            }));
+            const headers = ["Código", "Status", "Usado Por (Promoter ID)", "Data de Uso", "Criado Em"];
+            const rows = codesData.map((c: any) => {
+                const usedAt = toDateSafe(c.usedAt);
+                const createdAt = toDateSafe(c.createdAt);
+                return [
+                    `"${c.code}"`,
+                    `"${c.used ? 'USADO' : 'DISPONÍVEL'}"`,
+                    `"${c.usedBy || ''}"`,
+                    `"${usedAt ? usedAt.toLocaleString('pt-BR') : ''}"`,
+                    `"${createdAt ? createdAt.toLocaleString('pt-BR') : ''}"`
+                ].join(',');
+            });
 
-            // @ts-ignore
-            const ws = window.XLSX.utils.json_to_sheet(jsonData);
-            // @ts-ignore
-            const wb = window.XLSX.utils.book_new();
-            // @ts-ignore
-            window.XLSX.utils.book_append_sheet(wb, ws, "Estoque de Códigos");
-            // @ts-ignore
-            window.XLSX.writeFile(wb, `estoque_vip_${event.name.replace(/\s+/g, '_').toLowerCase()}.xlsx`);
-        } catch (e: any) {
-            alert("Erro ao baixar estoque: " + e.message);
+            const csvContent = [headers.join(','), ...rows].join('\n');
+            const bom = new Uint8Array([0xEF, 0xBB, 0xBF]); // UTF-8 BOM para garantir acentuação no Excel
+            const blob = new Blob([bom, csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `ESTOQUE_${event.name.replace(/\s+/g, '_')}_${new Date().getTime()}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch (err: any) {
+            alert("Erro ao baixar estoque: " + err.message);
         } finally {
-            setIsBulkProcessing(false);
+            setIsProcessingId(null);
         }
     };
 
@@ -362,48 +390,33 @@ const AdminClubVip: React.FC = () => {
 
     return (
         <div className="pb-40">
+            {/* CONTAINER OFF-SCREEN PARA RENDERIZAÇÃO DE PDF */}
+            <div className="fixed left-[-2000px] top-0 pointer-events-none" aria-hidden="true" style={{ width: '400px' }}>
+                {filteredMembers.map(m => {
+                    const event = vipEvents.find(e => e.id === m.vipEventId);
+                    const enrichedMemb = {
+                        ...m,
+                        eventTime: event?.eventTime,
+                        eventLocation: event?.eventLocation
+                    };
+                    return (
+                        <div key={`export-admin-${m.id}`}>
+                            <VipTicket membership={enrichedMemb} isExporting={true} />
+                        </div>
+                    );
+                })}
+            </div>
+
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
                     <TicketIcon className="w-8 h-8 text-primary" /> Gestão Clube VIP
                 </h1>
                 <div className="flex flex-wrap gap-2">
-                    {activeTab === 'members' && (
-                        <>
-                            <button onClick={() => window.open('/#/admin/vip-metrics/global', '_blank')} className="px-4 py-3 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-900/50">
-                                <ChartBarIcon className="w-4 h-4" /> Relatório Público
-                            </button>
-                            <button onClick={() => handleDownloadXLSX('codes')} className="px-4 py-3 bg-gray-800 text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:text-white">
-                                <DownloadIcon className="w-4 h-4" /> Códigos (.xlsx)
-                            </button>
-                            <button onClick={() => handleDownloadXLSX('full')} className="px-4 py-3 bg-gray-800 text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:text-white">
-                                <DownloadIcon className="w-4 h-4" /> Dados Completos
-                            </button>
-                        </>
-                    )}
-                    {activeTab === 'events' && (
-                        <button onClick={() => handleOpenEventModal()} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">
-                            <PlusIcon className="w-4 h-4" /> Novo Evento
-                        </button>
-                    )}
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
                         <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
                     </button>
                 </div>
             </div>
-
-            <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 w-fit ml-4 md:ml-0 overflow-x-auto max-w-full">
-                <button onClick={() => { setActiveTab('members'); setSelectedIds(new Set()); }} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'members' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Membros</button>
-                <button onClick={() => { setActiveTab('events'); setSelectedIds(new Set()); }} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400 hover:text-gray-200'}`}>Eventos / Ofertas</button>
-            </div>
-
-            {selectedIds.size > 0 && (
-                <div className="mx-4 md:mx-0 p-4 bg-primary rounded-2xl shadow-lg flex items-center justify-between animate-fadeIn sticky top-24 z-30 mb-6 border border-white/20">
-                    <p className="text-white font-black text-xs uppercase tracking-widest">{selectedIds.size} selecionados</p>
-                    <div className="flex gap-2">
-                        <button onClick={() => setSelectedIds(new Set())} className="px-4 py-2 bg-black/20 text-white font-black text-[10px] uppercase rounded-xl">Cancelar</button>
-                    </div>
-                </div>
-            )}
 
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
                 
@@ -422,8 +435,8 @@ const AdminClubVip: React.FC = () => {
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
+                                <thead className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
+                                    <tr>
                                         <th className="px-6 py-5 w-10 text-center">
                                             <input 
                                                 type="checkbox" 
@@ -479,6 +492,16 @@ const AdminClubVip: React.FC = () => {
                                                 </td>
                                                 <td className="px-6 py-5 text-right">
                                                     <div className="flex justify-end gap-2">
+                                                        {m.status === 'confirmed' && m.benefitCode && (
+                                                            <button 
+                                                                onClick={() => handleAdminDownloadTicket(m)}
+                                                                disabled={isDownloadingPdfId === m.id}
+                                                                className="p-2 bg-indigo-900/30 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all border border-indigo-800/30"
+                                                                title="Baixar PDF do Ingresso"
+                                                            >
+                                                                {isDownloadingPdfId === m.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <DownloadIcon className="w-4 h-4" />}
+                                                            </button>
+                                                        )}
                                                         {m.status !== 'refunded' && (
                                                             <>
                                                                 <button onClick={() => handleManualActivateSingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">ATIVAR</button>
