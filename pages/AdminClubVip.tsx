@@ -217,17 +217,26 @@ const AdminClubVip: React.FC = () => {
         }
     };
 
-    const handleManualActivateSingle = async (membership: VipMembership) => {
-        if(!window.confirm("Deseja forçar a ativação com um cupom do estoque?")) return;
+    const handleManualActivateOrSwap = async (membership: VipMembership, forceNew: boolean = false) => {
+        const confirmMsg = forceNew 
+            ? "Deseja INVALIDAR o código atual e pegar um NOVO do estoque para esta divulgadora?" 
+            : "Deseja ativar esta adesão usando um cupom do estoque disponível?";
+
+        if(!window.confirm(confirmMsg)) return;
+
         setIsBulkProcessing(true);
         try {
             const activateVip = httpsCallable(functions, 'activateVipMembership');
-            const res: any = await activateVip({ membershipId: membership.id });
+            const res: any = await activateVip({ membershipId: membership.id, forceNew });
             if (res.data.success) {
-                alert(`Sucesso! Código: ${res.data.code}`);
+                alert(`Sucesso! Código atribuído do estoque: ${res.data.code}`);
                 fetchData();
             }
-        } catch (e: any) { alert("Erro ao ativar: " + e.message); } finally { setIsBulkProcessing(false); }
+        } catch (e: any) { 
+            alert("Erro ao processar: " + (e.message || "Estoque possivelmente vazio.")); 
+        } finally { 
+            setIsBulkProcessing(false); 
+        }
     };
 
     const handleRefundAction = async (membership: VipMembership) => {
@@ -323,6 +332,7 @@ const AdminClubVip: React.FC = () => {
                                                 <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
                                                 <p className="text-[10px] text-gray-500 font-mono truncate">{m.promoterEmail}</p>
                                                 <p className="text-[9px] text-primary font-black uppercase mt-1">{m.vipEventName}</p>
+                                                <p className="text-[11px] text-primary font-mono font-black mt-1">{m.benefitCode || '---'}</p>
                                             </td>
                                             <td className="px-6 py-5 text-center">
                                                 <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>
@@ -347,7 +357,13 @@ const AdminClubVip: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-5 text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    <button onClick={() => handleManualActivateSingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">ATIVAR</button>
+                                                    {m.status === 'pending' ? (
+                                                        <button onClick={() => handleManualActivateOrSwap(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">ATIVAR</button>
+                                                    ) : (
+                                                        <button onClick={() => handleManualActivateOrSwap(m, true)} disabled={isBulkProcessing} className="p-2 bg-blue-900/30 text-blue-400 rounded-xl border border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all" title="Trocar / Renovar Código">
+                                                            <RefreshIcon className={`w-4 h-4 ${isBulkProcessing && isProcessingId === m.id ? 'animate-spin' : ''}`} />
+                                                        </button>
+                                                    )}
                                                     <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30" title="Estornar">
                                                         <UndoIcon className="w-4 h-4" />
                                                     </button>
