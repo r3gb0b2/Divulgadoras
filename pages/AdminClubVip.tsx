@@ -21,7 +21,7 @@ import {
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, EyeIcon,
     TicketIcon, RefreshIcon, PlusIcon, TrashIcon, PencilIcon, 
     WhatsAppIcon, DownloadIcon, LinkIcon, ExternalLinkIcon,
-    CogIcon, UndoIcon
+    CogIcon, UndoIcon, ChartBarIcon
 } from '../components/Icons';
 
 const toDateSafe = (timestamp: any): Date | null => {
@@ -268,7 +268,10 @@ const AdminClubVip: React.FC = () => {
                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
                     <TicketIcon className="w-8 h-8 text-primary" /> Gestão Clube VIP
                 </h1>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    <button onClick={() => navigate('/admin/vip-metrics/global')} className="px-4 py-3 bg-blue-600/20 text-blue-400 border border-blue-600/30 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2">
+                        <ChartBarIcon className="w-4 h-4" /> Métricas de Venda
+                    </button>
                     <button onClick={() => navigate('/admin/recovery')} className="px-4 py-3 bg-green-600/20 text-green-400 border border-green-600/30 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all">
                         <WhatsAppIcon className="w-4 h-4 inline mr-1" /> Recuperar Leads
                     </button>
@@ -373,11 +376,11 @@ const AdminClubVip: React.FC = () => {
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 mb-6">
                                         <div className="bg-white/5 p-3 rounded-2xl text-center border border-white/5">
-                                            <p className="text-[8px] font-black text-gray-500 uppercase">Estoque</p>
+                                            <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Estoque</p>
                                             <p className="text-xl font-black text-white">{stats.total}</p>
                                         </div>
                                         <div className="bg-white/5 p-3 rounded-2xl text-center border border-white/5">
-                                            <p className="text-[8px] font-black text-gray-500 uppercase">Disponível</p>
+                                            <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Disponível</p>
                                             <p className="text-xl font-black text-primary">{stats.available}</p>
                                         </div>
                                     </div>
@@ -386,7 +389,7 @@ const AdminClubVip: React.FC = () => {
                                             <CogIcon className="w-4 h-4" /> CÓDIGOS
                                         </button>
                                         <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-primary transition-all"><PencilIcon className="w-4 h-4" /></button>
-                                        <button onClick={() => { if(confirm("Excluir oferta VIP?")) deleteVipEvent(ev.id).then(fetchData); }} className="p-3 bg-red-900/30 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-600 hover:text-white transition-all"><TrashIcon className="w-4 h-4"/></button>
+                                        <button onClick={() => { if(confirm("Excluir oferta VIP?")) deleteVipEvent(ev.id).then(fetchData); }} className="p-3 bg-red-900/30 text-red-400 rounded-xl border border-red-500/20 hover:bg-red-600 hover:text-white transition-all"><TrashIcon className="w-4 h-4"/></button>
                                     </div>
                                 </div>
                             );
