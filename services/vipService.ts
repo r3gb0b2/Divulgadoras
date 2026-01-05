@@ -18,8 +18,15 @@ export const getAllVipEvents = async (): Promise<VipEvent[]> => {
 };
 
 /**
- * Adiciona códigos em lote para um evento
+ * Registra a visualização ou download do ingresso pelo cliente
  */
+export const trackVipTicketAction = async (membershipId: string, action: 'view' | 'download') => {
+    const field = action === 'view' ? 'viewedAt' : 'downloadedAt';
+    return firestore.collection(COLLECTION_MEMBERSHIPS).doc(membershipId).update({
+        [field]: firebase.firestore.FieldValue.serverTimestamp()
+    });
+};
+
 export const addVipCodes = async (eventId: string, codes: string[]) => {
     const batch = firestore.batch();
     const codesRef = firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes');
@@ -27,7 +34,7 @@ export const addVipCodes = async (eventId: string, codes: string[]) => {
     codes.forEach(code => {
         const trimmed = code.trim();
         if (trimmed) {
-            const docRef = codesRef.doc(trimmed); // O ID é o próprio código para evitar duplicidade
+            const docRef = codesRef.doc(trimmed);
             batch.set(docRef, {
                 code: trimmed,
                 used: false,
@@ -39,9 +46,6 @@ export const addVipCodes = async (eventId: string, codes: string[]) => {
     return batch.commit();
 };
 
-/**
- * Busca todos os códigos do estoque (usados e disponíveis)
- */
 export const getVipEventCodes = async (eventId: string) => {
     const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes')
         .orderBy('createdAt', 'desc')
@@ -49,9 +53,6 @@ export const getVipEventCodes = async (eventId: string) => {
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 };
 
-/**
- * Conta quantos códigos ainda restam no estoque
- */
 export const getVipCodeStats = async (eventId: string) => {
     const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes')
         .where('used', '==', false)

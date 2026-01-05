@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getAllVipMemberships, getActiveVipEvents } from '../services/vipService';
+import { getAllVipMemberships, getActiveVipEvents, trackVipTicketAction } from '../services/vipService';
 import { findPromotersByEmail } from '../services/promoterService';
 import { VipMembership, VipEvent } from '../types';
 import { 
@@ -80,12 +80,17 @@ const ClubVipStatus: React.FC = () => {
         setError(null);
     };
 
+    const handleOpenTicket = (m: VipMembership) => {
+        setShowTicketFor(m);
+        trackVipTicketAction(m.id, 'view').catch(() => {}); // Rastreio silencioso
+    };
+
     const handleDownloadPDF = async (membership: VipMembership) => {
         if (isDownloadingPDF) return;
         
         setIsDownloadingPDF(membership.id);
+        trackVipTicketAction(membership.id, 'download').catch(() => {}); // Rastreio silencioso
         
-        // Pequena pausa para garantir que o QR Code e o SVG da logo renderizaram
         setTimeout(async () => {
             const element = document.getElementById(`ticket-content-${membership.id}`);
             if (!element) {
@@ -98,7 +103,7 @@ const ClubVipStatus: React.FC = () => {
                 filename: `VIP_${membership.promoterName.split(' ')[0].toUpperCase()}_${membership.vipEventName.replace(/\s+/g, '_')}.pdf`,
                 image: { type: 'jpeg', quality: 1.0 },
                 html2canvas: { 
-                    scale: 3, // Alta resolução
+                    scale: 3, 
                     useCORS: true, 
                     backgroundColor: '#000000',
                     logging: false,
@@ -109,7 +114,7 @@ const ClubVipStatus: React.FC = () => {
                 },
                 jsPDF: { 
                     unit: 'px', 
-                    format: [400, 700], // Mesmas dimensões do elemento no VipTicket
+                    format: [400, 700],
                     orientation: 'portrait',
                     hotfixes: ['px_scaling']
                 }
@@ -130,7 +135,6 @@ const ClubVipStatus: React.FC = () => {
     return (
         <div className="max-w-xl mx-auto py-10 px-4">
             
-            {/* CONTAINER PARA EXPORTAÇÃO (FORA DA TELA) */}
             <div className="fixed left-[-2000px] top-0 pointer-events-none" aria-hidden="true" style={{ width: '400px' }}>
                 {memberships.map(m => (
                     <div key={`export-${m.id}`}>
@@ -220,7 +224,7 @@ const ClubVipStatus: React.FC = () => {
                                         {m.isBenefitActive && (
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                                                 <button 
-                                                    onClick={() => setShowTicketFor(m)}
+                                                    onClick={() => handleOpenTicket(m)}
                                                     className="w-full py-4 bg-gray-800 text-white font-black rounded-2xl text-center border border-white/5 shadow-lg hover:bg-gray-700 transition-all uppercase text-[10px] tracking-widest flex items-center justify-center gap-2 active:scale-95"
                                                 >
                                                     <TicketIcon className="w-4 h-4" /> VISUALIZAR
@@ -247,7 +251,6 @@ const ClubVipStatus: React.FC = () => {
                 </div>
             )}
 
-            {/* MODAL DO INGRESSO */}
             {showTicketFor && (
                 <VipTicket 
                     membership={showTicketFor} 
