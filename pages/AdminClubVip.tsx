@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { 
     getAllVipMemberships, 
-    updateVipMembership, 
     getAllVipEvents, 
     createVipEvent, 
     updateVipEvent, 
@@ -15,17 +14,15 @@ import {
     getVipEventCodes
 } from '../services/vipService';
 import { updatePromoter } from '../services/promoterService';
-import { getOrganizations } from '../services/organizationService';
 import { VipMembership, VipEvent } from '../types';
 import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { 
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, EyeIcon,
-    TicketIcon, RefreshIcon, ClockIcon, PlusIcon, TrashIcon, PencilIcon, 
-    WhatsAppIcon, InstagramIcon, DownloadIcon, ChartBarIcon, DocumentDuplicateIcon, 
-    CogIcon, UndoIcon, MapPinIcon
+    TicketIcon, RefreshIcon, PlusIcon, TrashIcon, PencilIcon, 
+    WhatsAppIcon, DownloadIcon, LinkIcon, ExternalLinkIcon,
+    CogIcon, UndoIcon
 } from '../components/Icons';
-import VipTicket from '../components/VipTicket';
 
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
@@ -87,7 +84,7 @@ const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: 
                         onClick={() => onDownloadStock(event)}
                         className="px-4 py-2 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-900/50"
                     >
-                        <DownloadIcon className="w-4 h-4" /> Baixar Completo
+                        <DownloadIcon className="w-4 h-4" /> Baixar XLS
                     </button>
                 </div>
 
@@ -126,17 +123,12 @@ const AdminClubVip: React.FC = () => {
     const [selectedEventId, setSelectedEventId] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Partial<VipEvent> | null>(null);
     const [eventForCodes, setEventForCodes] = useState<VipEvent | null>(null);
-
-    // Estado para download de PDF único (evita travar a página renderizando tudo)
-    const [exportMembership, setExportMembership] = useState<VipMembership | null>(null);
-    const [isDownloadingPdfId, setIsDownloadingPdfId] = useState<string | null>(null);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -186,65 +178,15 @@ const AdminClubVip: React.FC = () => {
         });
     }, [memberships, searchQuery, selectedEventId]);
 
-    const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.checked) {
-            setSelectedIds(new Set(filteredMembers.map(m => m.id)));
-        } else {
-            setSelectedIds(new Set());
-        }
+    const handleCopyTicketLink = (membership: VipMembership) => {
+        const url = `${window.location.origin}/#/clubvip/status?email=${encodeURIComponent(membership.promoterEmail)}`;
+        navigator.clipboard.writeText(url);
+        alert("Link do portal copiado!");
     };
 
-    const handleAdminDownloadTicket = async (membership: VipMembership) => {
-        if (isDownloadingPdfId) return;
-        
-        setIsDownloadingPdfId(membership.id);
-        const event = vipEvents.find(e => e.id === membership.vipEventId);
-        
-        // Ativa a renderização apenas do ingresso que vamos baixar
-        setExportMembership({
-            ...membership,
-            eventTime: event?.eventTime,
-            eventLocation: event?.eventLocation
-        });
-        
-        // Pequena pausa para o QR Code renderizar no elemento
-        setTimeout(async () => {
-            const element = document.getElementById(`ticket-content-${membership.id}`);
-            if (!element) {
-                alert("Erro ao preparar o documento.");
-                setIsDownloadingPdfId(null);
-                setExportMembership(null);
-                return;
-            }
-
-            const options = {
-                margin: 0,
-                filename: `VIP_${membership.promoterName.split(' ')[0].toUpperCase()}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { 
-                    scale: 2, 
-                    useCORS: true, 
-                    backgroundColor: '#000000',
-                    letterRendering: true
-                },
-                jsPDF: { 
-                    unit: 'px', 
-                    format: [400, 700],
-                    orientation: 'portrait'
-                }
-            };
-
-            try {
-                // @ts-ignore
-                await window.html2pdf().set(options).from(element).save();
-            } catch (err) {
-                console.error(err);
-                alert("Falha ao gerar PDF.");
-            } finally {
-                setIsDownloadingPdfId(null);
-                setExportMembership(null);
-            }
-        }, 800);
+    const handleOpenClientPortal = (membership: VipMembership) => {
+        const url = `${window.location.origin}/#/clubvip/status?email=${encodeURIComponent(membership.promoterEmail)}`;
+        window.open(url, '_blank');
     };
 
     const handleDownloadEventStock = async (event: VipEvent) => {
@@ -285,7 +227,7 @@ const AdminClubVip: React.FC = () => {
                 alert(`Sucesso! Código: ${res.data.code}`);
                 fetchData();
             }
-        } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
+        } catch (e: any) { alert("Erro ao ativar: " + e.message); } finally { setIsBulkProcessing(false); }
     };
 
     const handleRefundAction = async (membership: VipMembership) => {
@@ -295,7 +237,7 @@ const AdminClubVip: React.FC = () => {
             await refundVipMembership(membership.id);
             await updatePromoter(membership.promoterId, { emocoesBenefitActive: false });
             fetchData();
-        } catch (e: any) { alert(e.message); } finally { setIsProcessingId(null); }
+        } catch (e: any) { alert("Erro ao estornar: " + e.message); } finally { setIsProcessingId(null); }
     };
 
     const handleSaveEvent = async (e: React.FormEvent) => {
@@ -322,22 +264,21 @@ const AdminClubVip: React.FC = () => {
 
     return (
         <div className="pb-40">
-            {/* CONTAINER DE EXPORTAÇÃO DINÂMICO (Só renderiza o que for baixar) */}
-            <div className="fixed left-[-2000px] top-0 pointer-events-none" style={{ width: '400px' }}>
-                {exportMembership && <VipTicket membership={exportMembership} isExporting={true} />}
-            </div>
-
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
                     <TicketIcon className="w-8 h-8 text-primary" /> Gestão Clube VIP
                 </h1>
                 <div className="flex gap-2">
+                    <button onClick={() => navigate('/admin/recovery')} className="px-4 py-3 bg-green-600/20 text-green-400 border border-green-600/30 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all">
+                        <WhatsAppIcon className="w-4 h-4 inline mr-1" /> Recuperar Leads
+                    </button>
                     <button onClick={() => { setEditingEvent({ benefits: [], isActive: true }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
                         <PlusIcon className="w-4 h-4" /> Novo Evento
                     </button>
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
                         <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
                     </button>
+                    <button onClick={() => navigate('/admin')} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white"><ArrowLeftIcon className="w-5 h-5"/></button>
                 </div>
             </div>
 
@@ -365,17 +306,16 @@ const AdminClubVip: React.FC = () => {
                             <table className="w-full text-left">
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
-                                        <th className="px-6 py-5 w-10 text-center"><input type="checkbox" onChange={handleSelectAll} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" /></th>
-                                        <th className="px-6 py-5">Membro</th>
-                                        <th className="px-6 py-5 text-center">Status</th>
-                                        <th className="px-6 py-5 text-center">Rastreio</th>
-                                        <th className="px-6 py-4 text-right">Ação</th>
+                                        <th className="px-6 py-5">Membro / Evento</th>
+                                        <th className="px-6 py-5 text-center">Status Pgto</th>
+                                        <th className="px-6 py-5 text-center">Acessos</th>
+                                        <th className="px-6 py-4 text-right">Portal do Cliente</th>
+                                        <th className="px-6 py-4 text-right">Gestão</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {filteredMembers.map(m => (
-                                        <tr key={m.id} className="hover:bg-white/[0.02] transition-colors">
-                                            <td className="px-6 py-5 text-center"><input type="checkbox" checked={selectedIds.has(m.id)} onChange={() => { const n = new Set(selectedIds); if(n.has(m.id)) n.delete(m.id); else n.add(m.id); setSelectedIds(n); }} className="w-4 h-4 rounded border-gray-700 bg-dark text-primary" /></td>
+                                        <tr key={m.id} className="hover:bg-white/[0.02] transition-colors group">
                                             <td className="px-6 py-5">
                                                 <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
                                                 <p className="text-[10px] text-gray-500 font-mono truncate">{m.promoterEmail}</p>
@@ -388,19 +328,26 @@ const AdminClubVip: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-5 text-center">
                                                 <div className="flex justify-center gap-3">
-                                                    <div className={`p-1 ${m.viewedAt ? 'text-blue-400' : 'text-gray-700'}`} title="Visualizou"><EyeIcon className="w-4 h-4"/></div>
-                                                    <div className={`p-1 ${m.downloadedAt ? 'text-green-400' : 'text-gray-700'}`} title="Baixou"><DownloadIcon className="w-4 h-4"/></div>
+                                                    <div className={`p-1 ${m.viewedAt ? 'text-blue-400' : 'text-gray-700'}`} title="Visualizou Portal"><EyeIcon className="w-4 h-4"/></div>
+                                                    <div className={`p-1 ${m.downloadedAt ? 'text-green-400' : 'text-gray-700'}`} title="Baixou Ingresso"><DownloadIcon className="w-4 h-4"/></div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-5 text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    {m.status === 'confirmed' && m.benefitCode && (
-                                                        <button onClick={() => handleAdminDownloadTicket(m)} disabled={isDownloadingPdfId === m.id} className="p-2 bg-indigo-900/30 text-indigo-400 rounded-xl hover:bg-indigo-600 transition-all">
-                                                            {isDownloadingPdfId === m.id ? <RefreshIcon className="w-4 h-4 animate-spin" /> : <DownloadIcon className="w-4 h-4" />}
-                                                        </button>
-                                                    )}
-                                                    <button onClick={() => handleManualActivateSingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase">ATIVAR</button>
-                                                    <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all"><UndoIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleCopyTicketLink(m)} className="p-2 bg-indigo-900/30 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all border border-indigo-800/30" title="Copiar Link do Portal">
+                                                        <LinkIcon className="w-4 h-4" />
+                                                    </button>
+                                                    <button onClick={() => handleOpenClientPortal(m)} className="p-2 bg-indigo-900/30 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all border border-indigo-800/30" title="Ver como Cliente (QR Code)">
+                                                        <ExternalLinkIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => handleManualActivateSingle(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">ATIVAR</button>
+                                                    <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30" title="Estornar">
+                                                        <UndoIcon className="w-4 h-4" />
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -422,24 +369,24 @@ const AdminClubVip: React.FC = () => {
                                             <h3 className="text-xl font-black text-white uppercase">{ev.name}</h3>
                                             <p className="text-primary font-black text-lg">R$ {ev.price.toFixed(2)}</p>
                                         </div>
-                                        <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                        <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]' : 'bg-red-500'}`}></div>
                                     </div>
                                     <div className="grid grid-cols-2 gap-3 mb-6">
-                                        <div className="bg-white/5 p-3 rounded-2xl text-center">
+                                        <div className="bg-white/5 p-3 rounded-2xl text-center border border-white/5">
                                             <p className="text-[8px] font-black text-gray-500 uppercase">Estoque</p>
                                             <p className="text-xl font-black text-white">{stats.total}</p>
                                         </div>
-                                        <div className="bg-white/5 p-3 rounded-2xl text-center">
+                                        <div className="bg-white/5 p-3 rounded-2xl text-center border border-white/5">
                                             <p className="text-[8px] font-black text-gray-500 uppercase">Disponível</p>
                                             <p className="text-xl font-black text-primary">{stats.available}</p>
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { setEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-1 py-3 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2">
+                                        <button onClick={() => { setEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-1 py-3 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
                                             <CogIcon className="w-4 h-4" /> CÓDIGOS
                                         </button>
-                                        <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl"><PencilIcon className="w-4 h-4" /></button>
-                                        <button onClick={() => { if(confirm("Excluir?")) deleteVipEvent(ev.id).then(fetchData); }} className="p-3 bg-red-900/30 text-red-500 rounded-xl"><TrashIcon className="w-4 h-4"/></button>
+                                        <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-primary transition-all"><PencilIcon className="w-4 h-4" /></button>
+                                        <button onClick={() => { if(confirm("Excluir oferta VIP?")) deleteVipEvent(ev.id).then(fetchData); }} className="p-3 bg-red-900/30 text-red-500 rounded-xl border border-red-500/20 hover:bg-red-600 hover:text-white transition-all"><TrashIcon className="w-4 h-4"/></button>
                                     </div>
                                 </div>
                             );
@@ -451,24 +398,42 @@ const AdminClubVip: React.FC = () => {
             {/* MODAL EVENTO */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-6" onClick={() => setIsModalOpen(false)}>
-                    <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10 flex flex-col" onClick={e => e.stopPropagation()}>
-                        <h2 className="text-2xl font-black text-white uppercase mb-6">Evento VIP</h2>
+                    <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
+                        <h2 className="text-2xl font-black text-white uppercase mb-6 tracking-tighter">Oferta VIP</h2>
                         <form onSubmit={handleSaveEvent} className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
                             <div className="grid grid-cols-2 gap-4">
-                                <input type="text" placeholder="Nome" value={editingEvent?.name || ''} onChange={e => setEditingEvent({...editingEvent!, name: e.target.value})} className="bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" required />
-                                <input type="number" step="0.01" placeholder="Preço" value={editingEvent?.price || ''} onChange={e => setEditingEvent({...editingEvent!, price: Number(e.target.value)})} className="bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" required />
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Nome</label>
+                                    <input type="text" placeholder="Ex: Baile do Havaí" value={editingEvent?.name || ''} onChange={e => setEditingEvent({...editingEvent!, name: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" required />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Preço (R$)</label>
+                                    <input type="number" step="0.01" value={editingEvent?.price || ''} onChange={e => setEditingEvent({...editingEvent!, price: Number(e.target.value)})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" required />
+                                </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
-                                <input type="text" placeholder="Horário (22h às 05h)" value={editingEvent?.eventTime || ''} onChange={e => setEditingEvent({...editingEvent!, eventTime: e.target.value})} className="bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                                <input type="text" placeholder="Local" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} className="bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Horário</label>
+                                    <input type="text" placeholder="22h às 05h" value={editingEvent?.eventTime || ''} onChange={e => setEditingEvent({...editingEvent!, eventTime: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Local</label>
+                                    <input type="text" placeholder="Marina Park" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
                             </div>
-                            <input type="text" placeholder="Slug Externo" value={editingEvent?.externalSlug || ''} onChange={e => setEditingEvent({...editingEvent!, externalSlug: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                            <textarea placeholder="Benefícios (Um por linha)" rows={4} value={editingEvent?.benefits?.join('\n') || ''} onChange={e => setEditingEvent({...editingEvent!, benefits: e.target.value.split('\n')})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white text-sm" />
-                            <div className="flex gap-4">
-                                <label className="flex items-center gap-2 text-white text-xs font-black uppercase"><input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} /> Oferta Ativa</label>
-                                <label className="flex items-center gap-2 text-red-500 text-xs font-black uppercase"><input type="checkbox" checked={editingEvent?.isSoldOut} onChange={e => setEditingEvent({...editingEvent!, isSoldOut: e.target.checked})} /> Esgotado</label>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Slug Externo (ST Ingressos)</label>
+                                <input type="text" placeholder="ex: baile-havai-2024" value={editingEvent?.externalSlug || ''} onChange={e => setEditingEvent({...editingEvent!, externalSlug: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
                             </div>
-                            <button type="submit" className="w-full py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs">Salvar Alterações</button>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Benefícios (Um por linha)</label>
+                                <textarea rows={4} value={editingEvent?.benefits?.join('\n') || ''} onChange={e => setEditingEvent({...editingEvent!, benefits: e.target.value.split('\n')})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white text-sm" />
+                            </div>
+                            <div className="flex gap-6 pt-4">
+                                <label className="flex items-center gap-2 text-white text-[10px] font-black uppercase cursor-pointer"><input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-primary" /> Oferta Ativa</label>
+                                <label className="flex items-center gap-2 text-red-500 text-[10px] font-black uppercase cursor-pointer"><input type="checkbox" checked={editingEvent?.isSoldOut} onChange={e => setEditingEvent({...editingEvent!, isSoldOut: e.target.checked})} className="w-4 h-4 rounded bg-dark text-red-500" /> Esgotado</label>
+                            </div>
+                            <button type="submit" className="w-full py-5 bg-primary text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-primary/20">Salvar Alterações</button>
                         </form>
                     </div>
                 </div>
