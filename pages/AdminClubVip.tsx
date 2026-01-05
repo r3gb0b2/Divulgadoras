@@ -273,7 +273,7 @@ const AdminClubVip: React.FC = () => {
                         <ChartBarIcon className="w-4 h-4" /> Métricas de Venda
                     </button>
                     <button onClick={() => navigate('/admin/recovery')} className="px-4 py-3 bg-green-600/20 text-green-400 border border-green-600/30 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all">
-                        <WhatsAppIcon className="w-4 h-4 inline mr-1" /> Recuperar Leads
+                        <WhatsAppIcon className="w-4 h-4 inline mr-1" /> Recuperar Carrinhos VIP
                     </button>
                     <button onClick={() => { setEditingEvent({ benefits: [], isActive: true }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
                         <PlusIcon className="w-4 h-4" /> Novo Evento
