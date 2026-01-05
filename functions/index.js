@@ -41,14 +41,19 @@ const asaasFetch = async (endpoint, options = {}) => {
  * Pode ser chamada pelo Webhook ou manualmente pelo Admin
  */
 const internalAssignVipCode = async (membershipId) => {
-    const [promoterId, vipEventId] = membershipId.split('_');
-    
     return await db.runTransaction(async (transaction) => {
         const membershipRef = db.collection("vipMemberships").doc(membershipId);
         const membershipSnap = await transaction.get(membershipRef);
         
-        if (!membershipSnap.exists) throw new Error("Adesão não encontrada.");
+        if (!membershipSnap.exists) throw new Error("Adesão não encontrada no banco de dados.");
+        
         const mData = membershipSnap.data();
+        const promoterId = mData.promoterId;
+        const vipEventId = mData.vipEventId;
+
+        if (!promoterId || !vipEventId) {
+            throw new Error("Dados da adesão incompletos (promoterId ou vipEventId ausentes).");
+        }
 
         // Se já tem um código real atribuído (não o placeholder), não faz nada
         if (mData.benefitCode && mData.benefitCode !== 'AGUARDANDO_GERACAO' && mData.isBenefitActive) {
