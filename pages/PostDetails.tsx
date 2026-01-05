@@ -14,6 +14,15 @@ import JustificationReviewModal from '../components/JustificationReviewModal';
 import { storage } from '../firebase/config';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) return null;
+    if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return new Date(timestamp.seconds * 1000);
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) return date;
+    return null;
+};
+
 const PostDetails: React.FC = () => {
     const { postId } = useParams<{ postId: string }>();
     const navigate = useNavigate();
@@ -157,7 +166,7 @@ const PostDetails: React.FC = () => {
                         </span>
                         {post.expiresAt && (
                             <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase border bg-blue-900/30 text-blue-400 border-blue-800">
-                                Expira: {new Date(post.expiresAt.seconds * 1000).toLocaleDateString('pt-BR')}
+                                Expira: {toDateSafe(post.expiresAt)?.toLocaleDateString('pt-BR')}
                             </span>
                         )}
                     </div>

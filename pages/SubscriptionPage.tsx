@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -14,6 +13,14 @@ declare global {
     Stripe: any;
   }
 }
+
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) return null;
+    if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return new Date(timestamp.seconds * 1000);
+    const date = new Date(timestamp);
+    return isNaN(date.getTime()) ? null : date;
+};
 
 // Reusable Input component from other pages
 const InputWithIcon: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { Icon: React.ElementType }> = ({ Icon, ...props }) => (
@@ -124,13 +131,15 @@ const SubscriptionPage: React.FC = () => {
         }
     };
 
-    const formatDate = (timestamp?: Timestamp) => {
-        if (!timestamp) return 'N/A';
-        return timestamp.toDate().toLocaleDateString('pt-BR');
+    const formatDate = (timestamp?: any) => {
+        const date = toDateSafe(timestamp);
+        if (!date) return 'N/A';
+        return date.toLocaleDateString('pt-BR');
     };
     
     const planDetails = organization ? plans.find(p => p.id === organization.planId) : null;
-    const isExpired = organization?.planExpiresAt && organization.planExpiresAt.toDate() < new Date();
+    const expiryDate = toDateSafe(organization?.planExpiresAt);
+    const isExpired = expiryDate && expiryDate < new Date();
     const needsRenewal = organization?.status === 'trial' || isExpired;
     const hasRequiredInfo = organization?.ownerName && organization?.ownerPhone && organization.ownerTaxId;
 
