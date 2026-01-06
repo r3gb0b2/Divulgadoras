@@ -1,4 +1,3 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { VipEvent, VipMembership } from '../types';
@@ -51,7 +50,7 @@ export const addVipCodes = async (eventId: string, codes: string[]) => {
 
 export const getVipEventCodes = async (eventId: string) => {
     const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes').get();
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any))
         .sort((a, b) => getMs(b.createdAt) - getMs(a.createdAt));
 };
 

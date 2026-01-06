@@ -1,4 +1,3 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore } from '../firebase/config';
 import { VipEvent, VipMembership } from '../types';
@@ -21,6 +20,7 @@ export const getActiveGreenlifeEvents = async (): Promise<VipEvent[]> => {
 };
 
 export const getAllGreenlifeEvents = async (): Promise<VipEvent[]> => {
+    // Busca simples sem orderBy para evitar necessidade imediata de índices compostos no início
     const snap = await firestore.collection(COLLECTION_EVENTS).get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent))
         .sort((a, b) => getMs(b.createdAt) - getMs(a.createdAt));
@@ -58,7 +58,7 @@ export const getGreenlifeCodeStats = async (eventId: string) => {
 
 export const getGreenlifeEventCodes = async (eventId: string) => {
     const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes').get();
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as any))
         .sort((a, b) => getMs(b.createdAt) - getMs(a.createdAt));
 };
 
