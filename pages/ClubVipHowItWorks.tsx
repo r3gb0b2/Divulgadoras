@@ -1,7 +1,10 @@
 
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ArrowLeftIcon, SparklesIcon, CreditCardIcon, SearchIcon, EnvelopeIcon, ExternalLinkIcon, CheckCircleIcon } from '../components/Icons';
+import { 
+    ArrowLeftIcon, SparklesIcon, CreditCardIcon, SearchIcon, 
+    QrCodeIcon, TicketIcon, CheckCircleIcon, UserIcon 
+} from '../components/Icons';
 
 const StepCard: React.FC<{ number: string, icon: React.ElementType, title: string, description: string, color: string }> = ({ number, icon: Icon, title, description, color }) => (
     <div className="bg-gray-800 border border-gray-700 rounded-[2rem] p-8 relative overflow-hidden group hover:border-primary transition-all shadow-xl">
@@ -33,7 +36,7 @@ const ClubVipHowItWorks: React.FC = () => {
                     <SparklesIcon className="w-12 h-12 text-primary" />
                 </div>
                 <h1 className="text-5xl font-black text-white uppercase tracking-tighter mb-4">Como funciona o <span className="text-primary">VIP</span>?</h1>
-                <p className="text-xl text-gray-400 font-medium">Entenda o passo a passo da sua adesão até a entrada no evento.</p>
+                <p className="text-xl text-gray-400 font-medium">O acesso mais rápido e exclusivo para a nossa equipe.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -41,71 +44,71 @@ const ClubVipHowItWorks: React.FC = () => {
                     number="01"
                     icon={SparklesIcon}
                     color="bg-blue-500"
-                    title="Escolha sua Oferta"
-                    description="Selecione o evento VIP desejado e preencha seus dados de identificação. Precisamos do seu e-mail e telefone corretos para liberar sua cortesia."
+                    title="Escolha seu Evento"
+                    description="Selecione na página inicial do Clube VIP o evento que deseja garantir seus benefícios e ingressos promocionais."
                 />
                 
                 <StepCard 
                     number="02"
-                    icon={CreditCardIcon}
-                    color="bg-green-500"
-                    title="Pagamento Instantâneo"
-                    description="Realize o pagamento via Pix. O sistema identifica o valor automaticamente em segundos e já registra sua intenção de adesão."
+                    icon={UserIcon}
+                    color="bg-purple-500"
+                    title="Dados de Emissão"
+                    description="Preencha seus contatos e CPF/CNPJ. Esses dados são obrigatórios para a geração segura do seu QR Code Pix nominal."
                 />
 
                 <StepCard 
                     number="03"
-                    icon={SearchIcon}
-                    color="bg-purple-500"
-                    title="Análise do Perfil"
-                    description="Nossa equipe revisa seus dados e vincula seu e-mail ao sistema de ingressos oficial. Esse processo garante que sua cortesia seja exclusiva."
+                    icon={CreditCardIcon}
+                    color="bg-green-500"
+                    title="Pagamento Pix"
+                    description="Pague o valor da adesão via Pix. O sistema identifica o recebimento em segundos e libera seu acesso automaticamente."
                 />
 
                 <StepCard 
                     number="04"
-                    icon={EnvelopeIcon}
+                    icon={QrCodeIcon}
                     color="bg-indigo-500"
-                    title="Ativação do Cupom"
-                    description="Assim que aprovado, você recebe um e-mail de boas-vindas com seu código de cortesia oficial. O status no site muda para 'CORTESIA DISPONÍVEL'."
+                    title="Ingresso Gerado"
+                    description="Assim que pago, seu ingresso digital com QR Code exclusivo é gerado. Você também recebe uma confirmação oficial por e-mail."
                 />
 
                 <StepCard 
                     number="05"
-                    icon={ExternalLinkIcon}
+                    icon={SearchIcon}
                     color="bg-orange-500"
-                    title="Resgate no Site"
-                    description="No seu painel VIP, aparecerá o link direto. Clique nele para ir ao site de ingressos com o cupom já aplicado e garanta sua entrada."
+                    title="Portal do Membro"
+                    description="Sempre que precisar, consulte seu status e baixe seu ingresso no menu 'Status VIP' informando apenas o seu e-mail cadastrado."
                 />
 
                 <StepCard 
                     number="06"
-                    icon={CheckCircleIcon}
+                    icon={TicketIcon}
                     color="bg-yellow-500"
-                    title="Aproveite o Evento"
-                    description="Com seu ingresso em mãos, basta apresentar na entrada do evento. Lembre-se: sua cortesia é pessoal e intransferível."
+                    title="Entrada VIP"
+                    description="No dia do evento, apresente seu QR Code na portaria indicada. Seu acesso é validado na hora de forma simples e moderna."
                 />
             </div>
 
             <div className="mt-20 bg-secondary/60 backdrop-blur-xl p-10 rounded-[3rem] text-center border border-white/5 shadow-2xl">
-                <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-6">Pronto para a experiência VIP?</h2>
+                <h2 className="text-3xl font-black text-white uppercase tracking-tighter mb-6">Pronta para a experiência VIP?</h2>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                     <button 
                         onClick={() => navigate('/clubvip')} 
                         className="px-10 py-5 bg-primary text-white font-black rounded-3xl hover:bg-primary-dark transition-all shadow-xl shadow-primary/30 uppercase text-xs tracking-widest transform active:scale-95"
                     >
-                        ESCOLHER MEU EVENTO
+                        ADQUIRIR MEU ACESSO
                     </button>
                     <button 
                         onClick={() => navigate('/clubvip/status')} 
                         className="px-10 py-5 bg-gray-700 text-white font-black rounded-3xl hover:bg-gray-600 transition-all uppercase text-xs tracking-widest transform active:scale-95"
                     >
-                        CONSULTAR STATUS ATUAL
+                        CONSULTAR MEUS INGRESSOS
                     </button>
                 </div>
             </div>
             
             <p className="text-center text-gray-600 text-[10px] font-black uppercase tracking-[0.3em] mt-12">
-                Clube VIP Oficial • Gestão Exclusiva de Benefícios
+                Clube VIP Oficial • Tecnologia Equipe Certa
             </p>
         </div>
     );
