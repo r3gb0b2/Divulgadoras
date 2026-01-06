@@ -1,19 +1,18 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Campaign, AdminUserData, StatesConfig, Timestamp, CampaignStatus } from '../types';
 import { getCampaigns, addCampaign, updateCampaign, deleteCampaign, getStatesConfig, setStatesConfig } from '../services/settingsService';
-import { setAdminUserData } from '../services/adminService';
 import { stateMap } from '../constants/states';
-import { ArrowLeftIcon } from '../components/Icons';
+import { ArrowLeftIcon, PencilIcon, TrashIcon, RefreshIcon, PlusIcon, LinkIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
-import { functions } from '../firebase/config';
+import firebase from 'firebase/compat/app';
 
-// Modal component for Add/Edit Campaign
 const CampaignModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
-    onSave: (campaign: Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'> | Partial<Campaign> & { id: string }) => void;
-    campaign: Omit<Campaign, 'id' | 'stateAbbr' | 'organizationId'> | Campaign | null;
+    onSave: (campaign: any) => void;
+    campaign: Campaign | null;
 }> = ({ isOpen, onClose, onSave, campaign }) => {
     const [formData, setFormData] = useState({ 
         name: '', 
@@ -43,258 +42,146 @@ const CampaignModal: React.FC<{
     
     if (!isOpen) return null;
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSave({ ...(campaign || {}), ...formData });
-        onClose();
-    };
-
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex justify-center items-center z-50 p-4">
-            <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
-                <h2 className="text-2xl font-bold text-white mb-4">{'id' in (campaign || {}) ? 'Editar Evento' : 'Novo Evento'}</h2>
-                <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto space-y-4 pr-2">
-                    <input type="text" placeholder="Nome do Evento/Gênero" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
-                    <textarea placeholder="Descrição (opcional)" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white min-h-[80px]"/>
-                    <input type="text" placeholder="ID do Pixel (Facebook, etc) - Opcional" value={formData.pixelId} onChange={e => setFormData({...formData, pixelId: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
-                    <input type="url" placeholder="Link do Grupo do WhatsApp" value={formData.whatsappLink} onChange={e => setFormData({...formData, whatsappLink: e.target.value})} required className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"/>
-                    <textarea placeholder="Regras e Informações" value={formData.rules} onChange={e => setFormData({...formData, rules: e.target.value})} className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white min-h-[150px]"/>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-1">Status</label>
-                         <select 
-                            value={formData.status} 
-                            onChange={e => setFormData({...formData, status: e.target.value as CampaignStatus})} 
-                            className="w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-white"
-                        >
-                            <option value="active">Ativo (visível para cadastro)</option>
-                            <option value="inactive">Inativo (não permite novos cadastros)</option>
-                            <option value="hidden">Oculto (não aparece na lista de eventos)</option>
-                        </select>
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex justify-center items-center z-[100] p-4" onClick={onClose}>
+            <div className="bg-secondary rounded-[2.5rem] shadow-2xl p-8 w-full max-w-2xl max-h-[90vh] flex flex-col border border-white/10" onClick={e => e.stopPropagation()}>
+                <h2 className="text-2xl font-black text-white mb-6 uppercase tracking-tighter">{campaign ? 'Editar Evento' : 'Novo Evento'}</h2>
+                <form onSubmit={e => { e.preventDefault(); onSave(formData); }} className="flex-grow overflow-y-auto space-y-4 pr-2 custom-scrollbar">
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Nome do Evento</label>
+                        <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full px-5 py-4 bg-dark border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"/>
                     </div>
-                    <div>
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                            <input 
-                                type="checkbox" 
-                                checked={formData.preventDuplicateInOrg} 
-                                onChange={e => setFormData({...formData, preventDuplicateInOrg: e.target.checked})} 
-                                className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"
-                            />
-                            <span className="text-sm font-medium text-gray-300">Bloquear se já aprovada na organização</span>
-                        </label>
-                        <p className="text-xs text-gray-400 mt-1 ml-6">
-                            Se marcado, impede que uma divulgadora se cadastre neste evento se ela já tiver um cadastro 'Aprovado' em qualquer outro evento desta organização.
-                        </p>
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Link do Grupo WhatsApp</label>
+                        <input type="url" value={formData.whatsappLink} onChange={e => setFormData({...formData, whatsappLink: e.target.value})} required className="w-full px-5 py-4 bg-dark border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-primary text-sm"/>
+                    </div>
+                    <div className="space-y-1">
+                        <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Regras e Instruções</label>
+                        <textarea value={formData.rules} onChange={e => setFormData({...formData, rules: e.target.value})} rows={6} className="w-full px-5 py-4 bg-dark border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-primary text-sm"/>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                         <div className="space-y-1">
+                            <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Status</label>
+                            <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value as any})} className="w-full px-5 py-4 bg-dark border border-white/10 rounded-2xl text-white outline-none focus:ring-2 focus:ring-primary text-xs font-black uppercase">
+                                <option value="active">ATIVO</option>
+                                <option value="inactive">INATIVO</option>
+                                <option value="hidden">OCULTO</option>
+                            </select>
+                        </div>
+                        <div className="flex items-center pt-4">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" checked={formData.preventDuplicateInOrg} onChange={e => setFormData({...formData, preventDuplicateInOrg: e.target.checked})} className="w-4 h-4 rounded bg-dark text-primary" />
+                                <span className="text-[10px] font-black text-gray-400 uppercase">Bloquear Duplicidade</span>
+                            </label>
+                        </div>
                     </div>
                 </form>
-                 <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
-                    <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>
-                    <button type="submit" onClick={handleSubmit} className="px-4 py-2 bg-primary text-white rounded-md">Salvar</button>
+                 <div className="mt-8 flex gap-3 border-t border-white/5 pt-6">
+                    <button type="button" onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-xs">Cancelar</button>
+                    <button type="submit" onClick={() => onSave(formData)} className="flex-[2] py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-xl shadow-primary/20">Salvar Evento</button>
                 </div>
             </div>
         </div>
     );
 };
 
-interface StateManagementPageProps {
-  adminData: AdminUserData;
-}
-
-const getStatusBadge = (status: CampaignStatus) => {
-    const styles: Record<CampaignStatus, string> = {
-        active: "bg-green-900/50 text-green-300",
-        inactive: "bg-red-900/50 text-red-300",
-        hidden: "bg-gray-700 text-gray-400",
-    };
-    const text: Record<CampaignStatus, string> = { active: "Ativo", inactive: "Inativo", hidden: "Oculto" };
-    return <span className={`text-xs ml-2 px-2 py-0.5 rounded-full ${styles[status]}`}>{text[status]}</span>;
-};
-
-const StateManagementPage: React.FC<StateManagementPageProps> = ({ adminData }) => {
+const StateManagementPage: React.FC<{ adminData: AdminUserData }> = ({ adminData }) => {
     const { stateAbbr } = useParams<{ stateAbbr: string }>();
     const { selectedOrgId } = useAdminAuth();
     const navigate = useNavigate();
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-    const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
-    const [copiedLink, setCopiedLink] = useState<string | null>(null);
-
-    const isSuperAdmin = adminData.role === 'superadmin';
-    const orgIdForOps = isSuperAdmin ? undefined : selectedOrgId;
+    const [copiedId, setCopiedId] = useState<string | null>(null);
 
     const fetchData = useCallback(async () => {
-        if (!stateAbbr) return;
-
-        if (!isSuperAdmin && !selectedOrgId) {
-            setError("Sua conta de administrador não está associada a uma organização. Impossível carregar eventos.");
-            setIsLoading(false);
-            return;
-        }
-
+        if (!stateAbbr || !selectedOrgId) return;
         setIsLoading(true);
-        setError('');
         try {
-            const finalOrgId = orgIdForOps || undefined;
-            const campaignData = await getCampaigns(stateAbbr, finalOrgId);
-            setCampaigns(campaignData);
-            if (isSuperAdmin) {
-                const config = await getStatesConfig();
-                setStatesConfig(config);
-            }
+            const data = await getCampaigns(stateAbbr, selectedOrgId);
+            setCampaigns(data);
         } catch (err: any) {
-            setError(err.message || 'Falha ao carregar dados.');
+            setError(err.message);
         } finally {
             setIsLoading(false);
         }
-    }, [stateAbbr, isSuperAdmin, selectedOrgId, orgIdForOps]);
+    }, [stateAbbr, selectedOrgId]);
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+    useEffect(() => { fetchData(); }, [fetchData]);
 
-    const handleOpenModal = (campaign: Campaign | null = null) => {
-        setEditingCampaign(campaign);
-        setIsModalOpen(true);
-    };
-    
-    const handleCopyLink = (campaign: Campaign) => {
-        if (!stateAbbr || !orgIdForOps) return;
-        const link = `${window.location.origin}/#/${orgIdForOps}/register/${stateAbbr}/${encodeURIComponent(campaign.name)}`;
-        navigator.clipboard.writeText(link).then(() => {
-            setCopiedLink(campaign.id);
-            setTimeout(() => setCopiedLink(null), 2500);
-        }).catch(err => {
-            console.error('Failed to copy direct link: ', err);
-            alert('Falha ao copiar o link. Por favor, tente manualmente.');
-        });
-    };
-
-    const handleSaveCampaign = async (campaignData: Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'> | Partial<Campaign> & { id: string }) => {
-        if (!stateAbbr || !orgIdForOps) return;
-
-        if (isSuperAdmin) {
-             setError("Super Admins devem gerenciar campanhas no painel da organização.");
-             return;
-        }
-
+    const handleSave = async (formData: any) => {
+        if (!stateAbbr || !selectedOrgId) return;
         try {
-            if ('id' in campaignData && campaignData.id) {
-                const { id, ...dataToUpdate } = campaignData;
-                await updateCampaign(id, dataToUpdate);
+            if (editingCampaign) {
+                await updateCampaign(editingCampaign.id, formData);
             } else {
-                const newCampaignName = (campaignData as { name: string }).name;
                 await addCampaign({
-                    ...(campaignData as Omit<Campaign, 'id' | 'organizationId' | 'stateAbbr'>),
+                    ...formData,
                     stateAbbr,
-                    organizationId: orgIdForOps,
+                    organizationId: selectedOrgId
                 });
-
-                const adminRestrictions = adminData.assignedCampaigns?.[stateAbbr];
-                if (adminRestrictions !== undefined) {
-                    const newAssignedCampaigns = { ...(adminData.assignedCampaigns || {}) };
-                    const updatedCampaignsForState = [...(newAssignedCampaigns[stateAbbr] || []), newCampaignName];
-                    newAssignedCampaigns[stateAbbr] = updatedCampaignsForState;
-                    
-                    await setAdminUserData(adminData.uid, { assignedCampaigns: newAssignedCampaigns });
-                }
             }
             setIsModalOpen(false);
             fetchData();
         } catch (err: any) {
-            setError(err.message || 'Falha ao salvar evento.');
+            alert(err.message);
         }
     };
 
-    const handleDeleteCampaign = async (id: string) => {
-        if (window.confirm('Tem certeza que deseja deletar este evento?')) {
-            try {
-                await deleteCampaign(id);
-                fetchData();
-            } catch (err: any) {
-                setError(err.message || 'Falha ao deletar evento.');
-            }
-        }
+    const handleCopy = (c: Campaign) => {
+        const link = `${window.location.origin}/#/${selectedOrgId}/${stateAbbr}/${encodeURIComponent(c.name)}/register`;
+        navigator.clipboard.writeText(link);
+        setCopiedId(c.id);
+        setTimeout(() => setCopiedId(null), 2000);
     };
-    
-    const handleToggleStateActive = async (isActive: boolean) => {
-        if (!isSuperAdmin || !stateAbbr || !statesConfig) return;
-        try {
-            const newConfig = { ...statesConfig, [stateAbbr]: { ...statesConfig[stateAbbr], isActive } };
-            await setStatesConfig(newConfig);
-            setStatesConfig(newConfig);
-        } catch (err: any) {
-            setError(err.message || 'Falha ao atualizar status da região.');
-        }
-    };
-    
-    const currentStateConfig = stateAbbr ? statesConfig?.[stateAbbr] : null;
 
     return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold">Gerenciar: {stateAbbr ? stateMap[stateAbbr.toUpperCase()] : 'Região'}</h1>
-                <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
-                    <ArrowLeftIcon className="w-4 h-4" /> Voltar
-                </button>
+        <div className="max-w-5xl mx-auto p-4">
+            <div className="flex justify-between items-center mb-8">
+                <div>
+                    <h1 className="text-3xl font-black text-white uppercase tracking-tighter">{stateMap[stateAbbr?.toUpperCase() || '']}</h1>
+                    <p className="text-primary font-bold uppercase text-[10px] tracking-widest mt-1">Gestão de Eventos Regionais</p>
+                </div>
+                <div className="flex gap-2">
+                    <button onClick={() => { setEditingCampaign(null); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase shadow-xl flex items-center gap-2 transition-all active:scale-95">
+                        <PlusIcon className="w-4 h-4" /> Novo Evento
+                    </button>
+                    <button onClick={() => navigate(-1)} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-all"><ArrowLeftIcon className="w-5 h-5"/></button>
+                </div>
             </div>
-            {error && <p className="text-red-400 bg-red-900/50 p-3 rounded-md mb-4">{error}</p>}
-            
-            {isSuperAdmin && currentStateConfig && (
-                <div className="bg-secondary shadow-lg rounded-lg p-6 mb-6">
-                    <h2 className="text-xl font-semibold mb-3">Configurações Globais</h2>
-                    <label className="flex items-center space-x-3 cursor-pointer">
-                        <div className="relative">
-                            <input type="checkbox" checked={currentStateConfig.isActive} onChange={e => handleToggleStateActive(e.target.checked)} className="sr-only" />
-                            <div className={`block w-14 h-8 rounded-full ${currentStateConfig.isActive ? 'bg-primary' : 'bg-gray-600'}`}></div>
-                            <div className={`dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${currentStateConfig.isActive ? 'transform translate-x-full' : ''}`}></div>
-                        </div>
-                        <span className="text-white font-medium">Inscrições {currentStateConfig.isActive ? 'ATIVAS' : 'INATIVAS'} para esta região</span>
-                    </label>
-                </div>
-            )}
-            
-            <div className="bg-secondary shadow-lg rounded-lg p-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-semibold">Eventos / Gêneros</h2>
-                    {adminData.role !== 'viewer' && (
-                        <button onClick={() => handleOpenModal()} className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark text-sm">
-                            + Novo Evento
-                        </button>
-                    )}
-                </div>
-                {isLoading ? <p>Carregando...</p> : campaigns.length === 0 ? <p className="text-gray-400">Nenhum evento cadastrado para esta região.</p> : (
-                    <div className="space-y-3">
+
+            <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] border border-white/5 shadow-2xl p-6">
+                {isLoading ? (
+                    <div className="flex justify-center py-20"><RefreshIcon className="w-10 h-10 text-primary animate-spin" /></div>
+                ) : campaigns.length === 0 ? (
+                    <div className="text-center py-20 text-gray-600 font-bold uppercase text-xs">Nenhum evento cadastrado para esta região.</div>
+                ) : (
+                    <div className="grid gap-4">
                         {campaigns.map(c => (
-                            <div key={c.id} className="bg-gray-700/50 p-3 rounded-md flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                                <div>
-                                    <p className="font-semibold text-white flex items-center">{c.name} {getStatusBadge(c.status)}</p>
-                                    <p className="text-sm text-gray-400">{c.description}</p>
-                                    {c.preventDuplicateInOrg && (
-                                        <span className="text-xs text-yellow-400 bg-yellow-900/30 px-1.5 py-0.5 rounded mt-1 inline-block">Bloqueia Duplicidade</span>
-                                    )}
-                                </div>
-                                {adminData.role !== 'viewer' && (
-                                    <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium flex-shrink-0">
-                                        <button 
-                                            onClick={() => handleCopyLink(c)} 
-                                            className="text-blue-400 hover:text-blue-300 transition-colors duration-200 disabled:text-gray-500 disabled:cursor-default"
-                                            disabled={copiedLink === c.id}
-                                        >
-                                            {copiedLink === c.id ? 'Link Copiado!' : 'Copiar Link Direto'}
-                                        </button>
-                                        <button onClick={() => handleOpenModal(c)} className="text-indigo-400 hover:text-indigo-300">Editar</button>
-                                        <button onClick={() => handleDeleteCampaign(c.id)} className="text-red-400 hover:text-red-300">Excluir</button>
+                            <div key={c.id} className="bg-dark/40 p-6 rounded-3xl border border-white/5 flex flex-col md:flex-row justify-between items-center gap-6 group hover:border-primary/30 transition-all">
+                                <div className="text-center md:text-left">
+                                    <div className="flex items-center gap-3 justify-center md:justify-start">
+                                        <h3 className="text-xl font-black text-white uppercase">{c.name}</h3>
+                                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-black border ${c.status === 'active' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-red-900/40 text-red-400 border-red-800'}`}>{c.status.toUpperCase()}</span>
                                     </div>
-                                )}
+                                    <p className="text-gray-500 text-[10px] font-bold uppercase mt-1 tracking-widest truncate max-w-sm">{c.whatsappLink || 'Sem link de grupo'}</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleCopy(c)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${copiedId === c.id ? 'bg-green-600 text-white' : 'bg-indigo-900/20 text-indigo-400 border border-indigo-800/30 hover:bg-indigo-600 hover:text-white'}`}>
+                                        <LinkIcon className="w-4 h-4" /> {copiedId === c.id ? 'Copiado!' : 'Copiar Link'}
+                                    </button>
+                                    <button onClick={() => { setEditingCampaign(c); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl hover:bg-primary transition-all"><PencilIcon className="w-4 h-4"/></button>
+                                    <button onClick={() => { if(confirm("Excluir?")) deleteCampaign(c.id).then(fetchData); }} className="p-3 bg-red-900/30 text-red-500 rounded-xl hover:bg-red-600 transition-all"><TrashIcon className="w-4 h-4"/></button>
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
 
-            <CampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSaveCampaign} campaign={editingCampaign} />
+            <CampaignModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} onSave={handleSave} campaign={editingCampaign} />
         </div>
     );
 };

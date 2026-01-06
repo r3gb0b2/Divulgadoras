@@ -45,6 +45,8 @@ import AdminClubVip from './AdminClubVip';
 import AdminGreenlife from './AdminGreenlife';
 import RecoveryDashboard from './RecoveryDashboard';
 import VipPublicDashboard from './VipPublicDashboard';
+import StatesListPage from './StatesListPage';
+import StateManagementPage from './StateManagementPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
@@ -79,6 +81,9 @@ const AdminAuth: React.FC = () => {
 
             <Route path="promoters" element={<ProtectedRoute>{adminData ? <AdminPanel adminData={adminData} /> : <Navigate to="/admin/login" />}</ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+            <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
+            <Route path="state/:stateAbbr" element={<ProtectedRoute>{adminData ? <StateManagementPage adminData={adminData} /> : <Navigate to="/admin/login" />}</ProtectedRoute>} />
+            
             <Route path="apple-test" element={<ProtectedRoute><AdminAppleTestReview /></ProtectedRoute>} />
             
             <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
