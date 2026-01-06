@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPostsForOrg, getAssignmentsForOrganization, updatePost, acceptAllJustifications } from '../services/postService';
@@ -104,13 +105,20 @@ const AdminPosts: React.FC = () => {
 
     const filteredPosts = useMemo(() => {
         const now = new Date();
-        return posts.filter(p => {
+        const filtered = posts.filter(p => {
             const isExpired = p.expiresAt && toDateSafe(p.expiresAt) < now;
             const matchesStatus = statusFilter === 'all' 
                 || (statusFilter === 'active' && p.isActive && !isExpired)
                 || (statusFilter === 'inactive' && (!p.isActive || isExpired));
             const matchesCampaign = filterCampaign === 'all' || p.campaignName === filterCampaign;
             return matchesStatus && matchesCampaign;
+        });
+
+        // Ordenação por registro (createdAt) - Mais recentes primeiro
+        return filtered.sort((a, b) => {
+            const dateA = toDateSafe(a.createdAt)?.getTime() || 0;
+            const dateB = toDateSafe(b.createdAt)?.getTime() || 0;
+            return dateB - dateA;
         });
     }, [posts, statusFilter, filterCampaign]);
 
