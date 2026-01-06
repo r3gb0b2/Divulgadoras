@@ -132,7 +132,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const fetchData = useCallback(async (silent = false) => {
         const orgId = selectedOrgId || (isSuperAdmin ? undefined : selectedOrgId);
         
-        // Se não for superadmin e não tiver org selecionada, mostramos lista vazia e paramos o loading
         if (!isSuperAdmin && !orgId) {
             if (isMounted.current) setIsLoading(false);
             setPromoters([]);
@@ -145,7 +144,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setError('');
         
         try {
-            // Para SuperAdmin sem org selecionada, mostramos lista vazia por padrão para evitar lag global
             if (isSuperAdmin && !orgId) {
                 setPromoters([]);
                 setStats({ total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 });
@@ -153,8 +151,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 return;
             }
 
+            // Agora passamos o status e o estado para o banco de dados filtrar antes de retornar
             const [allPromoters, statsData, camps, reasons, allOrgs] = await Promise.all([
-                getAllPromotersForAdmin({ organizationId: orgId!, status: 'all' }),
+                getAllPromotersForAdmin({ 
+                    organizationId: orgId!, 
+                    status: filterStatus,
+                    filterState: filterState !== 'all' ? filterState : undefined
+                }),
                 getPromoterStats({ organizationId: orgId! }),
                 getAllCampaigns(orgId!),
                 getRejectionReasons(orgId!),
@@ -178,13 +181,13 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 setIsActionLoading(false);
             }
         }
-    }, [selectedOrgId, isSuperAdmin]);
+    }, [selectedOrgId, isSuperAdmin, filterStatus, filterState]);
 
     useEffect(() => {
         if (!authLoading) {
             fetchData();
         }
-    }, [selectedOrgId, fetchData, authLoading]);
+    }, [selectedOrgId, fetchData, authLoading, filterStatus, filterState]); // Adicionado filterStatus e filterState como dependências
 
     const handleLookup = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -310,6 +313,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         let results = promoters.filter(p => {
             if (!p) return false;
             
+            // Filtros de status e estado agora são feitos no banco, mas mantemos aqui por segurança
             if (filterStatus !== 'all' && p.status !== filterStatus) return false;
             if (filterState !== 'all' && p.state !== filterState) return false;
 
@@ -332,13 +336,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             return true;
         });
 
+        // Ordenação local redundante para garantir que os mais novos apareçam no topo
         results.sort((a, b) => {
-            const timeA = (a.status === 'approved' || a.status === 'rejected' || (a.status as string) === 'rejected_editable') 
-                ? getUnixTime(a.statusChangedAt || a.createdAt)
-                : getUnixTime(a.createdAt);
-            const timeB = (b.status === 'approved' || b.status === 'rejected' || (b.status as string) === 'rejected_editable') 
-                ? getUnixTime(b.statusChangedAt || b.createdAt)
-                : getUnixTime(b.createdAt);
+            const timeA = getUnixTime(a.createdAt);
+            const timeB = getUnixTime(b.createdAt);
             return timeB - timeA;
         });
 

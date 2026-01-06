@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
@@ -37,7 +38,6 @@ const getUnixTime = (ts: any): number => {
     return isNaN(d.getTime()) ? 0 : d.getTime() / 1000;
 };
 
-// FIX: Added missing cleanForCallable helper function to sanitize data for Cloud Function calls.
 /**
  * Auxiliar para limpar objetos que não podem ser serializados em chamadas HTTPS (como FieldValue).
  */
@@ -53,7 +53,6 @@ const cleanForCallable = (data: any): any => {
     return clean;
 };
 
-// ... restante do arquivo (mantendo as funções existentes)
 export const changePromoterEmail = async (promoterId: string, oldEmail: string, newEmail: string): Promise<void> => {
     try {
         const updateFunc = functions.httpsCallable('updatePromoterEmail');
@@ -72,7 +71,6 @@ export const notifyApprovalBulk = async (promoterIds: string[]): Promise<void> =
     }
 };
 
-// Nova função para notificação individual simplificada
 export const notifyPromoterEmail = async (promoterId: string): Promise<void> => {
     await notifyApprovalBulk([promoterId]);
 };
@@ -230,7 +228,6 @@ export const getAllPromoters = async (options: {
     try {
         const orgId = options.filterOrgId && options.filterOrgId !== 'all' ? options.filterOrgId : options.organizationId;
         
-        // Proteção contra orgId nulo em ambientes Super Admin sem org selecionada
         if (!orgId) return [];
 
         let q: firebase.firestore.Query = firestore.collection("promoters")
@@ -244,7 +241,12 @@ export const getAllPromoters = async (options: {
             q = q.where("state", "==", options.filterState);
         }
 
-        const snap = await q.limit(1000).get();
+        // Adicionada ordenação obrigatória direta no banco para novos cadastros aparecerem primeiro
+        // Nota: Isso pode exigir a criação de índices compostos se houver múltiplos filtros ativos
+        q = q.orderBy("createdAt", "desc");
+
+        // Aumentado o limite para 5.000 para cobrir bases maiores
+        const snap = await q.limit(5000).get();
         let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
 
         if (options.selectedCampaign && options.selectedCampaign !== 'all') {
@@ -258,21 +260,30 @@ export const getAllPromoters = async (options: {
         return results;
     } catch (error: any) {
         console.error("Erro ao buscar divulgadoras:", error);
+        // Fallback: Se der erro de índice ausente, tentamos uma busca simplificada sem ordenação
+        if (error.message?.includes("index")) {
+             const fallbackSnap = await firestore.collection("promoters")
+                .where("organizationId", "==", options.organizationId)
+                .limit(5000).get();
+             return fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter))
+                .sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
+        }
         throw new Error("Não foi possível carregar a lista de equipe.");
     }
 };
 
 /**
  * Função unificada para carregar TODAS as divulgadoras para o Admin.
- * Carrega até 1000 registros para permitir filtros locais eficientes.
  */
 export const getAllPromotersForAdmin = async (options: {
     organizationId: string;
     status?: PromoterStatus | 'all';
+    filterState?: string;
 }): Promise<Promoter[]> => {
     return getAllPromoters({
         organizationId: options.organizationId,
-        status: options.status
+        status: options.status,
+        filterState: options.filterState
     });
 };
 
