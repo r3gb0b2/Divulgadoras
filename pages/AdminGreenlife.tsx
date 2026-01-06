@@ -152,10 +152,20 @@ const AdminGreenlife: React.FC = () => {
 
     const handleSaveEvent = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!editingEvent?.name) return;
+        if (!editingEvent?.name || !editingEvent?.price) return;
         try {
-            if (editingEvent.id) await updateGreenlifeEvent(editingEvent.id, editingEvent);
-            else await createGreenlifeEvent(editingEvent as any);
+            const dataToSave = {
+                name: editingEvent.name,
+                price: Number(editingEvent.price),
+                eventTime: editingEvent.eventTime || '',
+                eventLocation: editingEvent.eventLocation || '',
+                isActive: editingEvent.isActive ?? true,
+                benefits: editingEvent.benefits || []
+            };
+
+            if (editingEvent.id) await updateGreenlifeEvent(editingEvent.id, dataToSave);
+            else await createGreenlifeEvent(dataToSave as any);
+            
             setIsModalOpen(false);
             fetchData();
         } catch (e: any) { alert(e.message); }
@@ -281,14 +291,29 @@ const AdminGreenlife: React.FC = () => {
                         <h2 className="text-2xl font-black text-white uppercase mb-6">Oferta Greenlife</h2>
                         <form onSubmit={handleSaveEvent} className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
-                                <input type="text" placeholder="Nome" value={editingEvent?.name || ''} onChange={e => setEditingEvent({...editingEvent!, name: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                                <input type="number" step="0.01" placeholder="Preço" value={editingEvent?.price || ''} onChange={e => setEditingEvent({...editingEvent!, price: Number(e.target.value)})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Nome da Oferta</label>
+                                    <input type="text" placeholder="Nome" value={editingEvent?.name || ''} onChange={e => setEditingEvent({...editingEvent!, name: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Preço (R$)</label>
+                                    <input type="number" step="0.01" placeholder="Preço" value={editingEvent?.price || ''} onChange={e => setEditingEvent({...editingEvent!, price: Number(e.target.value)})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
                             </div>
-                            <input type="text" placeholder="Unidade / Local" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                            <div className="flex gap-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Horário</label>
+                                    <input type="text" placeholder="Ex: 08h às 22h" value={editingEvent?.eventTime || ''} onChange={e => setEditingEvent({...editingEvent!, eventTime: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Unidade / Local</label>
+                                    <input type="text" placeholder="Ex: Greenlife Aldeota" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
+                            </div>
+                            <div className="flex gap-4 pt-2">
                                 <label className="flex items-center gap-2 text-white text-[10px] font-black uppercase cursor-pointer"><input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-green-500" /> Ativo</label>
                             </div>
-                            <button type="submit" className="w-full py-5 bg-green-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest">Salvar</button>
+                            <button type="submit" className="w-full py-5 bg-green-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest mt-4">Salvar Alterações</button>
                         </form>
                     </div>
                 </div>

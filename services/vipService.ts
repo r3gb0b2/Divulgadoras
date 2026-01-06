@@ -7,19 +7,25 @@ import { httpsCallable } from 'firebase/functions';
 const COLLECTION_EVENTS = 'vipEvents';
 const COLLECTION_MEMBERSHIPS = 'vipMemberships';
 
+const getMs = (ts: any): number => {
+    if (!ts) return 0;
+    if (typeof ts.toMillis === 'function') return ts.toMillis();
+    if (ts.seconds !== undefined) return ts.seconds * 1000;
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? 0 : d.getTime();
+};
+
 export const getActiveVipEvents = async (): Promise<VipEvent[]> => {
     const snap = await firestore.collection(COLLECTION_EVENTS).where('isActive', '==', true).get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
 };
 
 export const getAllVipEvents = async (): Promise<VipEvent[]> => {
-    const snap = await firestore.collection(COLLECTION_EVENTS).orderBy('createdAt', 'desc').get();
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+    const snap = await firestore.collection(COLLECTION_EVENTS).get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent))
+        .sort((a, b) => getMs(b.createdAt) - getMs(a.createdAt));
 };
 
-/**
- * Registra a visualização ou download do ingresso pelo cliente
- */
 export const trackVipTicketAction = async (membershipId: string, action: 'view' | 'download') => {
     const field = action === 'view' ? 'viewedAt' : 'downloadedAt';
     return firestore.collection(COLLECTION_MEMBERSHIPS).doc(membershipId).update({
@@ -30,33 +36,28 @@ export const trackVipTicketAction = async (membershipId: string, action: 'view' 
 export const addVipCodes = async (eventId: string, codes: string[]) => {
     const batch = firestore.batch();
     const codesRef = firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes');
-    
     codes.forEach(code => {
         const trimmed = code.trim();
         if (trimmed) {
-            const docRef = codesRef.doc(trimmed);
-            batch.set(docRef, {
+            batch.set(codesRef.doc(trimmed), {
                 code: trimmed,
                 used: false,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp()
             });
         }
     });
-    
     return batch.commit();
 };
 
 export const getVipEventCodes = async (eventId: string) => {
-    const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes')
-        .orderBy('createdAt', 'desc')
-        .get();
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes').get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+        .sort((a, b) => getMs(b.createdAt) - getMs(a.createdAt));
 };
 
 export const getVipCodeStats = async (eventId: string) => {
     const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes')
-        .where('used', '==', false)
-        .get();
+        .where('used', '==', false).get();
     return snap.size;
 };
 
@@ -80,30 +81,17 @@ export const checkVipMembership = async (email: string, vipEventId: string): Pro
     const snap = await firestore.collection(COLLECTION_MEMBERSHIPS)
         .where('promoterEmail', '==', email.toLowerCase().trim())
         .where('vipEventId', '==', vipEventId)
-        .limit(1)
-        .get();
-    
+        .limit(1).get();
     if (snap.empty) return null;
     return { id: snap.docs[0].id, ...snap.docs[0].data() } as VipMembership;
 };
 
 export const getAllVipMemberships = async (vipEventId?: string) => {
     let query: firebase.firestore.Query = firestore.collection(COLLECTION_MEMBERSHIPS);
-    if (vipEventId && vipEventId !== 'all') {
-        query = query.where('vipEventId', '==', vipEventId);
-    }
+    if (vipEventId && vipEventId !== 'all') query = query.where('vipEventId', '==', vipEventId);
     const snap = await query.get();
-    const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipMembership));
-    results.sort((a, b) => {
-        const getTime = (ts: any) => {
-            if (!ts) return 0;
-            if (ts.toMillis) return ts.toMillis();
-            if (ts.seconds) return ts.seconds * 1000;
-            return new Date(ts).getTime() || 0;
-        };
-        return getTime(b.submittedAt) - getTime(a.submittedAt);
-    });
-    return results;
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipMembership))
+        .sort((a, b) => getMs(b.submittedAt) - getMs(a.submittedAt));
 };
 
 export const updateVipMembership = async (id: string, data: Partial<VipMembership>) => {
