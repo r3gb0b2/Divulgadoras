@@ -5,8 +5,6 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import AdminDashboard from './AdminDashboard';
 import SuperAdminDashboard from './SuperAdminDashboard';
 import { AdminPanel } from './AdminPanel';
-import StatesListPage from './StatesListPage';
-import StateManagementPage from './StateManagementPage';
 import ManageUsersPage from './ManageUsersPage';
 import OrganizationsListPage from './OrganizationsListPage';
 import ManageOrganizationPage from './ManageOrganizationPage';
@@ -44,6 +42,7 @@ import AdminLoginPage from './AdminLoginPage';
 import AdminAppleTestReview from './AdminAppleTestReview';
 import AdminGlobalLists from './AdminGlobalLists';
 import AdminClubVip from './AdminClubVip';
+import AdminGreenlife from './AdminGreenlife';
 import RecoveryDashboard from './RecoveryDashboard';
 import VipPublicDashboard from './VipPublicDashboard';
 
@@ -81,10 +80,6 @@ const AdminAuth: React.FC = () => {
             <Route path="promoters" element={<ProtectedRoute>{adminData ? <AdminPanel adminData={adminData} /> : <Navigate to="/admin/login" />}</ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="apple-test" element={<ProtectedRoute><AdminAppleTestReview /></ProtectedRoute>} />
-            <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
-            <Route path="state/:stateAbbr" element={<ProtectedRoute><StateManagementPage adminData={adminData!} /></ProtectedRoute>} />
-            <Route path="users" element={<ProtectedRoute><ManageUsersPage /></ProtectedRoute>} />
-            <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
             
             <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
             <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
@@ -116,6 +111,7 @@ const AdminAuth: React.FC = () => {
             <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
             
             <Route path="club-vip" element={<ProtectedRoute><AdminClubVip /></ProtectedRoute>} />
+            <Route path="greenlife" element={<ProtectedRoute><AdminGreenlife /></ProtectedRoute>} />
             <Route path="recovery" element={<ProtectedRoute><RecoveryDashboard /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/admin" replace />} />

@@ -29,6 +29,8 @@ import GlobalGuestListCheck from './pages/GlobalGuestListCheck';
 import ClubVipHome from './pages/ClubVipHome';
 import ClubVipHowItWorks from './pages/ClubVipHowItWorks';
 import ClubVipStatus from './pages/ClubVipStatus';
+import GreenlifeHome from './pages/GreenlifeHome';
+import GreenlifeStatus from './pages/GreenlifeStatus';
 import { clearPushListeners } from './services/pushService';
 
 const OrganizationSwitcher: React.FC = () => {
@@ -70,12 +72,22 @@ const Header: React.FC = () => {
       }
   };
 
-  // Detecta se estamos no fluxo do Clube VIP
   const isVipContext = location.pathname.startsWith('/clubvip');
+  const isGreenlifeContext = location.pathname.startsWith('/alunosgreenlife');
   
-  const homePath = isVipContext ? '/clubvip' : '/';
-  const howItWorksPath = isVipContext ? '/clubvip/como-funciona' : '/como-funciona';
-  const statusPath = isVipContext ? '/clubvip/status' : '/status';
+  let homePath = '/';
+  let howItWorksPath = '/como-funciona';
+  let statusPath = '/status';
+
+  if (isVipContext) {
+      homePath = '/clubvip';
+      howItWorksPath = '/clubvip/como-funciona';
+      statusPath = '/clubvip/status';
+  } else if (isGreenlifeContext) {
+      homePath = '/alunosgreenlife';
+      howItWorksPath = '/alunosgreenlife/como-funciona'; // Placeholder se quiser criar
+      statusPath = '/alunosgreenlife/status';
+  }
 
   return (
       <header className="bg-secondary shadow-md sticky top-0 z-50 pt-[env(safe-area-inset-top)]">
@@ -83,12 +95,13 @@ const Header: React.FC = () => {
               <Link to={homePath} className="flex items-center" onClick={() => setIsMenuOpen(false)}>
                   <LogoIcon className="h-10 md:h-12 w-auto text-white" />
                   {isVipContext && <span className="ml-3 px-2 py-0.5 bg-primary text-[10px] font-black text-white rounded uppercase tracking-widest hidden sm:block">VIP</span>}
+                  {isGreenlifeContext && <span className="ml-3 px-2 py-0.5 bg-green-600 text-[10px] font-black text-white rounded uppercase tracking-widest hidden sm:block">GREENLIFE</span>}
               </Link>
               
               <div className='hidden md:flex items-center space-x-4'>
                   <OrganizationSwitcher />
                   <Link to={homePath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
-                  <Link to={howItWorksPath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Como Funciona</Link>
+                  {!isGreenlifeContext && <Link to={howItWorksPath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Como Funciona</Link>}
                   <Link to={statusPath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Status</Link>
                   <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
                   {adminData && (
@@ -117,15 +130,8 @@ const Header: React.FC = () => {
                           <OrganizationSwitcher />
                       </div>
                       <Link to={homePath} onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Início</Link>
-                      <Link to={howItWorksPath} onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Como Funciona</Link>
                       <Link to={statusPath} onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Status</Link>
                       <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Admin</Link>
-                      {adminData && (
-                          <button onClick={handleLogout} className="w-full text-left flex items-center gap-2 text-red-400 hover:text-red-500 px-3 py-2 rounded-md text-base font-medium">
-                              <LogoutIcon className="h-5 w-5" />
-                              <span>Sair</span>
-                          </button>
-                      )}
                   </div>
               </div>
           )}
@@ -136,9 +142,7 @@ const Header: React.FC = () => {
 
 const App: React.FC = () => {
   useEffect(() => {
-      return () => {
-          clearPushListeners();
-      }
+      return () => { clearPushListeners(); }
   }, []);
 
   return (
@@ -164,10 +168,14 @@ const App: React.FC = () => {
                 <Route path="/registrar-f1" element={<RegisterF1 />} />
                 <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
                 
-                {/* Clube VIP - Página Separada */}
+                {/* Clube VIP */}
                 <Route path="/clubvip" element={<ClubVipHome />} />
                 <Route path="/clubvip/como-funciona" element={<ClubVipHowItWorks />} />
                 <Route path="/clubvip/status" element={<ClubVipStatus />} />
+
+                {/* Alunos Greenlife */}
+                <Route path="/alunosgreenlife" element={<GreenlifeHome />} />
+                <Route path="/alunosgreenlife/status" element={<GreenlifeStatus />} />
                 
                 {/* Divulgadoras */}
                 <Route path="/posts" element={<PostCheck />} />
@@ -189,13 +197,7 @@ const App: React.FC = () => {
             </ErrorBoundary>
           </main>
           <footer className="text-center py-6 text-gray-400 text-sm mt-auto">
-              <p>
-                  &copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. 
-                  <span className="mx-2">|</span> 
-                  <Link to="/politica-de-privacidade" className="hover:text-white underline">Privacidade</Link>
-                  <span className="mx-2">|</span> 
-                  <Link to="/suporte" className="hover:text-white underline">Suporte</Link>
-              </p>
+              <p>&copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. </p>
           </footer>
         </div>
       </Router>
