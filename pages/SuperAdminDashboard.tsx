@@ -14,7 +14,9 @@ import {
     AlertTriangleIcon,
     ClockIcon,
     TrashIcon,
-    ClipboardDocumentListIcon
+    ClipboardDocumentListIcon,
+    TicketIcon,
+    ChartBarIcon
 } from '../components/Icons';
 
 const SuperAdminDashboard: React.FC = () => {
@@ -111,6 +113,16 @@ const SuperAdminDashboard: React.FC = () => {
                         <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Organizações</h2>
                     </div>
                     <p className="mt-4 text-gray-400 text-sm group-hover:text-purple-100">Gerencie produtoras, planos e assinaturas ativas.</p>
+                </Link>
+
+                <Link to="/admin/greenlife" className="group p-6 bg-secondary/60 backdrop-blur border border-white/5 rounded-[2rem] hover:bg-green-700 transition-all">
+                    <div className="flex items-center">
+                        <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                            <TicketIcon className="w-8 h-8" />
+                        </div>
+                        <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Alunos Greenlife</h2>
+                    </div>
+                    <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100">Gestão de adesões e cupons exclusivos Greenlife.</p>
                 </Link>
 
                 <Link to="/admin/global-lists" className="group p-6 bg-secondary/60 backdrop-blur border border-white/5 rounded-[2rem] hover:bg-purple-600 transition-all">
