@@ -66,10 +66,12 @@ const AdminAuth: React.FC = () => {
 
             <Route index element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
             
+            {/* Rotas exclusivas de SuperAdmin */}
             {adminData?.role === 'superadmin' && (
                 <>
                     <Route path="super" element={<ProtectedRoute><SuperAdminDashboard /></ProtectedRoute>} />
                     <Route path="organizations" element={<ProtectedRoute><OrganizationsListPage /></ProtectedRoute>} />
+                    <Route path="organization/:orgId" element={<ProtectedRoute><ManageOrganizationPage /></ProtectedRoute>} />
                     <Route path="applications" element={<ProtectedRoute><AdminApplicationsListPage /></ProtectedRoute>} />
                     <Route path="newsletter" element={<ProtectedRoute><NewsletterPage /></ProtectedRoute>} />
                     <Route path="email-templates" element={<ProtectedRoute><EmailTemplateEditor /></ProtectedRoute>} />
@@ -77,9 +79,11 @@ const AdminAuth: React.FC = () => {
                     <Route path="cleanup" element={<ProtectedRoute><AdminCleanupPage /></ProtectedRoute>} />
                     <Route path="push-queue" element={<ProtectedRoute><AdminPushQueuePage /></ProtectedRoute>} />
                     <Route path="global-lists" element={<ProtectedRoute><AdminGlobalLists /></ProtectedRoute>} />
+                    <Route path="greenlife" element={<ProtectedRoute><AdminGreenlife /></ProtectedRoute>} />
                 </>
             )}
 
+            {/* Rotas Gerais de Admin / Equipe */}
             <Route path="promoters" element={<ProtectedRoute>{adminData ? <AdminPanel adminData={adminData} /> : <Navigate to="/admin/login" />}</ProtectedRoute>} />
             <Route path="settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
@@ -116,11 +120,12 @@ const AdminAuth: React.FC = () => {
             <Route path="settings/change-password" element={<ProtectedRoute><ChangePasswordPage /></ProtectedRoute>} />
             <Route path="settings/subscription" element={<ProtectedRoute><SubscriptionPage /></ProtectedRoute>} />
             
+            {/* Módulos Financeiros / VIP */}
             <Route path="club-vip" element={<ProtectedRoute><AdminClubVip /></ProtectedRoute>} />
-            <Route path="greenlife" element={<ProtectedRoute><AdminGreenlife /></ProtectedRoute>} />
             <Route path="recovery" element={<ProtectedRoute><RecoveryDashboard /></ProtectedRoute>} />
             <Route path="recovery-leads" element={<ProtectedRoute><PromoterRecoveryPage /></ProtectedRoute>} />
 
+            {/* Fallback */}
             <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>
     );
