@@ -44,6 +44,7 @@ import AdminGlobalLists from './AdminGlobalLists';
 import AdminClubVip from './AdminClubVip';
 import AdminGreenlife from './AdminGreenlife';
 import RecoveryDashboard from './RecoveryDashboard';
+import PromoterRecoveryPage from './PromoterRecoveryPage';
 import VipPublicDashboard from './VipPublicDashboard';
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
@@ -118,6 +119,7 @@ const AdminAuth: React.FC = () => {
             <Route path="club-vip" element={<ProtectedRoute><AdminClubVip /></ProtectedRoute>} />
             <Route path="greenlife" element={<ProtectedRoute><AdminGreenlife /></ProtectedRoute>} />
             <Route path="recovery" element={<ProtectedRoute><RecoveryDashboard /></ProtectedRoute>} />
+            <Route path="recovery-leads" element={<ProtectedRoute><PromoterRecoveryPage /></ProtectedRoute>} />
 
             <Route path="*" element={<Navigate to="/admin" replace />} />
         </Routes>

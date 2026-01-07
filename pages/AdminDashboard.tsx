@@ -2,7 +2,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
-import { UsersIcon, MegaphoneIcon, TicketIcon, LogoutIcon, CogIcon, FaceIdIcon, EnvelopeIcon, WhatsAppIcon, ChartBarIcon, ClipboardDocumentListIcon, ClockIcon } from '../components/Icons';
+import { UsersIcon, MegaphoneIcon, TicketIcon, LogoutIcon, CogIcon, FaceIdIcon, EnvelopeIcon, WhatsAppIcon, ChartBarIcon, ClipboardDocumentListIcon, ClockIcon, UserPlusIcon } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
 const AdminDashboard: React.FC = () => {
@@ -47,6 +47,17 @@ const AdminDashboard: React.FC = () => {
                         <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
                     </Link>
 
+                    <Link to="/admin/recovery-leads" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-green-600 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
+                        <div className="flex items-center">
+                            <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                <WhatsAppIcon className="w-8 h-8" />
+                            </div>
+                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Recuperação Equipe</h2>
+                        </div>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Contatar candidatas pendentes e suporte rápido.</p>
+                        <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
+                    </Link>
+
                     {isSuperAdmin && (
                         <Link to="/admin/club-vip" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-amber-600 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
                             <div className="flex items-center">
@@ -60,18 +71,16 @@ const AdminDashboard: React.FC = () => {
                         </Link>
                     )}
 
-                    {isSuperAdmin && (
-                        <Link to="/admin/greenlife" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-green-600 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
-                            <div className="flex items-center">
-                                <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                    <TicketIcon className="w-8 h-8" />
-                                </div>
-                                <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Greenlife</h2>
+                    <Link to="/admin/recovery" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-amber-700 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
+                        <div className="flex items-center">
+                            <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                <WhatsAppIcon className="w-8 h-8" />
                             </div>
-                            <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Gestão de adesões exclusiva Alunos Greenlife.</p>
-                            <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
-                        </Link>
-                    )}
+                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Recuperação VIP</h2>
+                        </div>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-amber-100 line-clamp-2">Recuperar carrinhos abandonados do Club VIP.</p>
+                        <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
+                    </Link>
 
                     <Link to="/admin/posts" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-primary transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
                         <div className="flex items-center">
@@ -82,17 +91,6 @@ const AdminDashboard: React.FC = () => {
                         </div>
                         <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Criar tarefas e validar prints.</p>
                         <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
-                    </Link>
-
-                    <Link to="/admin/recovery" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-green-600 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
-                        <div className="flex items-center">
-                            <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                <WhatsAppIcon className="w-8 h-8" />
-                            </div>
-                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Recuperação</h2>
-                        </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Vendas manuais e recuperação de carrinhos.</p>
-                        <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
                     </Link>
 
                     <Link to="/admin/settings" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-gray-700 transition-all duration-300 border border-white/5 hover:border-primary shadow-xl">
