@@ -95,6 +95,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [selectedCampaign, setSelectedCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     
+    // Filtros de Idade
+    const [minAge, setMinAge] = useState('');
+    const [maxAge, setMaxAge] = useState('');
+    
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [isBulkAction, setIsBulkAction] = useState(false);
 
@@ -235,12 +239,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
-    // Ação ultra-rápida: Atualiza localmente e envia pro banco sem esperar o "full reload" ou disparar alertas
     const handleApprove = async (p: Promoter) => {
         const pId = p.id;
         const allCampaigns = Array.from(new Set([p.campaignName, ...(p.associatedCampaigns || [])].filter(Boolean) as string[]));
         
-        // Atualização otimista no estado local (remove da lista pendente imediatamente se o filtro for pendente)
         if (filterStatus === 'pending') {
             setPromoters(prev => prev.filter(item => item.id !== pId));
         }
@@ -251,7 +253,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 allCampaigns: allCampaigns,
                 actionTakenByEmail: adminData.email
             });
-            // Opcional: Atualiza estatísticas em silêncio
             fetchData(true);
         } catch (err: any) {
             console.error("Falha ao aprovar:", err);
@@ -295,7 +296,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 }));
                 setSelectedIds(new Set());
             } else if (selectedPromoter) {
-                // Remove localmente antes de terminar o request para parecer instantâneo
                 if (filterStatus === 'pending') {
                     setPromoters(prev => prev.filter(item => item.id !== selectedPromoter.id));
                 }
@@ -329,6 +329,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 if (!inMain && !inAssociated) return false;
             }
 
+            // Filtro de Idade
+            const age = calculateAge(p.dateOfBirth);
+            const minV = minAge === '' ? 0 : parseInt(minAge);
+            const maxV = maxAge === '' ? 999 : parseInt(maxAge);
+            if (age < minV || age > maxV) return false;
+
             const nameMatch = (p.name || '').toLowerCase().includes(query);
             const emailMatch = (p.email || '').toLowerCase().includes(query);
             const instaMatch = (p.instagram || '').toLowerCase().includes(query);
@@ -349,7 +355,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         });
 
         return results;
-    }, [promoters, filterStatus, filterState, selectedCampaign, searchQuery, filterGroup]);
+    }, [promoters, filterStatus, filterState, selectedCampaign, searchQuery, filterGroup, minAge, maxAge]);
 
     const statusBadge = (status: PromoterStatus) => {
         const config = {
@@ -392,28 +398,49 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
 
             <div className="bg-secondary p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-white/5 shadow-xl space-y-4 mx-2 md:mx-0">
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                    <div className="md:col-span-4 relative">
+                    <div className="md:col-span-3 relative">
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
                             type="text" 
-                            placeholder="Buscar nome, e-mail ou @..." 
+                            placeholder="Nome, e-mail ou @..." 
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-medium"
                         />
                     </div>
-                    <div className="md:col-span-4">
+                    <div className="md:col-span-3">
                         <select 
                             value={selectedCampaign} 
                             onChange={e => setSelectedCampaign(e.target.value)}
                             className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm focus:ring-1 focus:ring-primary outline-none font-bold"
                         >
-                            <option value="all">Filtrar por Evento (Todos)</option>
+                            <option value="all">Todos Eventos</option>
                             {campaigns.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
                         </select>
                     </div>
-                    <form onSubmit={handleLookup} className="flex gap-2 md:col-span-3">
-                         <input type="email" placeholder="Busca global (E-mail)..." value={lookupEmail} onChange={e => setLookupEmail(e.target.value)} className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
+                    {/* FILTRO DE IDADE */}
+                    <div className="md:col-span-3 flex gap-2">
+                        <div className="relative flex-1">
+                            <input 
+                                type="number" 
+                                placeholder="Idade De" 
+                                value={minAge} 
+                                onChange={e => setMinAge(e.target.value)}
+                                className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[11px] focus:ring-1 focus:ring-primary outline-none font-black uppercase text-center"
+                            />
+                        </div>
+                        <div className="relative flex-1">
+                            <input 
+                                type="number" 
+                                placeholder="Até" 
+                                value={maxAge} 
+                                onChange={e => setMaxAge(e.target.value)}
+                                className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[11px] focus:ring-1 focus:ring-primary outline-none font-black uppercase text-center"
+                            />
+                        </div>
+                    </div>
+                    <form onSubmit={handleLookup} className="flex gap-2 md:col-span-2">
+                         <input type="email" placeholder="Busca global..." value={lookupEmail} onChange={e => setLookupEmail(e.target.value)} className="flex-grow px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-xs focus:ring-1 focus:ring-primary outline-none font-bold"/>
                         <button type="submit" className="px-4 bg-primary text-white rounded-2xl hover:bg-primary-dark transition-colors"><SearchIcon className="w-4 h-4" /></button>
                     </form>
                     <button onClick={() => fetchData()} className="md:col-span-1 flex items-center justify-center py-3 bg-gray-800 text-gray-300 rounded-2xl hover:bg-gray-700">
@@ -421,7 +448,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     </button>
                 </div>
 
-                <div className="flex flex-wrap gap-2 pt-2">
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
                     <select value={filterStatus} onChange={e => setFilterStatus(e.target.value as any)} className="flex-1 sm:flex-none bg-dark border border-gray-700 text-gray-300 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest outline-none focus:border-primary">
                         <option value="pending">⏳ Pendentes</option>
                         <option value="approved">✅ Aprovadas</option>
@@ -504,12 +531,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                                     <WhatsAppIcon className="w-3.5 h-3.5" />
                                                                     <span className="text-[10px] font-bold">WhatsApp</span>
                                                                 </a>
-                                                                {p.tiktok && (
-                                                                    <a href={`https://tiktok.com/@${p.tiktok.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-gray-300 hover:text-white transition-colors flex items-center gap-1">
-                                                                        <TikTokIcon className="w-3.5 h-3.5" />
-                                                                        <span className="text-[10px] font-bold">TikTok</span>
-                                                                    </a>
-                                                                )}
                                                             </div>
                                                             <div className="flex items-center gap-3 mt-1.5">
                                                                 <p className="text-gray-600 text-[9px] font-bold uppercase tracking-widest">{calculateAge(p.dateOfBirth)}a • {p.state}</p>
@@ -576,13 +597,12 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 <div className="flex items-center gap-3 mt-1.5">
                                                     <a href={`https://instagram.com/${p.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-pink-500"><InstagramIcon className="w-4 h-4" /></a>
                                                     <a href={`https://wa.me/55${p.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-green-500"><WhatsAppIcon className="w-4 h-4" /></a>
-                                                    {p.tiktok && <a href={`https://tiktok.com/@${p.tiktok.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-white"><TikTokIcon className="w-4 h-4" /></a>}
                                                 </div>
                                                 <div className="flex items-center gap-2 mt-2">
                                                     {statusBadge(p.status)}
+                                                    <span className="text-[10px] text-gray-500 font-bold uppercase">{calculateAge(p.dateOfBirth)}a</span>
                                                     {p.hasJoinedGroup && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
                                                 </div>
-                                                <p className="text-gray-600 text-[8px] font-black uppercase tracking-widest mt-1">Por: {p.actionTakenByEmail?.split('@')[0] || '-'}</p>
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
