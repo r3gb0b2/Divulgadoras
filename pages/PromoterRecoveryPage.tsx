@@ -11,6 +11,18 @@ import {
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
 
+const calculateAge = (dob: string): number => {
+    if (!dob) return 0;
+    const birth = new Date(dob);
+    const now = new Date();
+    let age = now.getFullYear() - birth.getFullYear();
+    const m = now.getMonth() - birth.getMonth();
+    if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+        age--;
+    }
+    return age;
+};
+
 const PromoterRecoveryPage: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, selectedOrgId } = useAdminAuth();
@@ -26,6 +38,8 @@ const PromoterRecoveryPage: React.FC = () => {
     const [promoterStatusFilter, setPromoterStatusFilter] = useState<PromoterStatus | 'all'>('all');
     const [campaignFilter, setCampaignFilter] = useState('all');
     const [adminFilter, setAdminFilter] = useState('all');
+    const [minAge, setMinAge] = useState('');
+    const [maxAge, setMaxAge] = useState('');
 
     const [isManageTemplatesOpen, setIsManageTemplatesOpen] = useState(false);
     const [isSelectTemplateOpen, setIsSelectTemplateOpen] = useState(false);
@@ -67,20 +81,25 @@ const PromoterRecoveryPage: React.FC = () => {
     const filteredLeads = useMemo(() => {
         return leads.filter(p => {
             const pRecoveryStatus = p.recoveryStatus || 'none';
+            const age = calculateAge(p.dateOfBirth);
             
             const matchesRecoveryStatus = recoveryStatusFilter === 'all' || pRecoveryStatus === recoveryStatusFilter;
             const matchesPromoterStatus = promoterStatusFilter === 'all' || p.status === promoterStatusFilter;
             const matchesCampaign = campaignFilter === 'all' || p.campaignName === campaignFilter;
             const matchesAdmin = adminFilter === 'all' || p.recoveryAdminEmail === adminFilter;
             
+            const minAgeVal = minAge ? parseInt(minAge) : 0;
+            const maxAgeVal = maxAge ? parseInt(maxAge) : 99;
+            const matchesAge = age >= minAgeVal && age <= maxAgeVal;
+
             const matchesSearch = 
                 p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                 p.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 p.whatsapp.includes(searchQuery);
 
-            return matchesRecoveryStatus && matchesPromoterStatus && matchesCampaign && matchesAdmin && matchesSearch;
+            return matchesRecoveryStatus && matchesPromoterStatus && matchesCampaign && matchesAdmin && matchesSearch && matchesAge;
         });
-    }, [leads, recoveryStatusFilter, promoterStatusFilter, campaignFilter, adminFilter, searchQuery]);
+    }, [leads, recoveryStatusFilter, promoterStatusFilter, campaignFilter, adminFilter, searchQuery, minAge, maxAge]);
 
     const handleUpdateStatus = async (id: string, status: RecoveryStatus) => {
         try {
@@ -164,7 +183,7 @@ const PromoterRecoveryPage: React.FC = () => {
 
             {/* BARRA DE FILTROS AVANÇADA */}
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6 mb-8">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
                     <div className="lg:col-span-2 relative">
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input 
@@ -190,6 +209,17 @@ const PromoterRecoveryPage: React.FC = () => {
                         <option value="all">ADMIN (TODOS)</option>
                         {uniqueAdmins.map(admin => <option key={admin} value={admin}>{admin.split('@')[0].toUpperCase()}</option>)}
                     </select>
+
+                    <div className="flex gap-2">
+                        <input 
+                            type="number" placeholder="DE" value={minAge} onChange={e => setMinAge(e.target.value)}
+                            className="w-full px-3 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary"
+                        />
+                        <input 
+                            type="number" placeholder="ATÉ" value={maxAge} onChange={e => setMaxAge(e.target.value)}
+                            className="w-full px-3 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary"
+                        />
+                    </div>
                 </div>
 
                 <div className="flex items-center gap-4 px-2 border-t border-white/5 pt-4">
@@ -215,7 +245,7 @@ const PromoterRecoveryPage: React.FC = () => {
                     <table className="w-full text-left border-separate border-spacing-0">
                         <thead>
                             <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                <th className="px-6 py-5 border-b border-white/5">Candidata / Perfil</th>
+                                <th className="px-6 py-5 border-b border-white/5">Candidata / Idade</th>
                                 <th className="px-6 py-5 border-b border-white/5">Evento Vinculado</th>
                                 <th className="px-6 py-5 border-b border-white/5 text-center">Status Recuperação</th>
                                 <th className="px-6 py-5 border-b border-white/5 text-center">Admin Responsável</th>
@@ -238,7 +268,7 @@ const PromoterRecoveryPage: React.FC = () => {
                                                 <p className="text-sm font-black text-white uppercase truncate">{p.name}</p>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <span className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border ${getStatusStyle(p.status)}`}>
-                                                        {p.status === 'approved' ? 'Aprovado' : p.status === 'pending' ? 'Pendente' : p.status === 'rejected_editable' ? 'Revisar' : 'Reprovado'}
+                                                        {calculateAge(p.dateOfBirth)} anos
                                                     </span>
                                                     <p className="text-[10px] text-primary font-bold">{p.whatsapp}</p>
                                                 </div>
@@ -269,7 +299,7 @@ const PromoterRecoveryPage: React.FC = () => {
                                             <span className="text-[9px] text-gray-600 font-black uppercase tracking-widest italic">- disponível -</span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-5 text-right">
+                                    <td className="px-6 py-4 text-right">
                                         <button onClick={() => handleStartRecovery(p)} className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-green-500 shadow-lg shadow-green-900/20 transition-all transform active:scale-95">
                                             <WhatsAppIcon className="w-4 h-4" /> CONTATAR
                                         </button>
