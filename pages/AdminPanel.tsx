@@ -151,7 +151,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 return;
             }
 
-            // Agora passamos o status e o estado para o banco de dados filtrar antes de retornar
             const [allPromoters, statsData, camps, reasons, allOrgs] = await Promise.all([
                 getAllPromotersForAdmin({ 
                     organizationId: orgId!, 
@@ -187,7 +186,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         if (!authLoading) {
             fetchData();
         }
-    }, [selectedOrgId, fetchData, authLoading, filterStatus, filterState]); // Adicionado filterStatus e filterState como dependências
+    }, [selectedOrgId, fetchData, authLoading, filterStatus, filterState]);
 
     const handleLookup = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -236,36 +235,40 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         }
     };
 
+    // Ação ultra-rápida: Atualiza localmente e envia pro banco sem esperar o "full reload" ou disparar alertas
     const handleApprove = async (p: Promoter) => {
         const pId = p.id;
         const allCampaigns = Array.from(new Set([p.campaignName, ...(p.associatedCampaigns || [])].filter(Boolean) as string[]));
         
-        setIsBulkProcessing(true);
+        // Atualização otimista no estado local (remove da lista pendente imediatamente se o filtro for pendente)
+        if (filterStatus === 'pending') {
+            setPromoters(prev => prev.filter(item => item.id !== pId));
+        }
+
         try {
             await updatePromoter(pId, { 
                 status: 'approved',
                 allCampaigns: allCampaigns,
                 actionTakenByEmail: adminData.email
             });
-            await fetchData(true); 
+            // Opcional: Atualiza estatísticas em silêncio
+            fetchData(true);
         } catch (err: any) {
             console.error("Falha ao aprovar:", err);
-            await fetchData(true); 
-        } finally {
-            setIsBulkProcessing(false);
+            fetchData(true); 
         }
     };
 
     const handleNotifyEmailManual = async (p: Promoter) => {
         if (!window.confirm(`Enviar e-mail de boas-vindas para ${p.name}?`)) return;
-        setIsBulkProcessing(true);
+        setIsActionLoading(true);
         try {
             await notifyPromoterEmail(p.id);
             alert("E-mail enviado com sucesso!");
         } catch (e: any) {
             alert("Erro ao enviar: " + e.message);
         } finally {
-            setIsBulkProcessing(false);
+            setIsActionLoading(false);
         }
     };
 
@@ -292,6 +295,10 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 }));
                 setSelectedIds(new Set());
             } else if (selectedPromoter) {
+                // Remove localmente antes de terminar o request para parecer instantâneo
+                if (filterStatus === 'pending') {
+                    setPromoters(prev => prev.filter(item => item.id !== selectedPromoter.id));
+                }
                 await updatePromoter(selectedPromoter.id, { 
                     status: statusToSet, 
                     rejectionReason: reason,
@@ -299,9 +306,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 });
                 setSelectedPromoter(null);
             }
-            await fetchData(true); 
+            fetchData(true); 
         } catch (err: any) {
-            await fetchData(true);
+            fetchData(true);
         } finally {
             setIsBulkProcessing(false);
             setIsBulkAction(false);
@@ -313,7 +320,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         let results = promoters.filter(p => {
             if (!p) return false;
             
-            // Filtros de status e estado agora são feitos no banco, mas mantemos aqui por segurança
             if (filterStatus !== 'all' && p.status !== filterStatus) return false;
             if (filterState !== 'all' && p.state !== filterState) return false;
 
@@ -336,7 +342,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             return true;
         });
 
-        // Ordenação local redundante para garantir que os mais novos apareçam no topo
         results.sort((a, b) => {
             const timeA = getUnixTime(a.createdAt);
             const timeB = getUnixTime(b.createdAt);
@@ -368,7 +373,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
                 <div className="flex items-center gap-3">
                     <h1 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Equipe</h1>
-                    {isActionLoading && <RefreshIcon className="w-5 h-5 text-primary animate-spin" />}
+                    {(isActionLoading || isBulkProcessing) && <RefreshIcon className="w-5 h-5 text-primary animate-spin" />}
                 </div>
                 <div className="flex flex-wrap gap-2 overflow-x-auto pb-2 w-full md:w-auto">
                     {[
@@ -541,9 +546,9 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                             </>
                                                         )}
                                                         {p.status === 'pending' && (
-                                                            <button onClick={() => handleApprove(p)} disabled={isBulkProcessing} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>
+                                                            <button onClick={() => handleApprove(p)} className="p-2 bg-green-600 text-white rounded-lg hover:bg-green-500 transition-all"><CheckCircleIcon className="w-4 h-4" /></button>
                                                         )}
-                                                        <button onClick={() => { setSelectedPromoter(p); setIsBulkAction(false); setIsRejectionModalOpen(true); }} disabled={isBulkProcessing} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
+                                                        <button onClick={() => { setSelectedPromoter(p); setIsBulkAction(false); setIsRejectionModalOpen(true); }} className="p-2 bg-red-600 text-white rounded-lg hover:bg-red-500 transition-all"><XIcon className="w-4 h-4" /></button>
                                                         <button onClick={() => { setSelectedPromoter(p); setIsEditModalOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
                                                     </div>
                                                 </td>
@@ -581,14 +586,14 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
-                                            {p.status === 'pending' && <button onClick={() => handleApprove(p)} disabled={isBulkProcessing} className="flex-1 py-4 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2"><CheckCircleIcon className="w-4 h-4" /> Aprovar</button>}
+                                            {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="flex-1 py-4 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2"><CheckCircleIcon className="w-4 h-4" /> Aprovar</button>}
                                             {p.status === 'approved' && (
                                                 <>
                                                     <button onClick={() => handleWhatsAppManual(p)} className="p-4 bg-green-600 text-white rounded-2xl hover:bg-green-500 transition-all flex-1 flex justify-center"><WhatsAppIcon className="w-5 h-5" /></button>
                                                     <button onClick={() => handleNotifyEmailManual(p)} className="p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-500 transition-all flex-1 flex justify-center"><MailIcon className="w-5 h-5" /></button>
                                                 </>
                                             )}
-                                            <button onClick={() => { setSelectedPromoter(p); setIsBulkAction(false); setIsRejectionModalOpen(true); }} disabled={isBulkProcessing} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2"><XIcon className="w-4 h-4" /> Rejeitar</button>
+                                            <button onClick={() => { setSelectedPromoter(p); setIsBulkAction(false); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2"><XIcon className="w-4 h-4" /> Rejeitar</button>
                                         </div>
                                     </div>
                                 );

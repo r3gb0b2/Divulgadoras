@@ -38,21 +38,6 @@ const getUnixTime = (ts: any): number => {
     return isNaN(d.getTime()) ? 0 : d.getTime() / 1000;
 };
 
-/**
- * Auxiliar para limpar objetos que não podem ser serializados em chamadas HTTPS (como FieldValue).
- */
-const cleanForCallable = (data: any): any => {
-    const clean: any = {};
-    Object.keys(data).forEach(key => {
-        const val = data[key];
-        // Remove undefined e FieldValues que causam erro de serialização no httpsCallable
-        if (val !== undefined && !(val && typeof val === 'object' && val.constructor?.name === 'FieldValue')) {
-            clean[key] = val;
-        }
-    });
-    return clean;
-};
-
 export const changePromoterEmail = async (promoterId: string, oldEmail: string, newEmail: string): Promise<void> => {
     try {
         const updateFunc = functions.httpsCallable('updatePromoterEmail');
@@ -241,11 +226,8 @@ export const getAllPromoters = async (options: {
             q = q.where("state", "==", options.filterState);
         }
 
-        // Adicionada ordenação obrigatória direta no banco para novos cadastros aparecerem primeiro
-        // Nota: Isso pode exigir a criação de índices compostos se houver múltiplos filtros ativos
         q = q.orderBy("createdAt", "desc");
 
-        // Aumentado o limite para 5.000 para cobrir bases maiores
         const snap = await q.limit(5000).get();
         let results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
 
@@ -260,7 +242,6 @@ export const getAllPromoters = async (options: {
         return results;
     } catch (error: any) {
         console.error("Erro ao buscar divulgadoras:", error);
-        // Fallback: Se der erro de índice ausente, tentamos uma busca simplificada sem ordenação
         if (error.message?.includes("index")) {
              const fallbackSnap = await firestore.collection("promoters")
                 .where("organizationId", "==", options.organizationId)
@@ -306,20 +287,24 @@ export const getPromoterStats = async (options: {
     } catch (error) { return { total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 }; }
 };
 
+/**
+ * Atualiza o cadastro da divulgadora.
+ * O envio de e-mail agora é disparado por um gatilho de backend (Cloud Functions onUpdate)
+ * para que o painel administrativo seja instantâneo.
+ */
 export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
   try {
     const finalData = {
         ...data,
         statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-
-    if (data.status === 'approved' || (data.status as string) === 'rejected_editable') {
-        const updateFunc = functions.httpsCallable('updatePromoterAndSync');
-        await updateFunc({ promoterId: id, data: cleanForCallable(finalData) });
-    } else { 
-        await firestore.collection('promoters').doc(id).update(finalData); 
-    }
-  } catch (error) { throw new Error("Falha ao atualizar cadastro."); }
+    
+    // Atualização direta no Firestore para máxima velocidade no front-end.
+    // O backend vigia essa alteração e envia o e-mail em background.
+    await firestore.collection('promoters').doc(id).update(finalData);
+  } catch (error) { 
+    throw new Error("Falha ao atualizar cadastro."); 
+  }
 };
 
 export const deletePromoter = async (id: string): Promise<void> => {
