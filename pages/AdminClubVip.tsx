@@ -21,7 +21,7 @@ import {
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, EyeIcon,
     TicketIcon, RefreshIcon, PlusIcon, TrashIcon, PencilIcon, 
     WhatsAppIcon, DownloadIcon, LinkIcon, ExternalLinkIcon,
-    CogIcon, UndoIcon, ChartBarIcon
+    CogIcon, UndoIcon, ChartBarIcon, SparklesIcon, EnvelopeIcon
 } from '../components/Icons';
 
 const toDateSafe = (timestamp: any): Date | null => {
@@ -114,7 +114,7 @@ const AdminClubVip: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, loading: authLoading } = useAdminAuth();
     
-    const [activeTab, setActiveTab] = useState<'members' | 'events'>('members');
+    const [activeTab, setActiveTab] = useState<'members' | 'events' | 'recovery'>('members');
     const [memberships, setMemberships] = useState<VipMembership[]>([]);
     const [vipEvents, setVipEvents] = useState<VipEvent[]>([]);
     const [eventStats, setEventStats] = useState<Record<string, { total: number, available: number }>>({});
@@ -123,6 +123,11 @@ const AdminClubVip: React.FC = () => {
     const [selectedEventId, setSelectedEventId] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     
+    // Email states para recuperação
+    const [emailSubject, setEmailSubject] = useState('Gostaria de te ajudar a garantir seu VIP 🎫');
+    const [emailBody, setEmailBody] = useState('<p>Olá {{promoterName}},</p><p>Vimos que você iniciou sua adesão ao <strong>{{campaignName}}</strong> mas não concluiu o Pix.</p><p>Ainda temos algumas vagas disponíveis e gostaríamos que você estivesse conosco! Teve alguma dúvida no processo?</p><p>Acesse seu portal e tente novamente: <a href="https://equipecerta.com.br/#/clubvip/status">Acessar Portal VIP</a></p>');
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -177,6 +182,10 @@ const AdminClubVip: React.FC = () => {
             return matchesSearch && matchesEvent;
         });
     }, [memberships, searchQuery, selectedEventId]);
+
+    const pendingLeads = useMemo(() => {
+        return memberships.filter(m => m.status === 'pending');
+    }, [memberships]);
 
     const handleCopyTicketLink = (membership: VipMembership) => {
         const url = `${window.location.origin}/#/clubvip/status?email=${encodeURIComponent(membership.promoterEmail)}`;
@@ -271,6 +280,29 @@ const AdminClubVip: React.FC = () => {
         } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); }
     };
 
+    const handleSendRecoveryEmail = async () => {
+        if (pendingLeads.length === 0) return alert("Nenhum lead pendente para receber.");
+        if (!confirm(`Deseja enviar este e-mail para ${pendingLeads.length} pessoas com pagamento pendente?`)) return;
+
+        setIsSendingEmail(true);
+        try {
+            const sendNewsletter = httpsCallable(functions, 'sendNewsletter');
+            await sendNewsletter({
+                audience: {
+                    type: 'individual',
+                    promoterIds: pendingLeads.map(l => l.promoterId)
+                },
+                subject: emailSubject,
+                body: emailBody
+            });
+            alert("Disparo de recuperação concluído!");
+        } catch (err: any) {
+            alert("Erro no disparo: " + err.message);
+        } finally {
+            setIsSendingEmail(false);
+        }
+    };
+
     return (
         <div className="pb-40">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
@@ -280,9 +312,6 @@ const AdminClubVip: React.FC = () => {
                 <div className="flex flex-wrap gap-2">
                     <button onClick={() => navigate('/admin/vip-metrics/global')} className="px-4 py-3 bg-blue-600/20 text-blue-400 border border-blue-600/30 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2">
                         <ChartBarIcon className="w-4 h-4" /> Métricas de Venda
-                    </button>
-                    <button onClick={() => navigate('/admin/recovery')} className="px-4 py-3 bg-green-600/20 text-green-400 border border-green-600/30 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all">
-                        <WhatsAppIcon className="w-4 h-4 inline mr-1" /> Recuperar Carrinhos VIP
                     </button>
                     <button onClick={() => { setEditingEvent({ benefits: [], isActive: true }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
                         <PlusIcon className="w-4 h-4" /> Novo Evento
@@ -296,7 +325,8 @@ const AdminClubVip: React.FC = () => {
 
             <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 w-fit ml-4 md:ml-0">
                 <button onClick={() => setActiveTab('members')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'members' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Membros</button>
-                <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Ofertas / Eventos</button>
+                <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Ofertas</button>
+                <button onClick={() => setActiveTab('recovery')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'recovery' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Recuperação</button>
             </div>
 
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
@@ -320,9 +350,7 @@ const AdminClubVip: React.FC = () => {
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
                                         <th className="px-6 py-5">Membro / Evento</th>
                                         <th className="px-6 py-5 text-center">Status Pgto</th>
-                                        <th className="px-6 py-5 text-center">Acessos</th>
-                                        <th className="px-6 py-4 text-right">Portal do Cliente</th>
-                                        <th className="px-6 py-4 text-right">Gestão</th>
+                                        <th className="px-6 py-4 text-right">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
@@ -339,24 +367,11 @@ const AdminClubVip: React.FC = () => {
                                                     {m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-5 text-center">
-                                                <div className="flex justify-center gap-3">
-                                                    <div className={`p-1 ${m.viewedAt ? 'text-blue-400' : 'text-gray-700'}`} title="Visualizou Portal"><EyeIcon className="w-4 h-4"/></div>
-                                                    <div className={`p-1 ${m.downloadedAt ? 'text-green-400' : 'text-gray-700'}`} title="Baixou Ingresso"><DownloadIcon className="w-4 h-4"/></div>
-                                                </div>
-                                            </td>
                                             <td className="px-6 py-5 text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <button onClick={() => handleCopyTicketLink(m)} className="p-2 bg-indigo-900/30 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all border border-indigo-800/30" title="Copiar Link do Portal">
                                                         <LinkIcon className="w-4 h-4" />
                                                     </button>
-                                                    <button onClick={() => handleOpenClientPortal(m)} className="p-2 bg-indigo-900/30 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all border border-indigo-800/30" title="Ver como Cliente (QR Code)">
-                                                        <ExternalLinkIcon className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-5 text-right">
-                                                <div className="flex justify-end gap-2">
                                                     {m.status === 'pending' ? (
                                                         <button onClick={() => handleManualActivateOrSwap(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">ATIVAR</button>
                                                     ) : (
@@ -412,9 +427,51 @@ const AdminClubVip: React.FC = () => {
                         })}
                     </div>
                 )}
+
+                {activeTab === 'recovery' && (
+                    <div className="max-w-4xl mx-auto space-y-8 py-6">
+                        <div className="bg-primary/10 border border-primary/20 p-8 rounded-[2.5rem] flex flex-col md:flex-row items-center justify-between gap-8">
+                            <div className="flex-1 text-center md:text-left">
+                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2 flex items-center justify-center md:justify-start gap-3">
+                                    <SparklesIcon className="w-6 h-6 text-primary" /> Recuperação Inteligente
+                                </h3>
+                                <p className="text-gray-400 text-sm">Dispare um e-mail personalizado para todos os <strong>{pendingLeads.length} contatos</strong> que abandonaram o checkout.</p>
+                            </div>
+                            <div className="text-center p-6 bg-dark/50 rounded-3xl border border-white/5 min-w-[150px]">
+                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Candidatos</p>
+                                <p className="text-4xl font-black text-primary">{pendingLeads.length}</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Assunto do E-mail</label>
+                                <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:ring-2 focus:ring-primary shadow-inner" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Mensagem HTML</label>
+                                <div className="flex gap-2 mb-2">
+                                    {['{{promoterName}}', '{{campaignName}}'].map(tag => (
+                                        <button key={tag} onClick={() => setEmailBody(prev => prev + tag)} className="px-2 py-1 bg-gray-800 text-primary font-mono text-[10px] rounded border border-white/5 hover:bg-gray-700">{tag}</button>
+                                    ))}
+                                </div>
+                                <textarea rows={10} value={emailBody} onChange={e => setEmailBody(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-gray-300 font-mono text-sm outline-none focus:ring-2 focus:ring-primary shadow-inner" />
+                            </div>
+                            
+                            <button 
+                                onClick={handleSendRecoveryEmail}
+                                disabled={isSendingEmail || pendingLeads.length === 0}
+                                className="w-full py-6 bg-primary text-white font-black rounded-[2rem] shadow-2xl shadow-primary/40 hover:bg-primary-dark transition-all uppercase tracking-[0.2em] text-sm disabled:opacity-50 flex items-center justify-center gap-3"
+                            >
+                                {isSendingEmail ? <RefreshIcon className="w-5 h-5 animate-spin" /> : <EnvelopeIcon className="w-5 h-5" />}
+                                {isSendingEmail ? 'DISPARANDO E-MAILS...' : 'DISPARAR RECUPERAÇÃO AGORA'}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
-            {/* MODAL EVENTO */}
+            {/* MODAIS */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-6" onClick={() => setIsModalOpen(false)}>
                     <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -458,6 +515,7 @@ const AdminClubVip: React.FC = () => {
                 </div>
             )}
 
+            {/* FIX: Rename selectedEventForCodes to eventForCodes to match the state definition. */}
             {isCodesModalOpen && eventForCodes && (
                 <ManageCodesModal isOpen={isCodesModalOpen} onClose={() => setIsCodesModalOpen(false)} event={eventForCodes} onSaved={fetchData} onDownloadStock={handleDownloadEventStock} />
             )}
