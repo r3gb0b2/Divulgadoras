@@ -27,6 +27,8 @@ import PhotoViewerModal from '../components/PhotoViewerModal';
 import RejectionModal from '../components/RejectionModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import PromoterLookupModal from '../components/PromoterLookupModal';
+import { functions } from '../firebase/config';
+import { httpsCallable } from 'firebase/functions';
 
 const getUnixTime = (ts: any): number => {
     if (!ts) return 0; 
@@ -285,14 +287,38 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         setIsRejectionModalOpen(false); 
 
         try {
+            const sendNewsletter = httpsCallable(functions, 'sendNewsletter');
+            
             if (isBulkAction) {
-                await Promise.all(Array.from(selectedIds).map(async (id: string) => {
+                const targetIds = Array.from(selectedIds);
+                await Promise.all(targetIds.map(async (id: string) => {
                     await updatePromoter(id, { 
                         status: statusToSet, 
                         rejectionReason: reason,
                         actionTakenByEmail: adminData.email
                     });
                 }));
+
+                // Se oferecer VIP estiver marcado, dispara e-mail de marketing
+                if (offerVip) {
+                    await sendNewsletter({
+                        audience: { type: 'individual', promoterIds: targetIds },
+                        subject: "Oportunidade Especial para você! 🎫",
+                        body: `
+                            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+                                <h2 style="color: #7e39d5;">Olá! Temos uma novidade...</h2>
+                                <p>Agradecemos muito o seu interesse em nossa equipe de divulgação.</p>
+                                <p>Infelizmente, desta vez não conseguimos aprovar o seu cadastro para trabalhar no evento, <strong>MAS não queremos que você fique de fora!</strong></p>
+                                <div style="background: #f3f0ff; padding: 20px; border-radius: 15px; text-align: center; border: 1px solid #dcd0ff;">
+                                    <p style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">🌟 ACESSO PROMOCIONAL LIBERADO 🌟</p>
+                                    <p>Como você já se cadastrou conosco, liberamos um link exclusivo para você garantir seu ingresso através do nosso <strong>CLUBE VIP</strong> com valor promocional.</p>
+                                    <a href="https://divulgadoras.vercel.app/#/clubvip" style="display: inline-block; background: #7e39d5; color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none; font-weight: bold; margin-top: 10px;">GARANTIR MEU VIP AGORA</a>
+                                </div>
+                                <p style="font-size: 12px; color: #999; margin-top: 30px; border-top: 1px solid #eee; pt: 10px;">Equipe Certa - Gestão de Eventos</p>
+                            </div>
+                        `
+                    });
+                }
                 setSelectedIds(new Set());
             } else if (selectedPromoter) {
                 if (filterStatus === 'pending') {
@@ -303,10 +329,29 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     rejectionReason: reason,
                     actionTakenByEmail: adminData.email
                 });
+
+                if (offerVip) {
+                    await sendNewsletter({
+                        audience: { type: 'individual', promoterIds: [selectedPromoter.id] },
+                        subject: "Convite Especial: Clube VIP 🎫",
+                        body: `
+                             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+                                <h2 style="color: #7e39d5;">Olá ${selectedPromoter.name.split(' ')[0]}!</h2>
+                                <p>Infelizmente não pudemos aprovar seu perfil para trabalhar neste evento, mas temos uma <strong>oportunidade exclusiva</strong> para você não ficar de fora da festa.</p>
+                                <div style="background: #f3f0ff; padding: 20px; border-radius: 15px; text-align: center;">
+                                    <p style="font-weight: bold; font-size: 16px;">Garantimos uma vaga promocional para você no nosso Clube VIP!</p>
+                                    <p>Aproveite os benefícios e o valor diferenciado por ser nossa seguidora.</p>
+                                    <a href="https://divulgadoras.vercel.app/#/clubvip" style="display: inline-block; background: #7e39d5; color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none; font-weight: bold;">ACESSAR CLUBE VIP</a>
+                                </div>
+                            </div>
+                        `
+                    });
+                }
                 setSelectedPromoter(null);
             }
             fetchData(true); 
         } catch (err: any) {
+            console.error("Erro ao rejeitar/enviar e-mail:", err);
             fetchData(true);
         } finally {
             setIsBulkProcessing(false);
