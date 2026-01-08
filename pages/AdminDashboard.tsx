@@ -16,7 +16,8 @@ import {
     ClockIcon, 
     UserPlusIcon,
     ShieldCheckIcon,
-    SparklesIcon
+    SparklesIcon,
+    AlertTriangleIcon
 } from '../components/Icons';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 
@@ -61,22 +62,33 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                     <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Super Painel</h2>
                                 </div>
-                                <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Gestão global do sistema, Z-API e configurações de rede.</p>
+                                <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Gestão global do sistema e configurações de rede.</p>
                                 <div className="text-xs text-indigo-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Acesso Restrito &rarr;</div>
                             </Link>
 
-                            <Link to="/admin/greenlife" className="group block p-6 bg-green-600/10 rounded-3xl hover:bg-green-700 transition-all duration-300 border border-green-500/20 hover:border-transparent shadow-xl">
+                            <Link to="/admin/whatsapp-campaign" className="group block p-6 bg-green-600/10 rounded-3xl hover:bg-green-600 transition-all duration-300 border border-green-500/20 hover:border-transparent shadow-xl">
                                 <div className="flex items-center">
                                     <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                        <SparklesIcon className="w-8 h-8" />
+                                        <WhatsAppIcon className="w-8 h-8" />
                                     </div>
-                                    <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Alunos Greenlife</h2>
+                                    <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Campanhas WhatsApp</h2>
                                 </div>
-                                <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Controle de adesões e ingressos da rede Greenlife.</p>
-                                <div className="text-xs text-green-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
+                                <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Envios em massa para toda a base com IA.</p>
+                                <div className="text-xs text-green-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Disparar Agora &rarr;</div>
                             </Link>
                         </>
                     )}
+
+                    <Link to="/admin/whatsapp-reminders" className="group block p-6 bg-orange-600/10 rounded-3xl hover:bg-orange-600 transition-all duration-300 border border-orange-500/20 hover:border-transparent shadow-xl">
+                        <div className="flex items-center">
+                            <div className="p-3 rounded-2xl bg-orange-500/20 text-orange-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                <AlertTriangleIcon className="w-8 h-8" />
+                            </div>
+                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Smart Cobrança</h2>
+                        </div>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-orange-100 line-clamp-2">Cobrar prints esquecidos via WhatsApp.</p>
+                        <div className="text-xs text-orange-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Sincronizar Atrasos &rarr;</div>
+                    </Link>
 
                     <Link to="/admin/promoters" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-primary transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
                         <div className="flex items-center">
@@ -108,17 +120,6 @@ const AdminDashboard: React.FC = () => {
                             <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Club VIP</h2>
                         </div>
                         <p className="mt-4 text-gray-400 text-sm group-hover:text-amber-100 line-clamp-2">Gestão de adesões, cupons e recuperação de e-mail.</p>
-                        <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
-                    </Link>
-
-                    <Link to="/admin/recovery" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-amber-700 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
-                        <div className="flex items-center">
-                            <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                <WhatsAppIcon className="w-8 h-8" />
-                            </div>
-                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Recuperação VIP</h2>
-                        </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-amber-100 line-clamp-2">Recuperar carrinhos abandonados do Club VIP.</p>
                         <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
                     </Link>
 

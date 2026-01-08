@@ -49,6 +49,8 @@ import VipPublicDashboard from './VipPublicDashboard';
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
 import AdminWhatsAppSettings from './AdminWhatsAppSettings';
+import AdminSmartReminders from './AdminSmartReminders';
+import WhatsAppCampaignPage from './WhatsAppCampaignPage';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
@@ -82,6 +84,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="global-lists" element={<ProtectedRoute><AdminGlobalLists /></ProtectedRoute>} />
                     <Route path="greenlife" element={<ProtectedRoute><AdminGreenlife /></ProtectedRoute>} />
                     <Route path="whatsapp-settings" element={<ProtectedRoute><AdminWhatsAppSettings /></ProtectedRoute>} />
+                    <Route path="whatsapp-campaign" element={<ProtectedRoute><WhatsAppCampaignPage /></ProtectedRoute>} />
                 </>
             )}
 
@@ -91,7 +94,7 @@ const AdminAuth: React.FC = () => {
             <Route path="states" element={<ProtectedRoute><StatesListPage /></ProtectedRoute>} />
             <Route path="state/:stateAbbr" element={<ProtectedRoute>{adminData ? <StateManagementPage adminData={adminData} /> : <Navigate to="/admin/login" />}</ProtectedRoute>} />
             
-            <Route path="apple-test" element={<ProtectedRoute><AdminAppleTestReview /></ProtectedRoute>} />
+            <Route path="whatsapp-reminders" element={<ProtectedRoute><AdminSmartReminders /></ProtectedRoute>} />
             
             <Route path="posts" element={<ProtectedRoute><AdminPosts /></ProtectedRoute>} />
             <Route path="posts/new" element={<ProtectedRoute><CreatePost /></ProtectedRoute>} />
