@@ -1,14 +1,16 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { addPromoter, getLatestPromoterProfileByEmail } from '../services/promoterService';
+import { useParams, useNavigate, militaryTime, useLocation } from 'react-router-dom';
+import { addPromoter, getPromoterById, getLatestPromoterProfileByEmail } from '../services/promoterService';
 import { getOrganization } from '../services/organizationService';
+import { getAllCampaigns } from '../services/settingsService';
 import { 
   InstagramIcon, UserIcon, MailIcon, 
   PhoneIcon, CalendarIcon, CameraIcon,
-  ArrowLeftIcon, CheckCircleIcon, XIcon, AlertTriangleIcon, ShieldCheckIcon, MapPinIcon
+  ArrowLeftIcon, CheckCircleIcon, XIcon, MegaphoneIcon, AlertTriangleIcon, ShieldCheckIcon
 } from '../components/Icons';
 import { stateMap } from '../constants/states';
+import { Campaign } from '../types';
 
 const RegistrationForm: React.FC = () => {
   const { organizationId, state, campaignName: campaignNameFromUrl } = useParams<{ organizationId: string; state: string; campaignName: string }>();
@@ -22,12 +24,8 @@ const RegistrationForm: React.FC = () => {
     name: '',
     whatsapp: '',
     instagram: '',
-    taxId: '',
+    tiktok: '',
     dateOfBirth: '',
-    zipCode: '',
-    city: '',
-    street: '',
-    number: '',
     campaignName: campaignNameFromUrl ? decodeURIComponent(campaignNameFromUrl) : '',
   });
   
@@ -37,77 +35,132 @@ const RegistrationForm: React.FC = () => {
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isValidOrg, setIsValidOrg] = useState<boolean | null>(null);
 
-  const formatTaxId = (value: string) => {
-    const val = value.replace(/\D/g, '');
-    return val.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4").substring(0, 14);
+  const formatPhone = (value: string) => {
+    if (!value) return value;
+    const phoneNumber = value.replace(/\D/g, '');
+    const phoneNumberLength = phoneNumber.length;
+    if (phoneNumberLength <= 2) return phoneNumber;
+    if (phoneNumberLength <= 7) {
+      return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2)}`;
+    }
+    return `(${phoneNumber.slice(0, 2)}) ${phoneNumber.slice(2, 7)}-${phoneNumber.slice(7, 11)}`;
   };
 
-  const formatPhone = (value: string) => {
-    const phoneNumber = value.replace(/\D/g, '');
-    if (phoneNumber.length <= 10) return phoneNumber.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
-    return phoneNumber.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+  const sanitizeInstagram = (input: string) => {
+    return input
+      .replace(/https?:\/\/(www\.)?instagram\.com\//i, '') // Remove links
+      .replace(/@/g, '') // Remove o @
+      .split('/')[0] // Pega apenas a primeira parte se houver mais barras
+      .split('?')[0] // Remove query strings
+      .trim();
   };
 
   useEffect(() => {
     const loadInitialData = async () => {
-        if (!organizationId) { setIsValidOrg(false); setIsLoadingData(false); return; }
+        if (!organizationId || !state) {
+            setIsValidOrg(false);
+            setIsLoadingData(false);
+            return;
+        }
+
         try {
             const org = await getOrganization(organizationId);
-            setIsValidOrg(org && org.status !== 'deactivated');
-        } catch (err) { setIsValidOrg(false); }
+            if (org && org.status !== 'deactivated') {
+                setIsValidOrg(true);
+            } else {
+                setIsValidOrg(false);
+            }
+        } catch (err) {
+            setIsValidOrg(false);
+        }
+
+        if (editId) {
+            try {
+                const p = await getPromoterById(editId);
+                if (p) {
+                    setFormData({
+                        email: p.email,
+                        name: p.name,
+                        whatsapp: formatPhone(p.whatsapp),
+                        instagram: p.instagram,
+                        tiktok: p.tiktok || '',
+                        dateOfBirth: p.dateOfBirth,
+                        campaignName: p.campaignName || '',
+                    });
+                    if (p.photoUrls) setPreviews(p.photoUrls);
+                }
+            } catch (e) {
+                console.error("Erro ao carregar dados de edição");
+            }
+        }
         setIsLoadingData(false);
     };
+
     loadInitialData();
-  }, [organizationId]);
+  }, [editId, organizationId, state]);
 
   const handleEmailBlur = async () => {
     const email = formData.email.trim().toLowerCase();
     if (!email || !email.includes('@') || editId) return;
+
     setIsAutoFilling(true);
     try {
         const latestProfile = await getLatestPromoterProfileByEmail(email);
         if (latestProfile) {
             setFormData(prev => ({
                 ...prev,
-                name: latestProfile.name,
-                whatsapp: formatPhone(latestProfile.whatsapp),
-                instagram: latestProfile.instagram,
-                taxId: formatTaxId(latestProfile.taxId || ''),
-                dateOfBirth: latestProfile.dateOfBirth,
-                zipCode: latestProfile.address?.zipCode || '',
-                city: latestProfile.address?.city || '',
-                street: latestProfile.address?.street || '',
+                name: prev.name || latestProfile.name,
+                whatsapp: prev.whatsapp || formatPhone(latestProfile.whatsapp),
+                instagram: prev.instagram || latestProfile.instagram,
+                tiktok: prev.tiktok || latestProfile.tiktok || '',
+                dateOfBirth: prev.dateOfBirth || latestProfile.dateOfBirth
             }));
         }
-    } catch (e) { console.warn("Auto-fill error"); } finally { setIsAutoFilling(false); }
+    } catch (e) {
+        console.warn("Erro no auto-preenchimento");
+    } finally {
+        setIsAutoFilling(false);
+    }
+  };
+
+  const handleInstagramChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      const sanitized = sanitizeInstagram(val);
+      setFormData({ ...formData, instagram: sanitized });
+  };
+
+  const handleWhatsAppChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhone(e.target.value);
+    setFormData({ ...formData, whatsapp: formatted });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!acceptedTerms) { setError("Você precisa aceitar os termos."); return; }
-    if (photos.length < 1 && previews.length === 0) { setError("Envie ao menos 1 foto."); return; }
-    
+    if (!organizationId || isValidOrg === false) {
+      setError("Link de cadastro inválido.");
+      return;
+    }
+    if (photos.length < 1 && previews.length === 0) {
+      setError("Envie ao menos 1 foto para identificação.");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
+      const cleanWhatsapp = formData.whatsapp.replace(/\D/g, '');
       await addPromoter({
         ...formData,
-        whatsapp: formData.whatsapp.replace(/\D/g, ''),
-        taxId: formData.taxId.replace(/\D/g, ''),
+        whatsapp: cleanWhatsapp,
+        id: editId || undefined,
+        instagram: sanitizeInstagram(formData.instagram),
         photos,
         state: state || 'CE',
-        organizationId: organizationId!,
-        address: {
-            zipCode: formData.zipCode,
-            street: formData.street,
-            number: formData.number,
-            city: formData.city
-        }
+        organizationId 
       } as any);
+      localStorage.setItem('saved_promoter_email', formData.email.toLowerCase().trim());
       setIsSuccess(true);
       setTimeout(() => { navigate('/status'); }, 3000);
     } catch (err: any) {
@@ -116,96 +169,115 @@ const RegistrationForm: React.FC = () => {
     }
   };
 
-  if (isLoadingData) return <div className="flex justify-center items-center py-40"><RefreshIcon className="w-10 h-10 text-primary animate-spin" /></div>;
+  if (isLoadingData) {
+      return <div className="flex justify-center items-center py-40"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+  }
 
-  if (isSuccess) return (
-      <div className="max-w-2xl mx-auto py-20 px-4 text-center">
-        <div className="bg-secondary/60 backdrop-blur-xl p-10 rounded-[3rem] border border-green-500/30 shadow-2xl">
+  if (isValidOrg === false) {
+      return (
+          <div className="max-w-2xl mx-auto py-20 px-4 text-center">
+              <div className="bg-red-900/20 border border-red-500/50 p-10 rounded-[3rem]">
+                  <XIcon className="w-20 h-20 text-red-500 mx-auto mb-6" />
+                  <h1 className="text-3xl font-black text-white uppercase mb-4">Acesso Indisponível</h1>
+                  <button onClick={() => navigate('/')} className="mt-8 px-8 py-3 bg-primary text-white font-bold rounded-full">Sair</button>
+              </div>
+          </div>
+      );
+  }
+
+  if (isSuccess) {
+    return (
+      <div className="max-w-2xl mx-auto py-20 px-4 text-center animate-fadeIn">
+        <div className="bg-secondary/60 backdrop-blur-xl p-10 rounded-[3rem] border border-green-500/30">
           <CheckCircleIcon className="w-20 h-20 text-green-500 mx-auto mb-6" />
-          <h1 className="text-4xl font-black text-white uppercase mb-4">Cadastro Realizado!</h1>
-          <p className="text-gray-300 text-lg">Sua análise será concluída em até 24h.</p>
+          <h1 className="text-4xl font-black text-white uppercase mb-4">Inscrição Enviada!</h1>
+          <p className="text-gray-300 text-lg">Aguarde a nossa análise.</p>
         </div>
       </div>
-  );
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto py-8 px-4 pb-24">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-500 hover:text-white mb-8 font-black text-[10px] uppercase">
+      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-gray-500 hover:text-white mb-8 font-black text-xs uppercase">
         <ArrowLeftIcon className="w-4 h-4" /> Voltar
       </button>
 
       <div className="bg-secondary/40 backdrop-blur-2xl shadow-3xl rounded-[3rem] overflow-hidden border border-white/5">
         <div className="bg-gradient-to-br from-primary/30 to-transparent p-10 text-center">
-          <h1 className="text-5xl font-black text-white uppercase tracking-tighter">Ficha de <span className="text-primary">Inscrição</span></h1>
-          <p className="text-gray-400 mt-2 font-bold uppercase text-[10px] tracking-widest">{stateMap[state || ''] || state} • {formData.campaignName}</p>
+          <h1 className="text-5xl font-black text-white uppercase tracking-tighter leading-tight">
+            Inscrição <span className="text-primary">Divulgadora</span>
+          </h1>
+          <p className="text-gray-400 mt-2 font-bold uppercase text-xs tracking-widest">
+            {stateMap[state || ''] || state} • {decodeURIComponent(campaignNameFromUrl || '')}
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="p-8 md:p-14 space-y-12">
           {error && <div className="bg-red-900/40 border border-red-500/50 text-red-200 p-5 rounded-2xl text-sm font-bold text-center">{error}</div>}
 
           <div className="space-y-8">
-            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3"><UserIcon className="w-6 h-6 text-primary" /> Dados Pessoais</h2>
+            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+              <UserIcon className="w-6 h-6 text-primary" /> Identificação e Dados
+            </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest flex justify-between">
-                  <span>E-mail Profissional</span>
-                  {isAutoFilling && <span className="text-primary animate-pulse font-black">Sincronizando...</span>}
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest flex items-center justify-between">
+                  <span>E-mail</span>
+                  {isAutoFilling && <span className="text-primary animate-pulse normal-case font-black">Buscando dados anteriores...</span>}
                 </label>
+                <div className="bg-blue-900/10 border border-blue-500/20 px-4 py-3 rounded-2xl flex items-center gap-3 mb-2">
+                   <AlertTriangleIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                   <p className="text-[10px] text-blue-200 font-bold uppercase tracking-tight leading-tight">
+                      Use um e-mail que você acessa sempre para receber sua aprovação.
+                   </p>
+                </div>
                 <div className="relative">
                   <MailIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                  <input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} onBlur={handleEmailBlur} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="exemplo@gmail.com"/>
+                  <input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} onBlur={handleEmailBlur} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Seu melhor e-mail"/>
                 </div>
               </div>
               <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nome Completo (Conforme Identidade)</label>
-                <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Nome e Sobrenome"/>
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nome Completo</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Seu nome completo"/>
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">WhatsApp</label>
-                <input type="tel" required value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: formatPhone(e.target.value)})} className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="(00) 00000-0000"/>
+                <div className="relative">
+                  <PhoneIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <input type="tel" required value={formData.whatsapp} onChange={handleWhatsAppChange} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="(00) 00000-0000"/>
+                </div>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">CPF</label>
-                <input type="tel" required value={formData.taxId} onChange={e => setFormData({...formData, taxId: formatTaxId(e.target.value)})} className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="000.000.000-00"/>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Data de Nascimento</label>
-                <input type="date" required value={formData.dateOfBirth} onChange={e => setFormData({...formData, dateOfBirth: e.target.value})} className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" style={{ colorScheme: 'dark' }}/>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Instagram (@usuario)</label>
-                <input type="text" required value={formData.instagram} onChange={e => setFormData({...formData, instagram: e.target.value.replace('@','')})} className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="seu_perfil"/>
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nascimento</label>
+                <div className="relative">
+                  <CalendarIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+                  <input type="date" required value={formData.dateOfBirth} onChange={e => setFormData({...formData, dateOfBirth: e.target.value})} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" style={{ colorScheme: 'dark' }}/>
+                </div>
               </div>
             </div>
           </div>
 
           <div className="space-y-8">
-            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3"><MapPinIcon className="w-6 h-6 text-primary" /> Endereço Residencial</h2>
-            <div className="grid grid-cols-3 gap-4">
-                <div className="col-span-1 space-y-2">
-                    <label className="text-[10px] font-black text-gray-500 uppercase ml-4">CEP</label>
-                    <input type="tel" value={formData.zipCode} onChange={e => setFormData({...formData, zipCode: e.target.value})} className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white font-bold" placeholder="00000-000"/>
-                </div>
-                <div className="col-span-2 space-y-2">
-                    <label className="text-[10px] font-black text-gray-500 uppercase ml-4">Cidade</label>
-                    <input type="text" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white font-bold" placeholder="Ex: Fortaleza"/>
-                </div>
-                <div className="col-span-2 space-y-2">
-                    <label className="text-[10px] font-black text-gray-500 uppercase ml-4">Rua / Avenida</label>
-                    <input type="text" value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white font-bold" placeholder="Logradouro"/>
-                </div>
-                <div className="col-span-1 space-y-2">
-                    <label className="text-[10px] font-black text-gray-500 uppercase ml-4">Nº</label>
-                    <input type="text" value={formData.number} onChange={e => setFormData({...formData, number: e.target.value})} className="w-full px-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white font-bold" placeholder="123"/>
-                </div>
+            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+              <InstagramIcon className="w-6 h-6 text-primary" /> Redes Sociais
+            </h2>
+            <div className="relative">
+              <InstagramIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+              <input type="text" required value={formData.instagram} onChange={handleInstagramChange} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="usuario_instagram"/>
             </div>
           </div>
 
           <div className="space-y-8">
-            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3"><CameraIcon className="w-6 h-6 text-primary" /> Fotos Recentes</h2>
+            <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+              <CameraIcon className="w-6 h-6 text-primary" /> Fotos (Essencial)
+            </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {previews.map((url, i) => <img key={i} src={url} className="aspect-[3/4] rounded-3xl object-cover border border-white/10 shadow-xl" alt=""/>)}
-              {previews.length < 4 && (
+              {previews.map((url, i) => <div key={i} className="relative aspect-[3/4] rounded-3xl overflow-hidden border border-white/10 shadow-2xl"><img src={url} alt="" className="w-full h-full object-cover" /></div>)}
+              {previews.length < 8 && (
                 <label className="aspect-[3/4] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-3xl bg-white/5 cursor-pointer hover:border-primary transition-all">
                   <CameraIcon className="w-10 h-10 text-gray-600 mb-2" />
                   <span className="text-[10px] font-black text-gray-600 uppercase">Anexar</span>
@@ -216,23 +288,19 @@ const RegistrationForm: React.FC = () => {
           </div>
 
           <div className="pt-8 border-t border-white/5 space-y-8">
-             <label className="flex items-center gap-4 cursor-pointer group">
-                <input type="checkbox" checked={acceptedTerms} onChange={e => setAcceptedTerms(e.target.checked)} className="w-6 h-6 rounded bg-dark border-gray-700 text-primary" />
-                <span className="text-xs text-gray-400 font-medium leading-tight">Autorizo o uso da minha imagem e dados para fins de credenciamento e check-in nos eventos da <strong>Equipe Certa</strong>.</span>
-             </label>
-
              <button type="submit" disabled={isSubmitting} className="w-full py-6 bg-primary text-white font-black text-2xl rounded-[2rem] shadow-2xl shadow-primary/40 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
-                {isSubmitting ? 'ENVIANDO...' : 'ENVIAR PARA ANÁLISE'}
+                {isSubmitting ? 'ENVIANDO...' : 'CONCLUIR CADASTRO'}
               </button>
 
+              {/* SELO DE CONFIANÇA E RODAPÉ EMPRESARIAL */}
               <div className="flex flex-col items-center gap-4 text-center">
                   <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full border border-white/5">
                       <ShieldCheckIcon className="w-4 h-4 text-green-500" />
-                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Proteção de Dados Conforme LGPD</span>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ambiente Seguro & Criptografado</span>
                   </div>
-                  <div className="opacity-40 space-y-1">
-                      <p className="text-[10px] font-black text-gray-500 uppercase">Equipe Certa Produções</p>
-                      <p className="text-[9px] font-bold text-gray-600 uppercase">CNPJ: 26.656.545/0001-44</p>
+                  <div className="space-y-1 opacity-40">
+                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Equipe certa</p>
+                      <p className="text-[9px] font-bold text-gray-600 uppercase">RAFAEL M DA SILVA EVENTOS - ME • CNPJ: 26.656.545/0001-44</p>
                   </div>
               </div>
           </div>
@@ -241,11 +309,5 @@ const RegistrationForm: React.FC = () => {
     </div>
   );
 };
-
-const RefreshIcon = (props: any) => (
-    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" {...props}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-    </svg>
-);
 
 export default RegistrationForm;

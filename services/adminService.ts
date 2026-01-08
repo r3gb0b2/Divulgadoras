@@ -1,4 +1,5 @@
 
+
 import firebase from 'firebase/compat/app';
 import { firestore, functions } from '../firebase/config';
 import { AdminUserData, AdminApplication } from '../types';
@@ -141,7 +142,7 @@ export const acceptAdminApplication = async (app: AdminApplication, orgId: strin
       role: 'admin', // Default role on approval
       organizationIds: [orgId],
       assignedStates: [],
-      assignedCampaigns: {}, // Fix: Property recognized now in AdminUserData
+      assignedCampaigns: {},
     };
     batch.set(adminDocRef, newAdminData);
 

@@ -27,7 +27,7 @@ import PhotoViewerModal from '../components/PhotoViewerModal';
 import RejectionModal from '../components/RejectionModal';
 import EditPromoterModal from '../components/EditPromoterModal';
 import PromoterLookupModal from '../components/PromoterLookupModal';
-import { firestore, functions } from '../firebase/config';
+import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 
 const getUnixTime = (ts: any): number => {
@@ -86,7 +86,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [campaigns, setCampaigns] = useState<Campaign[]>([]);
     const [rejectionReasons, setRejectionReasons] = useState<RejectionReason[]>([]);
     const [orgsMap, setOrgsMap] = useState<Record<string, string>>({});
-    const [messageStatusMap, setMessageStatusMap] = useState<Record<string, string>>({});
 
     const [isLoading, setIsLoading] = useState(true);
     const [isActionLoading, setIsActionLoading] = useState(false); 
@@ -122,26 +121,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     useEffect(() => {
         return () => { isMounted.current = false; };
     }, []);
-
-    // Monitoramento em tempo real dos status de mensagens (Double Check)
-    useEffect(() => {
-        if (!selectedOrgId) return;
-        const unsubscribe = firestore.collection('whatsappLogs')
-            .where('organizationId', '==', selectedOrgId)
-            .orderBy('updatedAt', 'desc')
-            .limit(50)
-            .onSnapshot(snap => {
-                const map: Record<string, string> = {};
-                snap.forEach(doc => {
-                    const data = doc.data();
-                    if (data.promoterId && !map[data.promoterId]) {
-                        map[data.promoterId] = data.status; // 'delivered', 'read', etc
-                    }
-                });
-                setMessageStatusMap(map);
-            });
-        return () => unsubscribe();
-    }, [selectedOrgId]);
 
     const currentOrg = useMemo(() => {
         return organizationsForAdmin.find(o => o.id === selectedOrgId);
@@ -447,30 +426,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         return p.facePhotoUrl || (p.photoUrls && p.photoUrls.length > 0 ? p.photoUrls[0] : null);
     };
 
-    // Ícone de Status da Mensagem (Sure API)
-    const MessageStatusIcon = ({ promoterId }: { promoterId: string }) => {
-        const status = messageStatusMap[promoterId];
-        if (!status) return null;
-
-        if (status === 'read') {
-            return (
-                <div className="flex -space-x-1 text-blue-400" title="Mensagem lida">
-                    <CheckCircleIcon className="w-3 h-3" />
-                    <CheckCircleIcon className="w-3 h-3" />
-                </div>
-            );
-        }
-        if (status === 'delivered') {
-            return (
-                <div className="flex -space-x-1 text-gray-500" title="Mensagem entregue">
-                    <CheckCircleIcon className="w-3 h-3" />
-                    <CheckCircleIcon className="w-3 h-3" />
-                </div>
-            );
-        }
-        return <CheckCircleIcon className="w-3 h-3 text-gray-600" title="Mensagem enviada" />;
-    };
-
     return (
         <div className="space-y-6 pb-40 max-w-full overflow-x-hidden">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 px-2">
@@ -615,10 +570,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                             {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : <UserIcon className="w-6 h-6 text-gray-600" />}
                                                         </div>
                                                         <div className="overflow-hidden">
-                                                            <div className="flex items-center gap-2">
-                                                                <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name || 'Sem Nome'}</p>
-                                                                <MessageStatusIcon promoterId={p.id} />
-                                                            </div>
+                                                            <p className="text-white font-black text-sm truncate uppercase tracking-tight">{p.name || 'Sem Nome'}</p>
                                                             <div className="flex items-center gap-3 mt-1.5">
                                                                 <a href={`https://instagram.com/${p.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-pink-500 hover:text-pink-400 transition-colors flex items-center gap-1">
                                                                     <InstagramIcon className="w-3.5 h-3.5" />
@@ -673,10 +625,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : <UserIcon className="w-8 h-8 text-gray-600" />}
                                             </div>
                                             <div className="overflow-hidden flex-grow">
-                                                <div className="flex items-center gap-2">
-                                                    <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name || 'Sem Nome'}</p>
-                                                    <MessageStatusIcon promoterId={p.id} />
-                                                </div>
+                                                <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name || 'Sem Nome'}</p>
                                                 <p className="text-primary text-[9px] font-black uppercase tracking-widest mt-0.5">{p.campaignName || 'Geral'}</p>
                                                 <div className="flex items-center gap-2 mt-2">
                                                     {statusBadge(p.status)}
