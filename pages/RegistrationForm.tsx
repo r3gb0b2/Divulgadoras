@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, militaryTime, useLocation } from 'react-router-dom';
 import { addPromoter, getPromoterById, getLatestPromoterProfileByEmail } from '../services/promoterService';
 import { getOrganization } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { 
   InstagramIcon, UserIcon, MailIcon, 
   PhoneIcon, CalendarIcon, CameraIcon,
-  ArrowLeftIcon, CheckCircleIcon, XIcon, MegaphoneIcon, AlertTriangleIcon
+  ArrowLeftIcon, CheckCircleIcon, XIcon, MegaphoneIcon, AlertTriangleIcon, ShieldCheckIcon
 } from '../components/Icons';
 import { stateMap } from '../constants/states';
 import { Campaign } from '../types';
@@ -104,7 +104,6 @@ const RegistrationForm: React.FC = () => {
 
   const handleEmailBlur = async () => {
     const email = formData.email.trim().toLowerCase();
-    // Só tenta preencher se o e-mail parecer válido e não estivermos no modo edição
     if (!email || !email.includes('@') || editId) return;
 
     setIsAutoFilling(true);
@@ -128,7 +127,6 @@ const RegistrationForm: React.FC = () => {
   };
 
   const handleInstagramChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      // Limpa enquanto digita, impedindo @ e links
       const val = e.target.value;
       const sanitized = sanitizeInstagram(val);
       setFormData({ ...formData, instagram: sanitized });
@@ -141,20 +139,16 @@ const RegistrationForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!organizationId || isValidOrg === false) {
       setError("Link de cadastro inválido.");
       return;
     }
-    
     if (photos.length < 1 && previews.length === 0) {
       setError("Envie ao menos 1 foto para identificação.");
       return;
     }
-
     setIsSubmitting(true);
     setError(null);
-
     try {
       const cleanWhatsapp = formData.whatsapp.replace(/\D/g, '');
       await addPromoter({
@@ -166,7 +160,6 @@ const RegistrationForm: React.FC = () => {
         state: state || 'CE',
         organizationId 
       } as any);
-      
       localStorage.setItem('saved_promoter_email', formData.email.toLowerCase().trim());
       setIsSuccess(true);
       setTimeout(() => { navigate('/status'); }, 3000);
@@ -227,71 +220,42 @@ const RegistrationForm: React.FC = () => {
             <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
               <UserIcon className="w-6 h-6 text-primary" /> Identificação e Dados
             </h2>
-            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              
-              {/* E-MAIL EM PRIMEIRO LUGAR */}
               <div className="md:col-span-2 space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest flex items-center justify-between">
                   <span>E-mail</span>
                   {isAutoFilling && <span className="text-primary animate-pulse normal-case font-black">Buscando dados anteriores...</span>}
                 </label>
-                
                 <div className="bg-blue-900/10 border border-blue-500/20 px-4 py-3 rounded-2xl flex items-center gap-3 mb-2">
                    <AlertTriangleIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />
                    <p className="text-[10px] text-blue-200 font-bold uppercase tracking-tight leading-tight">
-                      Use um e-mail que você acessa sempre, pois seu convite e aprovação chegarão por ele.
+                      Use um e-mail que você acessa sempre para receber sua aprovação.
                    </p>
                 </div>
-
                 <div className="relative">
                   <MailIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                  <input 
-                    type="email" required value={formData.email}
-                    onChange={e => setFormData({...formData, email: e.target.value})}
-                    onBlur={handleEmailBlur}
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold transition-all"
-                    placeholder="Seu melhor e-mail"
-                  />
+                  <input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} onBlur={handleEmailBlur} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Seu melhor e-mail"/>
                 </div>
               </div>
-
               <div className="md:col-span-2 space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nome Completo</label>
                 <div className="relative">
                   <UserIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                  <input 
-                    type="text" required value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
-                    placeholder="Seu nome completo"
-                  />
+                  <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Seu nome completo"/>
                 </div>
               </div>
-
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">WhatsApp</label>
                 <div className="relative">
                   <PhoneIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                  <input 
-                    type="tel" required value={formData.whatsapp}
-                    onChange={handleWhatsAppChange}
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
-                    placeholder="(00) 00000-0000"
-                  />
+                  <input type="tel" required value={formData.whatsapp} onChange={handleWhatsAppChange} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="(00) 00000-0000"/>
                 </div>
               </div>
-
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest">Nascimento</label>
                 <div className="relative">
                   <CalendarIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                  <input 
-                    type="date" required value={formData.dateOfBirth}
-                    onChange={e => setFormData({...formData, dateOfBirth: e.target.value})}
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
-                    style={{ colorScheme: 'dark' }}
-                  />
+                  <input type="date" required value={formData.dateOfBirth} onChange={e => setFormData({...formData, dateOfBirth: e.target.value})} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" style={{ colorScheme: 'dark' }}/>
                 </div>
               </div>
             </div>
@@ -301,22 +265,9 @@ const RegistrationForm: React.FC = () => {
             <h2 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
               <InstagramIcon className="w-6 h-6 text-primary" /> Redes Sociais
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-gray-500 uppercase ml-4 tracking-widest flex items-center justify-between">
-                    <span>Instagram (Apenas o nome de usuário)</span>
-                    <span className="text-[8px] text-yellow-500 opacity-70">Sem @ e sem links</span>
-                </label>
-                <div className="relative">
-                  <InstagramIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
-                  <input 
-                    type="text" required value={formData.instagram}
-                    onChange={handleInstagramChange}
-                    className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold"
-                    placeholder="usuario"
-                  />
-                </div>
-              </div>
+            <div className="relative">
+              <InstagramIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-500" />
+              <input type="text" required value={formData.instagram} onChange={handleInstagramChange} className="w-full pl-14 pr-6 py-5 bg-white/5 border border-white/10 rounded-3xl text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="usuario_instagram"/>
             </div>
           </div>
 
@@ -325,36 +276,33 @@ const RegistrationForm: React.FC = () => {
               <CameraIcon className="w-6 h-6 text-primary" /> Fotos (Essencial)
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {previews.map((url, i) => (
-                <div key={i} className="relative aspect-[3/4] rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
-                  <img src={url} alt="" className="w-full h-full object-cover" />
-                </div>
-              ))}
+              {previews.map((url, i) => <div key={i} className="relative aspect-[3/4] rounded-3xl overflow-hidden border border-white/10 shadow-2xl"><img src={url} alt="" className="w-full h-full object-cover" /></div>)}
               {previews.length < 8 && (
                 <label className="aspect-[3/4] flex flex-col items-center justify-center border-2 border-dashed border-white/10 rounded-3xl bg-white/5 cursor-pointer hover:border-primary transition-all">
                   <CameraIcon className="w-10 h-10 text-gray-600 mb-2" />
                   <span className="text-[10px] font-black text-gray-600 uppercase">Anexar</span>
-                  <input type="file" multiple accept="image/*" className="hidden" onChange={e => {
-                    if (e.target.files) {
-                      const files = Array.from(e.target.files) as File[];
-                      setPhotos(files);
-                      setPreviews(files.map(f => URL.createObjectURL(f as Blob)));
-                    }
-                  }} />
+                  <input type="file" multiple accept="image/*" className="hidden" onChange={e => { if (e.target.files) { const files = Array.from(e.target.files) as File[]; setPhotos(files); setPreviews(files.map(f => URL.createObjectURL(f as Blob))); } }} />
                 </label>
               )}
             </div>
-            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest text-center">Envie fotos atuais de rosto e corpo.</p>
           </div>
 
-          <div className="pt-8 border-t border-white/5">
-             <p className="text-[10px] text-gray-600 font-black uppercase tracking-[0.3em] text-center mb-8">Passo 3 de 3 • Finalização</p>
-             <button 
-                type="submit" disabled={isSubmitting}
-                className="w-full py-6 bg-primary text-white font-black text-2xl rounded-[2rem] shadow-2xl shadow-primary/40 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
-              >
+          <div className="pt-8 border-t border-white/5 space-y-8">
+             <button type="submit" disabled={isSubmitting} className="w-full py-6 bg-primary text-white font-black text-2xl rounded-[2rem] shadow-2xl shadow-primary/40 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50">
                 {isSubmitting ? 'ENVIANDO...' : 'CONCLUIR CADASTRO'}
               </button>
+
+              {/* SELO DE CONFIANÇA E RODAPÉ EMPRESARIAL */}
+              <div className="flex flex-col items-center gap-4 text-center">
+                  <div className="flex items-center gap-2 px-4 py-2 bg-white/5 rounded-full border border-white/5">
+                      <ShieldCheckIcon className="w-4 h-4 text-green-500" />
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Ambiente Seguro & Criptografado</span>
+                  </div>
+                  <div className="space-y-1 opacity-40">
+                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Equipe certa</p>
+                      <p className="text-[9px] font-bold text-gray-600 uppercase">RAFAEL M DA SILVA EVENTOS - ME • CNPJ: 26.656.545/0001-44</p>
+                  </div>
+              </div>
           </div>
         </form>
       </div>
