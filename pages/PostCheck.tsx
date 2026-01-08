@@ -30,11 +30,11 @@ const toDateSafe = (timestamp: any): Date | null => {
 const isHistoryAssignment = (assignment: PostAssignment): boolean => {
     if (assignment.proofSubmittedAt) return true;
     if (assignment.justificationStatus === 'accepted' || assignment.justificationStatus === 'rejected') return true;
-    if (!assignment.post.isActive) return true;
+    if (!assignment.post?.isActive) return true;
     const now = new Date();
-    const expiresAt = toDateSafe(assignment.post.expiresAt);
+    const expiresAt = toDateSafe(assignment.post?.expiresAt);
     if (expiresAt && now > expiresAt) {
-        if (assignment.post.allowLateSubmissions) return false;
+        if (assignment.post?.allowLateSubmissions) return false;
         if (assignment.status === 'confirmed' && assignment.confirmedAt) {
             const confirmedAt = toDateSafe(assignment.confirmedAt);
             if (confirmedAt) {
@@ -62,11 +62,16 @@ const PostCard: React.FC<{
     const [isProofButtonEnabled, setIsProofButtonEnabled] = useState(false);
     const [countdownColor, setCountdownColor] = useState('text-gray-400');
     
+    // Estados para Justificativa
+    const [showJustifyForm, setShowJustifyForm] = useState(false);
+    const [justificationText, setJustificationText] = useState('');
+    const [justificationFiles, setJustificationFiles] = useState<File[]>([]);
+    const [isSubmittingJustification, setIsSubmittingJustification] = useState(false);
+
     useEffect(() => {
         if (assignment.status !== 'confirmed' || !assignment.confirmedAt || assignment.proofSubmittedAt) return;
         
         const confirmationTime = toDateSafe(assignment.confirmedAt);
-        // FIX: Fixed typo where confirmationTime was referred to as countdownTime.
         if (!confirmationTime) return;
 
         const expireTime = new Date(confirmationTime.getTime() + 24 * 60 * 60 * 1000);
@@ -76,7 +81,7 @@ const PostCard: React.FC<{
             const now = new Date();
 
             if (now > expireTime) {
-                if (assignment.post.allowLateSubmissions) {
+                if (assignment.post?.allowLateSubmissions) {
                     setTimeLeftForProof('Envio liberado (fora do prazo)');
                     setIsProofButtonEnabled(true);
                     setCountdownColor('text-yellow-500');
@@ -89,7 +94,7 @@ const PostCard: React.FC<{
                 return;
             }
 
-            if (assignment.post.allowImmediateProof) {
+            if (assignment.post?.allowImmediateProof) {
                 const diff = expireTime.getTime() - now.getTime();
                 setTimeLeftForProof(`Envio Liberado! Expira em: ${Math.floor(diff/3600000)}h ${Math.floor((diff/60000)%60)}m`);
                 setIsProofButtonEnabled(true);
@@ -117,7 +122,7 @@ const PostCard: React.FC<{
         }, 1000);
 
         return () => clearInterval(timer);
-    }, [assignment.status, assignment.confirmedAt, assignment.post.allowLateSubmissions, assignment.post.allowImmediateProof, assignment.proofSubmittedAt]);
+    }, [assignment.status, assignment.confirmedAt, assignment.post?.allowLateSubmissions, assignment.post?.allowImmediateProof, assignment.proofSubmittedAt]);
 
     const handleConfirm = async () => {
         setIsConfirming(true);
@@ -128,8 +133,24 @@ const PostCard: React.FC<{
         catch (err: any) { alert(err.message); } finally { setIsConfirming(false); }
     };
 
+    const handleSubmitJustification = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!justificationText.trim()) return;
+        setIsSubmittingJustification(true);
+        try {
+            await submitJustification(assignment.id, justificationText, justificationFiles);
+            setShowJustifyForm(false);
+            onRefresh();
+            alert("Sua justificativa foi enviada para análise da produção.");
+        } catch (e: any) {
+            alert(e.message);
+        } finally {
+            setIsSubmittingJustification(false);
+        }
+    };
+
     const handleDownloadLink1 = async () => {
-        if (!assignment.post.mediaUrl) return;
+        if (!assignment.post?.mediaUrl) return;
         setIsDownloading(true);
         try {
             let finalUrl = assignment.post.mediaUrl;
@@ -146,17 +167,17 @@ const PostCard: React.FC<{
     };
 
     const handleDownloadLink2 = () => {
-        if (!assignment.post.googleDriveUrl) return;
+        if (!assignment.post?.googleDriveUrl) return;
         window.open(assignment.post.googleDriveUrl, '_blank');
     };
 
     const handleOpenPostLink = () => {
-        if (!assignment.post.postLink) return;
+        if (!assignment.post?.postLink) return;
         window.open(assignment.post.postLink, '_blank');
     };
 
     const handleCopyPostLink = () => {
-        const linkToCopy = assignment.post.copyLink || assignment.post.postLink;
+        const linkToCopy = assignment.post?.copyLink || assignment.post?.postLink;
         if (!linkToCopy) return;
         navigator.clipboard.writeText(linkToCopy);
         setLinkCopied(true);
@@ -168,7 +189,7 @@ const PostCard: React.FC<{
             <div className="bg-dark/50 p-6 rounded-3xl border-2 border-yellow-900/50 mb-4 animate-fadeIn">
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h3 className="font-black text-white uppercase tracking-tight">{assignment.post.campaignName}</h3>
+                    <h3 className="font-black text-white uppercase tracking-tight">{assignment.post?.campaignName}</h3>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
                       <p className="text-yellow-500 text-xs font-black uppercase tracking-widest">Ação necessária!</p>
@@ -192,44 +213,40 @@ const PostCard: React.FC<{
         <div className="bg-secondary rounded-3xl shadow-xl overflow-hidden border border-gray-800 mb-6 animate-fadeIn">
             <div className="p-5 flex justify-between items-start bg-white/5">
                 <div>
-                    <p className="font-black text-white uppercase tracking-tight">{assignment.post.campaignName}</p>
-                    <p className="text-xs text-primary font-bold">{assignment.post.eventName || 'Tarefa Designada'}</p>
+                    <p className="font-black text-white uppercase tracking-tight">{assignment.post?.campaignName}</p>
+                    <p className="text-xs text-primary font-bold">{assignment.post?.eventName || 'Tarefa Designada'}</p>
                 </div>
             </div>
             <div className="p-5 space-y-4">
-                <div className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 text-sm text-gray-300 whitespace-pre-wrap italic">{assignment.post.instructions}</div>
+                <div className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 text-sm text-gray-300 whitespace-pre-wrap italic">{assignment.post?.instructions}</div>
                 
                 <div className="space-y-3">
-                    {assignment.post.type !== 'text' && (
+                    {assignment.post?.type !== 'text' && (
                         <div className="rounded-2xl overflow-hidden border border-gray-700">
-                             <StorageMedia path={assignment.post.mediaUrl || assignment.post.googleDriveUrl || ''} type={assignment.post.type as any} className="w-full h-auto max-h-64 object-contain bg-black" />
+                             <StorageMedia path={assignment.post?.mediaUrl || assignment.post?.googleDriveUrl || ''} type={assignment.post?.type as any} className="w-full h-auto max-h-64 object-contain bg-black" />
                         </div>
                     )}
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        {/* LINK 1: MÍDIA */}
-                        {assignment.post.mediaUrl && (
+                        {assignment.post?.mediaUrl && (
                             <button onClick={handleDownloadLink1} disabled={isDownloading} className="flex items-center justify-center gap-2 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold transition-all">
                                 <DownloadIcon className="w-4 h-4" /> BAIXAR MÍDIA
                             </button>
                         )}
                         
-                        {/* LINK 2: DRIVE / EXTERNO */}
-                        {assignment.post.googleDriveUrl && (
+                        {assignment.post?.googleDriveUrl && (
                             <button onClick={handleDownloadLink2} className="flex items-center justify-center gap-2 py-3 bg-indigo-900/40 border border-indigo-700/50 hover:bg-indigo-900/60 text-indigo-300 rounded-xl text-xs font-bold transition-all">
                                 <ExternalLinkIcon className="w-4 h-4" /> LINK DRIVE
                             </button>
                         )}
 
-                        {/* BOTÕES DE INTERAÇÃO (Somente se houver postLink) */}
-                        {assignment.post.postLink && (
+                        {assignment.post?.postLink && (
                             <button onClick={handleOpenPostLink} className="flex items-center justify-center gap-2 py-3 bg-blue-900/40 border border-blue-700/50 hover:bg-blue-900/60 text-blue-300 rounded-xl text-xs font-bold transition-all">
                                 <ExternalLinkIcon className="w-4 h-4" /> ABRIR PARA INTERAÇÃO
                             </button>
                         )}
 
-                        {/* BOTÃO DE COPIAR LINK (Somente se houver copyLink ou postLink como fallback) */}
-                        {(assignment.post.copyLink || assignment.post.postLink) && (
+                        {(assignment.post?.copyLink || assignment.post?.postLink) && (
                             <button onClick={handleCopyPostLink} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all border ${linkCopied ? 'bg-green-600 text-white border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'bg-orange-900/40 border-orange-700/50 text-orange-300 hover:bg-orange-900/60'}`}>
                                 <DocumentDuplicateIcon className="w-4 h-4" /> {linkCopied ? 'COPIADO!' : 'COPIAR PARA POSTAGEM'}
                             </button>
@@ -239,12 +256,12 @@ const PostCard: React.FC<{
             </div>
             
             <div className="px-5 pb-5">
-                {!assignment.proofSubmittedAt && (
+                {!assignment.proofSubmittedAt && !assignment.justification && (
                     <div className="flex flex-col gap-4">
                          {assignment.status === 'pending' ? (
                             <button onClick={handleConfirm} disabled={isConfirming} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all text-lg">{isConfirming ? 'GRAVANDO...' : 'EU POSTEI! 🚀'}</button>
                         ) : (
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 <button 
                                     onClick={() => navigate(`/proof/${assignment.id}`)} 
                                     disabled={!isProofButtonEnabled} 
@@ -252,12 +269,67 @@ const PostCard: React.FC<{
                                 >
                                     {isProofButtonEnabled ? 'ENVIAR PRINT' : 'AGUARDE O TEMPO'}
                                 </button>
+                                
                                 <div className="flex items-center justify-center gap-2 py-2 bg-dark/30 rounded-xl">
                                     <ClockIcon className={`w-4 h-4 ${countdownColor}`} />
                                     <span className={`text-[10px] font-black uppercase tracking-widest ${countdownColor}`}>{timeLeftForProof}</span>
                                 </div>
+
+                                {assignment.post?.allowJustification !== false && (
+                                    <button 
+                                        onClick={() => setShowJustifyForm(!showJustifyForm)}
+                                        className="w-full py-3 bg-transparent border-2 border-orange-500/30 text-orange-400 font-bold rounded-2xl text-xs uppercase tracking-widest hover:bg-orange-500/10 transition-all flex items-center justify-center gap-2"
+                                    >
+                                        <AlertTriangleIcon className="w-4 h-4" />
+                                        {showJustifyForm ? 'CANCELAR JUSTIFICATIVA' : 'JUSTIFICAR AUSÊNCIA'}
+                                    </button>
+                                )}
+
+                                {showJustifyForm && (
+                                    <form onSubmit={handleSubmitJustification} className="p-5 bg-dark/50 rounded-3xl border border-orange-500/20 space-y-4 animate-slideDown">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Descreva o motivo:</label>
+                                            <textarea 
+                                                required
+                                                value={justificationText}
+                                                onChange={e => setJustificationText(e.target.value)}
+                                                className="w-full p-4 bg-gray-900 border border-gray-700 rounded-xl text-white text-sm outline-none focus:ring-1 focus:ring-orange-500"
+                                                placeholder="Ex: Problemas com Instagram, doente, etc..."
+                                                rows={3}
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Anexo opcional (print do erro):</label>
+                                            <input 
+                                                type="file" 
+                                                accept="image/*"
+                                                onChange={e => {
+                                                    if(e.target.files) setJustificationFiles(Array.from(e.target.files));
+                                                }}
+                                                className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-gray-700 file:text-white hover:file:bg-gray-600"
+                                            />
+                                        </div>
+                                        <button 
+                                            type="submit"
+                                            disabled={isSubmittingJustification}
+                                            className="w-full py-3 bg-orange-600 text-white font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-orange-500 transition-all shadow-lg shadow-orange-900/40"
+                                        >
+                                            {isSubmittingJustification ? 'ENVIANDO...' : 'CONFIRMAR JUSTIFICATIVA'}
+                                        </button>
+                                    </form>
+                                )}
                             </div>
                         )}
+                    </div>
+                )}
+
+                {assignment.justification && (
+                    <div className="mt-2 p-4 bg-orange-900/10 rounded-2xl border border-orange-500/20 flex items-center gap-3">
+                        <CheckCircleIcon className="w-5 h-5 text-orange-400" />
+                        <div>
+                            <p className="text-[10px] text-orange-400 font-black uppercase tracking-widest">Justificativa Enviada</p>
+                            <p className="text-[9px] text-gray-500 font-bold uppercase">Aguardando análise da produção.</p>
+                        </div>
                     </div>
                 )}
             </div>
