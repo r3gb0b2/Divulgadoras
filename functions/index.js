@@ -22,6 +22,34 @@ const asaasFetch = async (endpoint, options = {}) => {
     return data;
 };
 
+// --- WEBHOOK SURE (WhatsApp/Instagram) ---
+// Esta função atende ao requisito GET para verificação e POST para eventos
+export const sureWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
+    // 1. Verificação do Webhook (Requisito GET solicitado pelo usuário)
+    if (req.method === 'GET') {
+        // A ferramenta Sure geralmente envia o ID do bot via query string (?id=...) 
+        // ou espera que o servidor responda com o ID configurado.
+        const botId = req.query.id || req.query.botId || "";
+        console.log("Sure Webhook Verification (GET) received for ID:", botId);
+        
+        // Retornamos apenas o ID em texto puro conforme exigido
+        return res.status(200).send(botId);
+    }
+
+    // 2. Recebimento de Eventos (POST)
+    if (req.method === 'POST') {
+        const body = req.body;
+        console.log("Sure Webhook Event (POST):", JSON.stringify(body));
+
+        // Aqui futuramente processaremos mensagens recebidas
+        // Ex: Se a divulgadora mandar uma foto, podemos tentar identificar se é um print
+        
+        return res.status(200).json({ success: true });
+    }
+
+    return res.status(405).send('Method Not Allowed');
+});
+
 // Função Genérica para Atribuir Código do Estoque
 const assignCodeGeneric = async (membershipId, membershipCollection, eventsCollection) => {
     return await db.runTransaction(async (transaction) => {
@@ -31,7 +59,6 @@ const assignCodeGeneric = async (membershipId, membershipCollection, eventsColle
         if (!membershipSnap.exists) throw new Error("Adesão não encontrada no sistema.");
         const mData = membershipSnap.data();
         
-        // Se já tiver código, não faz nada (evita gasto duplo de estoque)
         if (mData.status === 'confirmed' && mData.benefitCode) return mData.benefitCode;
 
         const codesRef = db.collection(eventsCollection).doc(mData.vipEventId).collection("availableCodes");
@@ -42,14 +69,12 @@ const assignCodeGeneric = async (membershipId, membershipCollection, eventsColle
         const codeDoc = unusedCodeSnap.docs[0];
         const assignedCode = codeDoc.data().code;
 
-        // Atualiza o código como usado
         transaction.update(codeDoc.ref, { 
             used: true, 
             usedBy: mData.promoterEmail, 
             usedAt: admin.firestore.FieldValue.serverTimestamp() 
         });
 
-        // Atualiza a adesão do aluno
         transaction.update(membershipRef, { 
             status: 'confirmed', 
             benefitCode: assignedCode, 
@@ -62,15 +87,12 @@ const assignCodeGeneric = async (membershipId, membershipCollection, eventsColle
 };
 
 // --- GREENLIFE FUNCTIONS ---
-
 export const createGreenlifeAsaasPix = functions.region("southamerica-east1").https.onCall(async (data) => {
     const { email, name, whatsapp, taxId, amount, vipEventId, promoterId, vipEventName } = data;
-    
     const customerRes = await asaasFetch('/customers', { 
         method: 'POST', 
         body: JSON.stringify({ name, email, mobilePhone: whatsapp, cpfCnpj: taxId, externalReference: promoterId }) 
     });
-    
     const paymentRes = await asaasFetch('/payments', { 
         method: 'POST', 
         body: JSON.stringify({ 
@@ -82,10 +104,7 @@ export const createGreenlifeAsaasPix = functions.region("southamerica-east1").ht
             externalReference: `greenlife_${promoterId}_${vipEventId}` 
         }) 
     });
-    
     const pixRes = await asaasFetch(`/payments/${paymentRes.id}/pixQrCode`);
-    
-    // Registra a intenção de adesão
     await db.collection("greenlifeMemberships").doc(`${promoterId}_${vipEventId}`).set({ 
         asaasPaymentId: paymentRes.id, 
         status: 'pending', 
@@ -98,7 +117,6 @@ export const createGreenlifeAsaasPix = functions.region("southamerica-east1").ht
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         submittedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
-    
     return { paymentId: paymentRes.id, payload: pixRes.payload, encodedImage: pixRes.encodedImage };
 });
 
@@ -107,30 +125,20 @@ export const activateGreenlifeMembership = functions.region("southamerica-east1"
     return { success: true, code };
 });
 
-// --- WEBHOOK UNIFICADO ---
-
+// --- WEBHOOK ASAAS ---
 export const asaasWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     const body = req.body;
-    console.log("Asaas Webhook Received:", body.event, body.payment?.externalReference);
-
     if (body.event === 'PAYMENT_CONFIRMED' || body.event === 'PAYMENT_RECEIVED') {
         const ref = body.payment?.externalReference;
-        
         if (ref) {
             try {
                 if (ref.startsWith('greenlife_')) {
                     const membershipId = ref.replace('greenlife_', '');
                     await assignCodeGeneric(membershipId, "greenlifeMemberships", "greenlifeEvents");
-                    console.log("Greenlife payment processed:", membershipId);
                 } else {
-                    // Fallback para o Club VIP original (que não usa prefixo)
                     await assignCodeGeneric(ref, "vipMemberships", "vipEvents");
-                    console.log("VIP payment processed:", ref);
                 }
-            } catch (err) {
-                console.error("Webhook Error:", err.message);
-                // Retornamos 200 mesmo com erro interno para o Asaas não ficar repetindo o erro se for regra de negócio (estoque vazio)
-            }
+            } catch (err) { console.error("Webhook Error:", err.message); }
         }
     }
     res.status(200).send('OK');
