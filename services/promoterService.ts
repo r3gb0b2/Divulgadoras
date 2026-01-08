@@ -1,4 +1,3 @@
-
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { Promoter, PromoterApplicationData, PromoterStatus, RejectionReason, GroupRemovalRequest } from '../types';
@@ -16,7 +15,7 @@ export const createVipPromoter = async (data: { name: string, email: string, wha
         email: emailLower,
         whatsapp: data.whatsapp.replace(/\D/g, ''),
         instagram: 'vip_member',
-        status: 'approved', // Já entra como aprovado para fins de portal
+        status: 'approved',
         organizationId: 'club-vip-global',
         campaignName: 'Membro Clube VIP',
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -27,37 +26,12 @@ export const createVipPromoter = async (data: { name: string, email: string, wha
     return promoterRef.id;
 };
 
-/**
- * Auxiliar para obter timestamp unix de forma segura para ordenação em memória.
- */
 const getUnixTime = (ts: any): number => {
     if (!ts) return 0; 
     if (typeof ts.toMillis === 'function') return ts.toMillis() / 1000;
     if (ts.seconds !== undefined) return ts.seconds;
     const d = new Date(ts);
     return isNaN(d.getTime()) ? 0 : d.getTime() / 1000;
-};
-
-export const changePromoterEmail = async (promoterId: string, oldEmail: string, newEmail: string): Promise<void> => {
-    try {
-        const updateFunc = functions.httpsCallable('updatePromoterEmail');
-        await updateFunc({ promoterId, oldEmail, newEmail: newEmail.toLowerCase().trim() });
-    } catch (error: any) {
-        throw new Error(error.message || "Falha ao alterar e-mail.");
-    }
-};
-
-export const notifyApprovalBulk = async (promoterIds: string[]): Promise<void> => {
-    try {
-        const notifyFunc = functions.httpsCallable('notifyApprovalBulk');
-        await notifyFunc({ promoterIds });
-    } catch (error: any) {
-        throw new Error(error.message || "Falha ao enviar notificações.");
-    }
-};
-
-export const notifyPromoterEmail = async (promoterId: string): Promise<void> => {
-    await notifyApprovalBulk([promoterId]);
 };
 
 export const addPromoter = async (data: PromoterApplicationData): Promise<void> => {
@@ -93,12 +67,19 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
       })
     );
 
-    const newPromoter: Omit<Promoter, 'id'> = {
-      name: data.name.trim(), email: emailLower,
+    const newPromoter: any = {
+      name: data.name.trim(), 
+      email: emailLower,
+      cpf: (data as any).cpf || '',
       whatsapp: data.whatsapp.replace(/\D/g, ''),
       instagram: data.instagram.replace('@', '').trim(),
       tiktok: data.tiktok?.replace('@', '').trim() || '',
-      dateOfBirth: data.dateOfBirth, photoUrls, facePhotoUrl: photoUrls[0],
+      dateOfBirth: data.dateOfBirth,
+      cep: (data as any).cep || '',
+      address: (data as any).address || '',
+      city: (data as any).city || '',
+      photoUrls, 
+      facePhotoUrl: photoUrls[0],
       status: 'pending', 
       createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       statusChangedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -119,23 +100,6 @@ export const addPromoter = async (data: PromoterApplicationData): Promise<void> 
   }
 };
 
-export const submitEmocoesProof = async (promoterId: string, file: File): Promise<void> => {
-    try {
-        const fileName = `emocoes_proofs/${promoterId}_${Date.now()}_${file.name}`;
-        const storageRef = storage.ref(fileName);
-        await storageRef.put(file);
-        const url = await storageRef.getDownloadURL();
-
-        await firestore.collection('promoters').doc(promoterId).update({
-            emocoesStatus: 'pending',
-            emocoesProofUrl: url,
-            statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-    } catch (error: any) {
-        throw new Error("Erro ao enviar comprovante: " + error.message);
-    }
-};
-
 export const checkPromoterStatus = async (email: string): Promise<Promoter[]> => {
     const snap = await firestore.collection("promoters").where("email", "==", email.toLowerCase().trim()).get();
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
@@ -152,20 +116,6 @@ export const getLatestPromoterProfileByEmail = async (email: string): Promise<Pr
         
         return docs[0];
     } catch (error) { return null; }
-};
-
-export const confirmPromoterGroupEntry = async (id: string): Promise<void> => {
-    try {
-        const doc = await firestore.collection('promoters').doc(id).get();
-        if (!doc.exists) return;
-        const data = doc.data() as Promoter;
-        const relatedSnap = await firestore.collection('promoters').where('email', '==', data.email.toLowerCase().trim()).where('organizationId', '==', data.organizationId).where('status', '==', 'approved').get();
-        const batch = firestore.batch();
-        relatedSnap.forEach(doc => { batch.update(doc.ref, { hasJoinedGroup: true }); });
-        await batch.commit();
-    } catch (error) {
-        await firestore.collection('promoters').doc(id).update({ hasJoinedGroup: true });
-    }
 };
 
 export const getPromoterById = async (id: string): Promise<Promoter | null> => {
@@ -200,9 +150,6 @@ export const findPromotersByEmail = async (email: string): Promise<Promoter[]> =
     } catch (error) { return []; }
 };
 
-/**
- * Função unificada para carregar divulgadoras para o Admin com múltiplos filtros.
- */
 export const getAllPromoters = async (options: {
     organizationId: string;
     filterOrgId?: string;
@@ -242,20 +189,10 @@ export const getAllPromoters = async (options: {
         return results;
     } catch (error: any) {
         console.error("Erro ao buscar divulgadoras:", error);
-        if (error.message?.includes("index")) {
-             const fallbackSnap = await firestore.collection("promoters")
-                .where("organizationId", "==", options.organizationId)
-                .limit(5000).get();
-             return fallbackSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter))
-                .sort((a, b) => getUnixTime(b.createdAt) - getUnixTime(a.createdAt));
-        }
         throw new Error("Não foi possível carregar a lista de equipe.");
     }
 };
 
-/**
- * Função unificada para carregar TODAS as divulgadoras para o Admin.
- */
 export const getAllPromotersForAdmin = async (options: {
     organizationId: string;
     status?: PromoterStatus | 'all';
@@ -287,20 +224,12 @@ export const getPromoterStats = async (options: {
     } catch (error) { return { total: 0, pending: 0, approved: 0, rejected: 0, removed: 0 }; }
 };
 
-/**
- * Atualiza o cadastro da divulgadora.
- * O envio de e-mail agora é disparado por um gatilho de backend (Cloud Functions onUpdate)
- * para que o painel administrativo seja instantâneo.
- */
 export const updatePromoter = async (id: string, data: Partial<Omit<Promoter, 'id'>>): Promise<void> => {
   try {
     const finalData = {
         ...data,
         statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
     };
-    
-    // Atualização direta no Firestore para máxima velocidade no front-end.
-    // O backend vigia essa alteração e envia o e-mail em background.
     await firestore.collection('promoters').doc(id).update(finalData);
   } catch (error) { 
     throw new Error("Falha ao atualizar cadastro."); 
@@ -319,18 +248,6 @@ export const getRejectionReasons = async (organizationId: string): Promise<Rejec
     } catch (error) { return []; }
 };
 
-export const addRejectionReason = async (text: string, organizationId: string): Promise<void> => {
-    await firestore.collection("rejectionReasons").add({ text, organizationId });
-};
-
-export const updateRejectionReason = async (id: string, text: string): Promise<void> => {
-    await firestore.collection("rejectionReasons").doc(id).update({ text });
-};
-
-export const deleteRejectionReason = async (id: string): Promise<void> => {
-    await firestore.collection("rejectionReasons").doc(id).delete();
-};
-
 export const getApprovedPromoters = async (organizationId: string, state: string, campaignName: string): Promise<Promoter[]> => {
     try {
         const q = firestore.collection("promoters")
@@ -341,20 +258,8 @@ export const getApprovedPromoters = async (organizationId: string, state: string
         const snap = await q.get();
         const allApproved = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Promoter));
         const results = allApproved.filter(p => p.campaignName === campaignName || (p.associatedCampaigns && p.associatedCampaigns.includes(campaignName)));
-        results.sort((a, b) => getUnixTime(b.statusChangedAt) - getUnixTime(a.statusChangedAt));
         return results;
     } catch (error) { return []; }
-};
-
-export const requestGroupRemoval = async (promoterId: string, campaignName: string, organizationId: string): Promise<void> => {
-    try {
-        const promoter = await getPromoterById(promoterId);
-        if (!promoter) throw new Error("Divulgadora não encontrada.");
-        await firestore.collection('groupRemovalRequests').add({
-            promoterId, promoterName: promoter.name, promoterEmail: promoter.email,
-            campaignName, organizationId, status: 'pending', requestedAt: firebase.firestore.Timestamp.now(),
-        });
-    } catch (error) { throw new Error("Falha ao registrar solicitação."); }
 };
 
 export const getGroupRemovalRequests = async (organizationId: string): Promise<GroupRemovalRequest[]> => {
@@ -362,7 +267,6 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
         const q = firestore.collection('groupRemovalRequests').where('organizationId', '==', organizationId).where('status', '==', 'pending');
         const snap = await q.get();
         const results = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as GroupRemovalRequest));
-        results.sort((a, b) => getUnixTime(b.requestedAt) - getUnixTime(a.requestedAt));
         return results;
     } catch (error) { return []; }
 };
@@ -370,3 +274,82 @@ export const getGroupRemovalRequests = async (organizationId: string): Promise<G
 export const updateGroupRemovalRequest = async (id: string, data: Partial<GroupRemovalRequest>): Promise<void> => {
     try { await firestore.collection('groupRemovalRequests').doc(id).update(data); } catch (error) { throw new Error("Falha ao atualizar solicitação."); }
 }
+
+export const notifyPromoterEmail = async (id: string): Promise<void> => {
+  try {
+    const func = functions.httpsCallable('notifyPromoterEmail');
+    await func({ promoterId: id });
+  } catch (error) {
+    console.error("Erro ao notificar por e-mail:", error);
+    throw new Error("Não foi possível enviar o e-mail de notificação.");
+  }
+};
+
+export const confirmPromoterGroupEntry = async (id: string): Promise<void> => {
+  try {
+    await firestore.collection('promoters').doc(id).update({
+      hasJoinedGroup: true,
+      statusChangedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Erro ao confirmar entrada no grupo:", error);
+    throw new Error("Não foi possível confirmar a entrada no grupo.");
+  }
+};
+
+export const addRejectionReason = async (text: string, organizationId: string): Promise<string> => {
+  try {
+    const docRef = await firestore.collection('rejectionReasons').add({
+      text: text.trim(),
+      organizationId
+    });
+    return docRef.id;
+  } catch (error) {
+    throw new Error("Falha ao adicionar motivo de rejeição.");
+  }
+};
+
+export const updateRejectionReason = async (id: string, text: string): Promise<void> => {
+  try {
+    await firestore.collection('rejectionReasons').doc(id).update({
+      text: text.trim()
+    });
+  } catch (error) {
+    throw new Error("Falha ao atualizar motivo de rejeição.");
+  }
+};
+
+export const deleteRejectionReason = async (id: string): Promise<void> => {
+  try {
+    await firestore.collection('rejectionReasons').doc(id).delete();
+  } catch (error) {
+    throw new Error("Falha ao remover motivo de rejeição.");
+  }
+};
+
+export const requestGroupRemoval = async (promoterId: string, campaignName: string, organizationId: string): Promise<void> => {
+  try {
+    const p = await getPromoterById(promoterId);
+    await firestore.collection('groupRemovalRequests').add({
+      promoterId,
+      promoterName: p?.name || 'Desconhecido',
+      promoterEmail: p?.email || '',
+      campaignName,
+      organizationId,
+      status: 'pending',
+      requestedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  } catch (error) {
+    throw new Error("Falha ao solicitar remoção.");
+  }
+};
+
+export const changePromoterEmail = async (id: string, newEmail: string): Promise<void> => {
+  try {
+    await firestore.collection('promoters').doc(id).update({
+      email: newEmail.toLowerCase().trim()
+    });
+  } catch (error) {
+    throw new Error("Falha ao alterar e-mail.");
+  }
+};
