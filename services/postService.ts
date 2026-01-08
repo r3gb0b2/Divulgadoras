@@ -173,13 +173,14 @@ export const createPost = async (postData: Omit<Post, 'id' | 'createdAt'>, promo
     const batch = firestore.batch();
     const now = firebase.firestore.FieldValue.serverTimestamp();
     
-    batch.set(postRef, { ...stripUndefined(postData), id: postRef.id, createdAt: now });
+    // Fix: Explicitly include organizationId in the saved post object
+    batch.set(postRef, { ...stripUndefined(postData), id: postRef.id, createdAt: now, organizationId: postData.organizationId });
     
     promoters.forEach(p => {
         const assignmentRef = firestore.collection('postAssignments').doc();
         batch.set(assignmentRef, {
             postId: postRef.id,
-            post: { ...stripUndefined(postData), id: postRef.id },
+            post: { ...stripUndefined(postData), id: postRef.id, organizationId: postData.organizationId },
             promoterId: p.id,
             promoterEmail: p.email,
             promoterName: p.name,

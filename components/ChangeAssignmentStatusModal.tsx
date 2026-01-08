@@ -60,19 +60,19 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
                     proofImageUrls: ['manual'], 
                     justification: undefined, 
                     justificationStatus: undefined,
-                    justificationSubmittedAt: null,
+                    // Fix: Removed justificationSubmittedAt as it is not needed here
                 };
             } else {
                  dataToSave = {
                     status: selectedStatus as any,
-                    proofSubmittedAt: null, 
+                    proofSubmittedAt: firebase.firestore.FieldValue.delete() as any, 
                     proofImageUrls: [],
                  };
             }
         } else if (action === 'manage_justification') {
             dataToSave = {
                 justificationStatus: justificationStatus,
-                justificationResponse: justificationResponse,
+                justificationResponse: justificationResponse, // Fix: Property recognized now
             };
         }
         
@@ -166,19 +166,19 @@ const ChangeAssignmentStatusModal: React.FC<ChangeAssignmentStatusModalProps> = 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <button 
                         onClick={() => setJustificationStatus('accepted')}
-                        className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${justificationStatus === 'accepted' ? 'bg-green-600 text-white border-green-500 shadow-lg' : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'}`}
+                        className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${justificationStatus === 'accepted' ? 'bg-green-600 text-white border-green-500 shadow-lg' : 'bg-gray-800 text-gray-400 hover:text-gray-300'}`}
                     >
                         <CheckCircleIcon className="w-4 h-4" /> Aprovar
                     </button>
                     <button 
                         onClick={() => setJustificationStatus('rejected')}
-                        className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${justificationStatus === 'rejected' ? 'bg-red-600 text-white border-red-500 shadow-lg' : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'}`}
+                        className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${justificationStatus === 'rejected' ? 'bg-red-600 text-white border-red-500 shadow-lg' : 'bg-gray-800 text-gray-400 hover:text-gray-300'}`}
                     >
                         <XIcon className="w-4 h-4" /> Recusar
                     </button>
                     <button 
                         onClick={() => setJustificationStatus('pending')}
-                        className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${justificationStatus === 'pending' ? 'bg-yellow-600 text-white border-yellow-500 shadow-lg' : 'bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300'}`}
+                        className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-black uppercase tracking-widest border transition-all ${justificationStatus === 'pending' ? 'bg-yellow-600 text-white border-yellow-500 shadow-lg' : 'bg-gray-800 text-gray-400 hover:text-gray-300'}`}
                     >
                         <ClockIcon className="w-4 h-4" /> Pendente
                     </button>
