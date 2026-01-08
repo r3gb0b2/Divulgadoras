@@ -1,4 +1,5 @@
-import { functions } from '../firebase/config';
+
+import { functions, firestore } from '../firebase/config';
 
 export const getStripePublishableKey = async (): Promise<string> => {
     try {
@@ -52,5 +53,18 @@ export const getEnvironmentConfig = async (): Promise<any> => {
     } catch (error: any) {
         console.error("Error getting environment config:", error);
         throw new Error(`Não foi possível buscar a configuração do servidor. Detalhes: ${error.message}`);
+    }
+};
+
+/**
+ * Recupera as credenciais da API Sure salva no Firestore.
+ */
+export const getWhatsAppConfig = async () => {
+    try {
+        const doc = await firestore.collection('systemConfig').doc('whatsapp').get();
+        return doc.exists ? doc.data() : null;
+    } catch (e) {
+        console.error("Erro ao buscar config WhatsApp:", e);
+        return null;
     }
 };

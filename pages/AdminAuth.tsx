@@ -48,6 +48,7 @@ import PromoterRecoveryPage from './PromoterRecoveryPage';
 import VipPublicDashboard from './VipPublicDashboard';
 import StatesListPage from './StatesListPage';
 import StateManagementPage from './StateManagementPage';
+import AdminWhatsAppSettings from './AdminWhatsAppSettings';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user, loading } = useAdminAuth();
@@ -80,6 +81,7 @@ const AdminAuth: React.FC = () => {
                     <Route path="push-queue" element={<ProtectedRoute><AdminPushQueuePage /></ProtectedRoute>} />
                     <Route path="global-lists" element={<ProtectedRoute><AdminGlobalLists /></ProtectedRoute>} />
                     <Route path="greenlife" element={<ProtectedRoute><AdminGreenlife /></ProtectedRoute>} />
+                    <Route path="whatsapp-settings" element={<ProtectedRoute><AdminWhatsAppSettings /></ProtectedRoute>} />
                 </>
             )}
 
