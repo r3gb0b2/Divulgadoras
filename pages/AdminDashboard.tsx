@@ -66,6 +66,17 @@ const AdminDashboard: React.FC = () => {
                                 <div className="text-xs text-indigo-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Acesso Restrito &rarr;</div>
                             </Link>
 
+                            <Link to="/admin/greenlife" className="group block p-6 bg-green-900/20 rounded-3xl hover:bg-green-600 transition-all duration-300 border border-green-500/30 hover:border-transparent shadow-xl ring-1 ring-green-500/20">
+                                <div className="flex items-center">
+                                    <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                        <TicketIcon className="w-8 h-8" />
+                                    </div>
+                                    <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Alunos Greenlife</h2>
+                                </div>
+                                <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Gestão de cupons, estoque e ingressos exclusivos Greenlife.</p>
+                                <div className="text-xs text-green-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Gerenciar Agora &rarr;</div>
+                            </Link>
+
                             <Link to="/admin/whatsapp-campaign" className="group block p-6 bg-green-600/10 rounded-3xl hover:bg-green-600 transition-all duration-300 border border-green-500/20 hover:border-transparent shadow-xl">
                                 <div className="flex items-center">
                                     <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
