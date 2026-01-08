@@ -1,10 +1,12 @@
+
 import React, { useState, useMemo } from 'react';
 import { RejectionReason } from '../types';
+import { SparklesIcon } from './Icons';
 
 interface RejectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (reason: string, allowEdit: boolean) => void;
+  onConfirm: (reason: string, allowEdit: boolean, offerVip: boolean) => void;
   reasons: RejectionReason[];
 }
 
@@ -21,20 +23,18 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
   const [selectedReasons, setSelectedReasons] = useState<Set<string>>(new Set());
   const [customReason, setCustomReason] = useState('');
   const [allowEdit, setAllowEdit] = useState(false);
+  const [offerVip, setOfferVip] = useState(false);
 
   const combinedReasons = useMemo(() => {
     const reasonMap = new Map<string, RejectionReason>();
     
-    // Add custom (DB) reasons first to prioritize them and their IDs
     reasons.forEach(reason => {
         reasonMap.set(reason.text.trim().toLowerCase(), reason);
     });
 
-    // Add default reasons only if a reason with the same text doesn't already exist
     defaultRejectionReasons.forEach(defaultReason => {
         const key = defaultReason.text.trim().toLowerCase();
         if (!reasonMap.has(key)) {
-            // Add it with a placeholder orgId to satisfy the type
             reasonMap.set(key, { ...defaultReason, organizationId: 'default' });
         }
     });
@@ -58,79 +58,108 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
   };
 
   const handleConfirm = () => {
-    const finalReasons = [
+    const baseReasons = [
         ...Array.from(selectedReasons),
         ...(customReason.trim() ? [customReason.trim()] : [])
     ];
     
-    const reasonMessage = finalReasons.length > 0 
-        ? `- ${finalReasons.join('\n- ')}` 
+    let reasonMessage = baseReasons.length > 0 
+        ? `- ${baseReasons.join('\n- ')}` 
         : 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado.';
 
-    onConfirm(reasonMessage, allowEdit);
-    // Reset state for next use
+    // Se oferecer VIP estiver marcado, adicionamos o gancho de vendas
+    if (offerVip) {
+        reasonMessage += "\n\n⚠️ OPORTUNIDADE ESPECIAL: Mas não fique triste! Como você demonstrou interesse em estar conosco, liberamos um acesso promocional exclusivo através do nosso CLUBE VIP. Garanta seu lugar com desconto agora: https://divulgadoras.vercel.app/#/clubvip";
+    }
+
+    onConfirm(reasonMessage, allowEdit, offerVip);
+    
+    // Reset state
     setSelectedReasons(new Set());
     setCustomReason('');
     setAllowEdit(false);
+    setOfferVip(false);
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-      <div className="bg-secondary rounded-lg shadow-xl p-6 w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-white">Motivo da Rejeição</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-300 text-3xl">&times;</button>
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex justify-center items-center z-[150] p-4" onClick={onClose}>
+      <div className="bg-secondary rounded-[2.5rem] shadow-2xl p-8 w-full max-w-lg max-h-[90vh] flex flex-col border border-white/10" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Finalizar Recusa</h2>
+            <button onClick={onClose} className="p-2 text-gray-500 hover:text-white transition-colors">&times;</button>
         </div>
         
-        <div className="flex-grow overflow-y-auto space-y-4">
-            <h3 className="text-lg font-semibold text-gray-200">Selecione um ou mais motivos:</h3>
-            <div className="space-y-2">
-                {combinedReasons.map(reason => (
-                    <label key={reason.id} className="flex items-center p-2 bg-gray-700/50 rounded-md cursor-pointer hover:bg-gray-700">
-                        <input
-                            type="checkbox"
-                            checked={selectedReasons.has(reason.text)}
-                            onChange={() => handleReasonToggle(reason.text)}
-                            className="h-4 w-4 text-primary bg-gray-700 border-gray-500 focus:ring-primary rounded"
-                        />
-                        <span className="ml-3 text-gray-200">{reason.text}</span>
-                    </label>
-                ))}
+        <div className="flex-grow overflow-y-auto space-y-6 pr-2 custom-scrollbar">
+            <div className="space-y-3">
+                <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Motivos da Rejeição:</h3>
+                <div className="space-y-2">
+                    {combinedReasons.map(reason => (
+                        <label key={reason.id} className={`flex items-center p-3 rounded-2xl border transition-all cursor-pointer ${selectedReasons.has(reason.text) ? 'bg-primary/10 border-primary/50 text-white' : 'bg-dark/50 border-white/5 text-gray-400 hover:bg-gray-800'}`}>
+                            <input
+                                type="checkbox"
+                                checked={selectedReasons.has(reason.text)}
+                                onChange={() => handleReasonToggle(reason.text)}
+                                className="h-4 w-4 text-primary bg-dark border-gray-700 focus:ring-0 rounded"
+                            />
+                            <span className="ml-3 text-xs font-bold">{reason.text}</span>
+                        </label>
+                    ))}
+                </div>
             </div>
 
-            <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Outro motivo (opcional):
-                </label>
+            <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Observação Adicional:</label>
                 <textarea
                     value={customReason}
                     onChange={(e) => setCustomReason(e.target.value)}
-                    placeholder="Adicione uma observação ou motivo personalizado..."
-                    className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md shadow-sm bg-gray-700 text-gray-200 focus:outline-none focus:ring-primary focus:border-primary min-h-[80px]"
+                    placeholder="Algo mais que deseja dizer?"
+                    className="w-full px-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-sm outline-none focus:ring-1 focus:ring-primary min-h-[100px]"
                 />
             </div>
             
-            <div className="border-t border-gray-700 pt-4">
-                <label className="flex items-center p-2 bg-yellow-900/30 rounded-md cursor-pointer hover:bg-yellow-900/50">
+            <div className="space-y-3 pt-2 border-t border-white/5">
+                <label className="flex items-center p-4 bg-orange-900/10 rounded-2xl border border-orange-500/20 cursor-pointer group">
                     <input
                         type="checkbox"
                         checked={allowEdit}
                         onChange={(e) => setAllowEdit(e.target.checked)}
-                        className="h-4 w-4 text-primary bg-gray-700 border-gray-500 focus:ring-primary rounded"
+                        className="h-5 w-5 text-orange-500 bg-dark border-gray-700 focus:ring-0 rounded"
                     />
-                    <span className="ml-3 text-yellow-200 text-sm font-medium">Permitir que a divulgadora edite e reenvie o cadastro</span>
+                    <div className="ml-4">
+                        <span className="block text-xs font-black text-orange-400 uppercase tracking-tight">Permitir Correção</span>
+                        <span className="block text-[10px] text-gray-500">Ela poderá editar as fotos e enviar de novo.</span>
+                    </div>
+                </label>
+
+                {/* NOVO CAMPO: OFERECER CLUB VIP */}
+                <label className="flex items-center p-4 bg-primary/10 rounded-2xl border border-primary/20 cursor-pointer group relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-all">
+                        <SparklesIcon className="w-12 h-12 text-primary" />
+                    </div>
+                    <input
+                        type="checkbox"
+                        checked={offerVip}
+                        onChange={(e) => setOfferVip(e.target.checked)}
+                        className="h-5 w-5 text-primary bg-dark border-gray-700 focus:ring-0 rounded z-10"
+                    />
+                    <div className="ml-4 z-10">
+                        <span className="block text-xs font-black text-white uppercase tracking-tight flex items-center gap-2">
+                            Oferecer CLUB VIP <SparklesIcon className="w-3 h-3 text-primary" />
+                        </span>
+                        <span className="block text-[10px] text-gray-400">Envia link de ingresso promocional no e-mail de recusa.</span>
+                    </div>
                 </label>
             </div>
         </div>
 
-        <div className="mt-6 flex justify-end space-x-3 border-t border-gray-700 pt-4">
-          <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-600 text-gray-200 rounded-md hover:bg-gray-500">
+        <div className="mt-8 flex gap-3 border-t border-white/5 pt-6">
+          <button type="button" onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-xs tracking-widest transition-all">
             Cancelar
           </button>
           <button 
             type="button" 
             onClick={handleConfirm} 
-            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            className="flex-[2] py-4 bg-red-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest shadow-xl shadow-red-900/20 hover:bg-red-500 transition-all transform active:scale-95"
           >
             Confirmar Rejeição
           </button>

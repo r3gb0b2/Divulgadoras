@@ -95,7 +95,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
     const [selectedCampaign, setSelectedCampaign] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     
-    // Filtros de Idade
     const [minAge, setMinAge] = useState('');
     const [maxAge, setMaxAge] = useState('');
     
@@ -280,7 +279,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         window.open(url, '_blank');
     };
 
-    const handleRejectConfirm = async (reason: string, allowEdit: boolean) => {
+    const handleRejectConfirm = async (reason: string, allowEdit: boolean, offerVip: boolean) => {
         const statusToSet: PromoterStatus = allowEdit ? 'rejected_editable' : 'rejected';
         setIsBulkProcessing(true);
         setIsRejectionModalOpen(false); 
@@ -329,7 +328,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                 if (!inMain && !inAssociated) return false;
             }
 
-            // Filtro de Idade
             const age = calculateAge(p.dateOfBirth);
             const minV = minAge === '' ? 0 : parseInt(minAge);
             const maxV = maxAge === '' ? 999 : parseInt(maxAge);
@@ -418,7 +416,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             {campaigns.map(c => <option key={c.id} value={c.name}>{c.name} ({c.stateAbbr})</option>)}
                         </select>
                     </div>
-                    {/* FILTRO DE IDADE */}
                     <div className="md:col-span-3 flex gap-2">
                         <div className="relative flex-1">
                             <input 
@@ -580,7 +577,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                             </table>
                         </div>
 
-                        {/* Mobile View */}
                         <div className="md:hidden grid grid-cols-1 gap-4">
                             {filteredPromoters.map(p => {
                                 const photo = getPhotoUrl(p);
