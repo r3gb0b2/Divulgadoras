@@ -196,15 +196,8 @@ const App: React.FC = () => {
               </Routes>
             </ErrorBoundary>
           </main>
-          <footer className="text-center py-8 text-gray-500 text-[11px] mt-auto border-t border-white/5 bg-secondary/20">
-              <div className="container mx-auto px-6 space-y-2">
-                <p className="font-black uppercase tracking-widest text-gray-400">
-                    &copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados.
-                </p>
-                <p className="font-bold uppercase opacity-60">
-                    RAFAEL M DA SILVA EVENTOS - ME | CNPJ: 26.656.545/0001-44
-                </p>
-              </div>
+          <footer className="text-center py-6 text-gray-400 text-sm mt-auto">
+              <p>&copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. </p>
           </footer>
         </div>
       </Router>
