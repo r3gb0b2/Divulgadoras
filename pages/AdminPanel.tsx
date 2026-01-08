@@ -299,22 +299,25 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                     });
                 }));
 
-                // Se oferecer VIP estiver marcado, dispara e-mail de marketing
                 if (offerVip) {
                     await sendNewsletter({
                         audience: { type: 'individual', promoterIds: targetIds },
-                        subject: "Oportunidade Especial para você! 🎫",
+                        subject: "Temos uma oportunidade especial para você! 🎫",
                         body: `
-                            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
-                                <h2 style="color: #7e39d5;">Olá! Temos uma novidade...</h2>
-                                <p>Agradecemos muito o seu interesse em nossa equipe de divulgação.</p>
-                                <p>Infelizmente, desta vez não conseguimos aprovar o seu cadastro para trabalhar no evento, <strong>MAS não queremos que você fique de fora!</strong></p>
-                                <div style="background: #f3f0ff; padding: 20px; border-radius: 15px; text-align: center; border: 1px solid #dcd0ff;">
-                                    <p style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">🌟 ACESSO PROMOCIONAL LIBERADO 🌟</p>
-                                    <p>Como você já se cadastrou conosco, liberamos um link exclusivo para você garantir seu ingresso através do nosso <strong>CLUBE VIP</strong> com valor promocional.</p>
-                                    <a href="https://divulgadoras.vercel.app/#/clubvip" style="display: inline-block; background: #7e39d5; color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none; font-weight: bold; margin-top: 10px;">GARANTIR MEU VIP AGORA</a>
+                            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
+                                <h2 style="color: #7e39d5; text-align: center;">Olá! Tudo bem?</h2>
+                                <p>Agradecemos muito o seu interesse em fazer parte da nossa equipe de divulgação.</p>
+                                <p>Desta vez, devido ao grande número de inscritas, as vagas para trabalhar no evento já foram preenchidas e não conseguimos aprovar o seu perfil para esta função específica.</p>
+                                
+                                <div style="background: #f8f5ff; padding: 30px; border-radius: 20px; text-align: center; border: 2px dashed #7e39d5; margin: 25px 0;">
+                                    <p style="font-weight: 900; font-size: 20px; color: #7e39d5; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">🌟 PRESENTE EXCLUSIVO 🌟</p>
+                                    <p style="font-size: 16px; margin-bottom: 20px;">Mas não queremos que você fique de fora! Como você se cadastrou conosco, liberamos um <b>Acesso Promocional Limitado</b> através do nosso <b>CLUBE VIP</b>.</p>
+                                    <a href="https://divulgadoras.vercel.app/#/clubvip" style="display: inline-block; background: #7e39d5; color: white; padding: 18px 35px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(126, 57, 213, 0.3);">GARANTIR MEU INGRESSO COM DESCONTO</a>
+                                    <p style="font-size: 11px; color: #999; mt: 20px;">*Oferta válida enquanto durar o estoque do Clube VIP.</p>
                                 </div>
-                                <p style="font-size: 12px; color: #999; margin-top: 30px; border-top: 1px solid #eee; pt: 10px;">Equipe Certa - Gestão de Eventos</p>
+                                
+                                <p>Esperamos te ver na festa aproveitando como nossa convidada VIP!</p>
+                                <p style="font-size: 12px; color: #999; margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px; text-align: center;">Equipe Certa - Gestão de Equipes</p>
                             </div>
                         `
                     });
@@ -335,14 +338,20 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                         audience: { type: 'individual', promoterIds: [selectedPromoter.id] },
                         subject: "Convite Especial: Clube VIP 🎫",
                         body: `
-                             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+                             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; color: #333; line-height: 1.6;">
                                 <h2 style="color: #7e39d5;">Olá ${selectedPromoter.name.split(' ')[0]}!</h2>
-                                <p>Infelizmente não pudemos aprovar seu perfil para trabalhar neste evento, mas temos uma <strong>oportunidade exclusiva</strong> para você não ficar de fora da festa.</p>
-                                <div style="background: #f3f0ff; padding: 20px; border-radius: 15px; text-align: center;">
-                                    <p style="font-weight: bold; font-size: 16px;">Garantimos uma vaga promocional para você no nosso Clube VIP!</p>
-                                    <p>Aproveite os benefícios e o valor diferenciado por ser nossa seguidora.</p>
-                                    <a href="https://divulgadoras.vercel.app/#/clubvip" style="display: inline-block; background: #7e39d5; color: white; padding: 15px 30px; border-radius: 10px; text-decoration: none; font-weight: bold;">ACESSAR CLUBE VIP</a>
+                                <p>Obrigado por enviar seu cadastro para nossa equipe.</p>
+                                <p>No momento, as vagas para divulgação deste evento foram preenchidas e seu perfil não foi selecionado para trabalhar nesta edição.</p>
+                                
+                                <div style="background: #f8f5ff; padding: 30px; border-radius: 20px; text-align: center; border: 2px dashed #7e39d5; margin: 25px 0;">
+                                    <p style="font-weight: 900; font-size: 18px; color: #7e39d5; margin-bottom: 10px; text-transform: uppercase;">✨ OPORTUNIDADE VIP ✨</p>
+                                    <p>Para que você não perca a festa, garantimos para você um valor <b>super reduzido e exclusivo</b> através do nosso Clube VIP!</p>
+                                    <p style="margin-bottom: 25px;">Aproveite os benefícios de ser nossa seguidora cadastrada.</p>
+                                    <a href="https://divulgadoras.vercel.app/#/clubvip" style="display: inline-block; background: #7e39d5; color: white; padding: 18px 35px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px;">ACESSAR VALORES PROMOCIONAIS</a>
                                 </div>
+                                
+                                <p>Nos vemos lá!</p>
+                                <p style="font-size: 12px; color: #999; margin-top: 40px; border-top: 1px solid #eee; padding-top: 20px; text-align: center;">Equipe Certa - Produção</p>
                             </div>
                         `
                     });
@@ -544,8 +553,6 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                         </th>
                                         <th className="px-6 py-5">Perfil / Contato</th>
                                         <th className="px-6 py-5">Evento / Lista</th>
-                                        <th className="px-6 py-5">Status</th>
-                                        <th className="px-6 py-5 text-center">Grupo</th>
                                         <th className="px-6 py-4 text-right">Ações</th>
                                     </tr>
                                 </thead>
@@ -583,22 +590,7 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 </td>
                                                 <td className="px-6 py-5">
                                                     <p className="text-white font-black text-[10px] uppercase tracking-tighter">{p.campaignName || 'Geral'}</p>
-                                                    {(p.associatedCampaigns || []).length > 0 && (
-                                                        <p className="text-[8px] text-gray-500 font-bold uppercase mt-0.5">+{p.associatedCampaigns!.length} extras</p>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-5">
                                                     <div>{statusBadge(p.status)}</div>
-                                                    {p.actionTakenByEmail && (
-                                                        <p className="text-[8px] text-gray-600 font-bold uppercase mt-1">Por: {p.actionTakenByEmail.split('@')[0]}</p>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-5 text-center">
-                                                    {p.hasJoinedGroup ? (
-                                                        <span className="px-2 py-0.5 rounded-lg bg-green-900/20 text-green-400 border border-green-800/30 text-[8px] font-black uppercase tracking-widest">No Grupo</span>
-                                                    ) : (
-                                                        <span className="px-2 py-0.5 rounded-lg bg-gray-800 text-gray-600 border border-gray-700 text-[8px] font-black uppercase tracking-widest">Fora</span>
-                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -635,25 +627,14 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             <div className="overflow-hidden flex-grow">
                                                 <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name || 'Sem Nome'}</p>
                                                 <p className="text-primary text-[9px] font-black uppercase tracking-widest mt-0.5">{p.campaignName || 'Geral'}</p>
-                                                <div className="flex items-center gap-3 mt-1.5">
-                                                    <a href={`https://instagram.com/${p.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="text-pink-500"><InstagramIcon className="w-4 h-4" /></a>
-                                                    <a href={`https://wa.me/55${p.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="text-green-500"><WhatsAppIcon className="w-4 h-4" /></a>
-                                                </div>
                                                 <div className="flex items-center gap-2 mt-2">
                                                     {statusBadge(p.status)}
                                                     <span className="text-[10px] text-gray-500 font-bold uppercase">{calculateAge(p.dateOfBirth)}a</span>
-                                                    {p.hasJoinedGroup && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap gap-2 pt-2 border-t border-white/5">
                                             {p.status === 'pending' && <button onClick={() => handleApprove(p)} className="flex-1 py-4 bg-green-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2"><CheckCircleIcon className="w-4 h-4" /> Aprovar</button>}
-                                            {p.status === 'approved' && (
-                                                <>
-                                                    <button onClick={() => handleWhatsAppManual(p)} className="p-4 bg-green-600 text-white rounded-2xl hover:bg-green-500 transition-all flex-1 flex justify-center"><WhatsAppIcon className="w-5 h-5" /></button>
-                                                    <button onClick={() => handleNotifyEmailManual(p)} className="p-4 bg-blue-600 text-white rounded-2xl hover:bg-blue-500 transition-all flex-1 flex justify-center"><MailIcon className="w-5 h-5" /></button>
-                                                </>
-                                            )}
                                             <button onClick={() => { setSelectedPromoter(p); setIsBulkAction(false); setIsRejectionModalOpen(true); }} className="flex-1 py-4 bg-red-600 text-white font-black text-[10px] uppercase rounded-2xl flex items-center justify-center gap-2"><XIcon className="w-4 h-4" /> Rejeitar</button>
                                         </div>
                                     </div>

@@ -65,11 +65,11 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
     
     let reasonMessage = baseReasons.length > 0 
         ? `- ${baseReasons.join('\n- ')}` 
-        : 'Agradecemos o seu interesse, mas no momento seu perfil não foi selecionado.';
+        : 'Agradecemos o seu interesse, mas no momento as vagas da equipe foram preenchidas e seu perfil não foi selecionado.';
 
     // Se oferecer VIP estiver marcado, adicionamos o gancho de vendas
     if (offerVip) {
-        reasonMessage += "\n\n⚠️ OPORTUNIDADE ESPECIAL: Mas não fique triste! Como você demonstrou interesse em estar conosco, liberamos um acesso promocional exclusivo através do nosso CLUBE VIP. Garanta seu lugar com desconto agora: https://divulgadoras.vercel.app/#/clubvip";
+        reasonMessage += "\n\n🎁 OPORTUNIDADE ESPECIAL: Notamos seu grande interesse em estar conosco e, como agradecimento, liberamos um acesso promocional exclusivo para o nosso CLUBE VIP com valor diferenciado. Não fique de fora da festa! Reserve agora: https://divulgadoras.vercel.app/#/clubvip";
     }
 
     onConfirm(reasonMessage, allowEdit, offerVip);
@@ -146,7 +146,7 @@ const RejectionModal: React.FC<RejectionModalProps> = ({ isOpen, onClose, onConf
                         <span className="block text-xs font-black text-white uppercase tracking-tight flex items-center gap-2">
                             Oferecer CLUB VIP <SparklesIcon className="w-3 h-3 text-primary" />
                         </span>
-                        <span className="block text-[10px] text-gray-400">Envia link de ingresso promocional no e-mail de recusa.</span>
+                        <span className="block text-[10px] text-gray-400">Envia convite com valor promocional.</span>
                     </div>
                 </label>
             </div>
