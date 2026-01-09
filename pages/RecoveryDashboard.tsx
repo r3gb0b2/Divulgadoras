@@ -30,8 +30,9 @@ const RecoveryDashboard: React.FC = () => {
     
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState<RecoveryStatus | 'all'>('none');
+    const [statusFilter, setStatusFilter] = useState<RecoveryStatus | 'all'>('all');
     const [campaignFilter, setCampaignFilter] = useState('all');
+    const [adminFilter, setAdminFilter] = useState('all');
 
     // Modais
     const [isManageTemplatesOpen, setIsManageTemplatesOpen] = useState(false);
@@ -65,19 +66,31 @@ const RecoveryDashboard: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
+    // Lista de admins únicos para o filtro
+    const uniqueAdmins = useMemo(() => {
+        const admins = leads
+            .map(l => (l as any).recoveryAdminEmail)
+            .filter((email): email is string => !!email);
+        return Array.from(new Set(admins)).sort();
+    }, [leads]);
+
     const filteredLeads = useMemo(() => {
         return leads.filter(p => {
             const pRecoveryStatus = (p as any).recoveryStatus || 'none';
+            const pAdminEmail = (p as any).recoveryAdminEmail || '';
+            
             const matchesStatus = statusFilter === 'all' || pRecoveryStatus === statusFilter;
             const matchesCampaign = campaignFilter === 'all' || p.vipEventId === campaignFilter;
+            const matchesAdmin = adminFilter === 'all' || pAdminEmail === adminFilter;
+            
             const matchesSearch = 
                 p.promoterName.toLowerCase().includes(searchQuery.toLowerCase()) || 
                 p.promoterEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (p.promoterWhatsapp || '').includes(searchQuery);
 
-            return matchesStatus && matchesSearch && matchesCampaign;
+            return matchesStatus && matchesSearch && matchesCampaign && matchesAdmin;
         });
-    }, [leads, statusFilter, campaignFilter, searchQuery]);
+    }, [leads, statusFilter, campaignFilter, adminFilter, searchQuery]);
 
     const handleUpdateStatus = async (membershipId: string, status: RecoveryStatus) => {
         try {
@@ -156,19 +169,23 @@ const RecoveryDashboard: React.FC = () => {
             </div>
 
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                     <div className="lg:col-span-2 relative">
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                         <input type="text" placeholder="BUSCAR POR NOME OU WHATSAPP..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary" />
                     </div>
                     <select value={campaignFilter} onChange={e => setCampaignFilter(e.target.value)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-primary">
-                        <option value="all">TODOS EVENTOS VIP</option>
+                        <option value="all">EVENTO (TODOS)</option>
                         {events.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                     <select value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-primary">
                         <option value="all">STATUS (TODOS)</option>
-                        <option value="none">🆕 NÃO ABORDADO</option>
-                        <option value="contacted">💬 ABORDADO</option>
+                        <option value="none">🆕 NOVOS</option>
+                        <option value="contacted">💬 ABORDADOS</option>
+                    </select>
+                    <select value={adminFilter} onChange={e => setAdminFilter(e.target.value)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-primary">
+                        <option value="all">ADMIN (TODOS)</option>
+                        {uniqueAdmins.map(admin => <option key={admin} value={admin}>{admin.split('@')[0].toUpperCase()}</option>)}
                     </select>
                 </div>
 
@@ -179,7 +196,7 @@ const RecoveryDashboard: React.FC = () => {
                                 <th className="px-6 py-5">Potencial Membro</th>
                                 <th className="px-6 py-5">Evento</th>
                                 <th className="px-6 py-5">Abandono</th>
-                                <th className="px-6 py-5 text-center">Recuperação</th>
+                                <th className="px-6 py-5 text-center">Status / Admin</th>
                                 <th className="px-6 py-4 text-right">Ação</th>
                             </tr>
                         </thead>
@@ -187,9 +204,10 @@ const RecoveryDashboard: React.FC = () => {
                             {isLoading ? (
                                 <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs animate-pulse">Buscando leads...</td></tr>
                             ) : filteredLeads.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhum carrinho pendente</td></tr>
+                                <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhum lead pendente encontrado</td></tr>
                             ) : filteredLeads.map(p => {
                                 const pRec = (p as any).recoveryStatus || 'none';
+                                const pAdmin = (p as any).recoveryAdminEmail ? (p as any).recoveryAdminEmail.split('@')[0] : null;
                                 return (
                                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
                                         <td className="px-6 py-5">
@@ -205,9 +223,14 @@ const RecoveryDashboard: React.FC = () => {
                                             </div>
                                         </td>
                                         <td className="px-6 py-5 text-center">
-                                            <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${pRec === 'contacted' ? 'bg-blue-900/40 text-blue-400 border-blue-800' : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
-                                                {pRec === 'contacted' ? 'ABORDADO' : 'NOVO'}
-                                            </span>
+                                            <div className="flex flex-col items-center gap-1.5">
+                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${pRec === 'contacted' ? 'bg-blue-900/40 text-blue-400 border-blue-800' : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
+                                                    {pRec === 'contacted' ? 'ABORDADO' : 'NOVO'}
+                                                </span>
+                                                {pAdmin && (
+                                                    <span className="text-[7px] font-black text-gray-600 uppercase tracking-widest bg-dark px-1.5 py-0.5 rounded">POR: {pAdmin}</span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-5 text-right">
                                             <button onClick={() => handleStartRecovery(p)} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-green-500 shadow-lg shadow-green-900/20 transition-all"><WhatsAppIcon className="w-4 h-4" /> CONTATAR</button>
@@ -228,11 +251,11 @@ const RecoveryDashboard: React.FC = () => {
                         <div className="flex-grow overflow-y-auto space-y-4 pr-2 custom-scrollbar">
                             {editingTemplate ? (
                                 <div className="space-y-4">
-                                    <input type="text" placeholder="Título" value={editingTemplate.title || ''} onChange={e => setEditingTemplate({...editingTemplate, title: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white" />
-                                    <textarea rows={6} placeholder="Texto... Use {{nome}} e {{evento}}" value={editingTemplate.text || ''} onChange={e => setEditingTemplate({...editingTemplate, text: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white text-sm" />
+                                    <input type="text" placeholder="Título" value={editingTemplate.title || ''} onChange={e => setEditingTemplate({...editingTemplate, title: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-black" />
+                                    <textarea rows={6} placeholder="Texto... Use {{nome}}, {{evento}} e {{admin}}" value={editingTemplate.text || ''} onChange={e => setEditingTemplate({...editingTemplate, text: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white text-sm" />
                                     <div className="flex gap-2">
-                                        <button onClick={handleSaveTemplateAction} className="flex-1 py-3 bg-primary text-white font-black rounded-xl">Salvar</button>
-                                        <button onClick={() => setEditingTemplate(null)} className="px-4 py-3 bg-gray-700 text-white font-black rounded-xl">Cancelar</button>
+                                        <button onClick={handleSaveTemplateAction} className="flex-1 py-3 bg-primary text-white font-black rounded-xl uppercase text-xs">Salvar</button>
+                                        <button onClick={() => setEditingTemplate(null)} className="px-4 py-3 bg-gray-700 text-white font-black rounded-xl uppercase text-xs">Cancelar</button>
                                     </div>
                                 </div>
                             ) : (
