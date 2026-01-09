@@ -6,15 +6,23 @@ import { ASAAS_CONFIG } from "./credentials.js";
 admin.initializeApp();
 const db = admin.firestore();
 
-// Helper robusto para chamadas à API Sure/Babysuri
+// Helper inteligente para chamadas à API Sure/Babysuri
 const sureFetch = async (endpoint, method, body, config) => {
     if (!config || !config.apiUrl || !config.apiToken) {
         throw new Error("Configuração da API Sure incompleta.");
     }
     
-    const url = `${config.apiUrl.replace(/\/$/, '')}${endpoint}`;
+    // Lógica para evitar duplicidade de /api na URL
+    let baseUrl = config.apiUrl.replace(/\/$/, '');
+    let cleanEndpoint = endpoint;
     
-    console.log(`[SureAPI] Chamando ${method} ${url}`);
+    if (baseUrl.toLowerCase().endsWith('/api') && endpoint.toLowerCase().startsWith('/api')) {
+        cleanEndpoint = endpoint.substring(4); // Remove o /api do início do endpoint
+    }
+    
+    const url = `${baseUrl}${cleanEndpoint}`;
+    
+    console.log(`[SureAPI] Tentando: ${method} ${url} | Platform: ${body.platform}`);
     
     const res = await fetch(url, {
         method,
@@ -25,7 +33,6 @@ const sureFetch = async (endpoint, method, body, config) => {
         body: JSON.stringify(body)
     });
     
-    // Captura resposta como texto primeiro para evitar "Unexpected end of JSON"
     const responseText = await res.text();
     let responseData = {};
     
@@ -33,14 +40,18 @@ const sureFetch = async (endpoint, method, body, config) => {
         try {
             responseData = JSON.parse(responseText);
         } catch (e) {
-            // Se não for JSON, armazena o texto bruto para depuração
             responseData = { message: responseText };
         }
     }
     
     if (!res.ok) {
-        console.error(`[SureAPI] Erro ${res.status}:`, responseText);
-        // Retorna o erro amigável da API ou o status code
+        console.error(`[SureAPI] Falha ${res.status} na URL ${url}:`, responseText);
+        
+        // Mensagem específica para 404
+        if (res.status === 404) {
+            throw new Error(`Endpoint não encontrado (404). Verifique se a URL da API no painel de ajustes está correta e termina com /api`);
+        }
+        
         throw new Error(responseData.message || responseData.error || `Erro HTTP ${res.status}`);
     }
     
@@ -94,7 +105,6 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
             }
 
             if (!destination) {
-                console.warn(`[Campaign] Destino vazio para ${pid}`);
                 failureCount++;
                 continue;
             }
@@ -109,7 +119,7 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
                 instanceId: config.instanceId,
                 to: destination,
                 message: personalizedMessage,
-                platform: platform.toLowerCase(),
+                platform: platform.toLowerCase(), // 'instagram' ou 'whatsapp'
                 type: 'text'
             };
 
@@ -126,7 +136,7 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
         success: successCount > 0, 
         count: successCount, 
         failures: failureCount, 
-        message: `Concluído via ${platform.toUpperCase()}. Sucessos: ${successCount}, Falhas: ${failureCount}. ${lastError ? 'Mensagem da API: ' + lastError : ''}` 
+        message: `Concluído via ${platform.toUpperCase()}. Sucessos: ${successCount}, Falhas: ${failureCount}. ${lastError ? 'Detalhe: ' + lastError : ''}` 
     };
 });
 

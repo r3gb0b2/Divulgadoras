@@ -113,12 +113,13 @@ const AdminWhatsAppSettings: React.FC = () => {
                                 </label>
                                 <input 
                                     type="url" 
-                                    placeholder="https://cbm-wap-babysuri-cb129855986.azurewebsites.net"
+                                    placeholder="https://exemplo.azurewebsites.net/api"
                                     value={config.apiUrl}
                                     onChange={e => setConfig({...config, apiUrl: e.target.value})}
                                     className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-primary transition-all shadow-inner"
                                     required
                                 />
+                                <p className="text-[9px] text-gray-500 uppercase font-black ml-1">Dica: Se receber erro 404, certifique-se que a URL termina com <b>/api</b></p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -156,8 +157,8 @@ const AdminWhatsAppSettings: React.FC = () => {
                                         className="w-6 h-6 rounded-lg bg-dark border-gray-700 text-primary focus:ring-0" 
                                     />
                                     <div className="flex flex-col">
-                                        <span className="text-xs font-black text-white uppercase tracking-tight group-hover:text-primary transition-colors">Ativar Automações WhatsApp</span>
-                                        <span className="text-[9px] text-gray-500 font-bold uppercase">Quando ativado, o sistema usará esta API para disparos.</span>
+                                        <span className="text-xs font-black text-white uppercase tracking-tight group-hover:text-primary transition-colors">Ativar Automações</span>
+                                        <span className="text-[9px] text-gray-500 font-bold uppercase">Habilita disparos via WhatsApp e Instagram Direct.</span>
                                     </div>
                                 </label>
                             </div>
@@ -180,13 +181,13 @@ const AdminWhatsAppSettings: React.FC = () => {
                         <div className="space-y-4">
                             <div className="p-4 bg-gray-800/50 rounded-2xl border border-white/5">
                                 <p className="text-[10px] text-gray-400 leading-relaxed">
-                                    Para o Webhook funcionar, a sua conta na Sure deve estar com o status <strong>Conectado</strong>.
+                                    O erro 404 em disparos de <b>Instagram</b> geralmente significa que a URL base da API não reconheceu o caminho das mensagens.
                                 </p>
                             </div>
                             <div className="p-4 bg-gray-800/50 rounded-2xl border border-white/5">
                                 <p className="text-[9px] font-black text-white uppercase mb-1">Verificação:</p>
                                 <p className="text-[10px] text-gray-400 leading-relaxed italic">
-                                    Nossa função identifica o ID que a Sure envia e responde na hora, garantindo que o botão de "Verificar" fique verde instantaneamente.
+                                    Ao salvar, tente fazer um disparo de teste. Se o erro 404 persistir, tente remover ou adicionar o <b>/api</b> no final da URL base.
                                 </p>
                             </div>
                         </div>
