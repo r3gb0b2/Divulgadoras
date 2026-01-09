@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -5,8 +6,7 @@ import { getOrganizations } from '../services/organizationService';
 import { getAllCampaigns } from '../services/settingsService';
 import { sendWhatsAppCampaign } from '../services/messageService';
 import { Organization, Campaign, Promoter } from '../types';
-// FIX: Added missing MegaphoneIcon and RefreshIcon to the imports from components/Icons.
-import { ArrowLeftIcon, SparklesIcon, WhatsAppIcon, InstagramIcon, FilterIcon, MegaphoneIcon, RefreshIcon } from '../components/Icons';
+import { ArrowLeftIcon, SparklesIcon, WhatsAppIcon, InstagramIcon, FilterIcon, MegaphoneIcon, RefreshIcon, AlertTriangleIcon } from '../components/Icons';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 
@@ -169,12 +169,12 @@ const WhatsAppCampaignPage: React.FC = () => {
 
     return (
         <div className="max-w-6xl mx-auto pb-20">
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex justify-between items-center mb-6 px-4 md:px-0">
                 <h1 className="text-3xl font-bold flex items-center gap-3">
                     <SparklesIcon className="w-8 h-8 text-primary" />
                     Campanha Multi-Canal (Super Admin)
                 </h1>
-                <button onClick={() => navigate('/admin/settings')} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
+                <button onClick={() => navigate('/admin/settings')} className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-md hover:bg-gray-700 text-sm">
                     <ArrowLeftIcon className="w-4 h-4" />
                     <span>Voltar</span>
                 </button>
@@ -207,6 +207,20 @@ const WhatsAppCampaignPage: React.FC = () => {
                                     </button>
                                 </div>
                             </div>
+
+                            {platform === 'instagram' && (
+                                <div className="p-4 bg-amber-900/20 border border-amber-500/30 rounded-2xl animate-fadeIn">
+                                    <div className="flex gap-3 items-start">
+                                        <AlertTriangleIcon className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                                        <div className="text-left">
+                                            <p className="text-amber-200 text-[10px] font-black uppercase tracking-tight">Política da Meta</p>
+                                            <p className="text-amber-100 text-[9px] leading-tight mt-1">
+                                                O Direct só funcionará se a divulgadora tiver interagido com seu perfil nas últimas 24 horas. Caso contrário, a API retornará falha.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="space-y-4">
                                 <div>
@@ -348,7 +362,7 @@ const WhatsAppCampaignPage: React.FC = () => {
                             {/* Status and Action */}
                             <div className="pt-6 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
                                 <div className="text-center md:text-left">
-                                    {result && <p className="text-green-400 font-black text-[10px] uppercase animate-fadeIn">{result.message}</p>}
+                                    {result && <p className={`font-black text-[10px] uppercase animate-fadeIn ${result.success ? 'text-green-400' : 'text-amber-400'}`}>{result.message}</p>}
                                     {error && <p className="text-red-400 font-black text-[10px] uppercase animate-fadeIn">{error}</p>}
                                     {!result && !error && <p className="text-gray-500 font-black text-[10px] uppercase tracking-widest">Aguardando disparo...</p>}
                                 </div>

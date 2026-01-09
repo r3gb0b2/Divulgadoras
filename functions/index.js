@@ -12,7 +12,10 @@ const sureFetch = async (endpoint, method, body, config) => {
         throw new Error("Configuração da API Sure incompleta no banco de dados.");
     }
     
-    const url = `${config.apiUrl}${endpoint}`;
+    const url = `${config.apiUrl.replace(/\/$/, '')}${endpoint}`;
+    
+    console.log(`[SureAPI] Chamando ${method} ${url}`);
+    
     const res = await fetch(url, {
         method,
         headers: {
@@ -22,12 +25,14 @@ const sureFetch = async (endpoint, method, body, config) => {
         body: JSON.stringify(body)
     });
     
+    const responseData = await res.json();
+    
     if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Erro na API Sure: ${res.status} - ${errorText}`);
+        console.error(`[SureAPI] Erro na Resposta:`, responseData);
+        throw new Error(responseData.message || `Erro na API Sure: ${res.status}`);
     }
     
-    return await res.json();
+    return responseData;
 };
 
 // --- WEBHOOK SURE ---
@@ -57,23 +62,31 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
     const { promoterIds } = filters;
     let successCount = 0;
     let failureCount = 0;
+    let lastError = "";
 
-    // Processamento em lote para evitar timeout
     for (const pid of promoterIds) {
         try {
             const pSnap = await db.collection('promoters').doc(pid).get();
             if (!pSnap.exists) continue;
             const p = pSnap.data();
 
-            // Define o destino com base na plataforma
-            let destination = platform === 'instagram' ? p.instagram : p.whatsapp;
+            let destination = "";
+            if (platform === 'instagram') {
+                // Limpeza agressiva do Instagram
+                destination = (p.instagram || "")
+                    .replace(/https?:\/\/(www\.)?instagram\.com\//i, '')
+                    .replace(/@/g, '')
+                    .split('/')[0]
+                    .split('?')[0]
+                    .trim();
+            } else {
+                destination = (p.whatsapp || "").replace(/\D/g, '');
+            }
+
             if (!destination) {
                 failureCount++;
                 continue;
             }
-
-            // Remove @ do instagram se houver
-            destination = destination.replace('@', '').trim();
 
             const personalizedMessage = messageTemplate
                 .replace(/{{name}}/g, p.name.split(' ')[0])
@@ -81,27 +94,28 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
                 .replace(/{{campaignName}}/g, p.campaignName || 'Evento')
                 .replace(/{{portalLink}}/g, `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`);
 
-            // Payload padrão da Sure para texto
             const payload = {
                 instanceId: config.instanceId,
                 to: destination,
                 message: personalizedMessage,
-                platform: platform // Parâmetro que a Sure usa para distinguir WA de IG
+                platform: platform.toLowerCase(),
+                type: 'text'
             };
 
             await sureFetch('/api/messages/sendText', 'POST', payload, config);
             successCount++;
         } catch (err) {
-            console.error(`Falha ao enviar para ${pid}:`, err.message);
+            console.error(`[Campaign] Falha para ${pid}:`, err.message);
+            lastError = err.message;
             failureCount++;
         }
     }
 
     return { 
-        success: true, 
+        success: successCount > 0, 
         count: successCount, 
         failures: failureCount, 
-        message: `Campanha concluída via ${platform.toUpperCase()}. Sucessos: ${successCount}, Falhas: ${failureCount}` 
+        message: `Concluído via ${platform.toUpperCase()}. Sucessos: ${successCount}, Falhas: ${failureCount}. ${lastError ? 'Último erro: ' + lastError : ''}` 
     };
 });
 
