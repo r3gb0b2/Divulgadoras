@@ -66,7 +66,6 @@ const RecoveryDashboard: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
-    // Lista de admins únicos para o filtro
     const uniqueAdmins = useMemo(() => {
         const admins = leads
             .map(l => (l as any).recoveryAdminEmail)
@@ -105,13 +104,15 @@ const RecoveryDashboard: React.FC = () => {
         } catch (e) { console.error(e); }
     };
 
-    const handleStartRecovery = (lead: VipMembership) => {
+    const handleStartRecovery = async (lead: VipMembership) => {
         setSelectedLead(lead);
+        // Atualiza imediatamente quem abordou
+        await handleUpdateStatus(lead.id, 'contacted');
+
         if (templates.length === 0) {
             const firstName = lead.promoterName.split(' ')[0];
             const event = events.find(e => e.id === lead.vipEventId);
             const msg = `Olá ${firstName}! Vi que você tentou garantir seu acesso VIP para o evento ${lead.vipEventName}, mas o pagamento não foi concluído. 👋\n\nAinda tenho algumas vagas com o desconto de R$ ${event?.price.toFixed(2)}. Teve alguma dúvida ou dificuldade com o Pix? Posso te ajudar a finalizar?`;
-            handleUpdateStatus(lead.id, 'contacted');
             window.open(`https://wa.me/55${(lead.promoterWhatsapp || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
         } else {
             setIsSelectTemplateOpen(true);
@@ -126,7 +127,6 @@ const RecoveryDashboard: React.FC = () => {
             .replace(/{{nome}}/g, firstName)
             .replace(/{{admin}}/g, adminName)
             .replace(/{{evento}}/g, selectedLead.vipEventName || 'evento');
-        handleUpdateStatus(selectedLead.id, 'contacted');
         window.open(`https://wa.me/55${(selectedLead.promoterWhatsapp || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
         setIsSelectTemplateOpen(false);
     };
@@ -142,10 +142,10 @@ const RecoveryDashboard: React.FC = () => {
         const date = toDateSafe(ts);
         if (!date) return '---';
         const diff = Math.floor((new Date().getTime() - date.getTime()) / 60000);
-        if (diff < 60) return `há ${diff} min`;
+        if (diff < 60) return `${diff}m`;
         const hours = Math.floor(diff / 60);
-        if (hours < 24) return `há ${hours} h`;
-        return `há ${Math.floor(hours/24)} dias`;
+        if (hours < 24) return `${hours}h`;
+        return `${Math.floor(hours/24)}d`;
     };
 
     return (
@@ -159,7 +159,7 @@ const RecoveryDashboard: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                     <button onClick={() => setIsManageTemplatesOpen(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-500 transition-all flex items-center gap-2">
-                        <DocumentDuplicateIcon className="w-4 h-4" /> Modelos WhatsApp
+                        <DocumentDuplicateIcon className="w-4 h-4" /> Modelos
                     </button>
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
                         <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
@@ -172,7 +172,7 @@ const RecoveryDashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                     <div className="lg:col-span-2 relative">
                         <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                        <input type="text" placeholder="BUSCAR POR NOME OU WHATSAPP..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary" />
+                        <input type="text" placeholder="BUSCAR NOME OU WHATSAPP..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-primary" />
                     </div>
                     <select value={campaignFilter} onChange={e => setCampaignFilter(e.target.value)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-primary">
                         <option value="all">EVENTO (TODOS)</option>
@@ -190,50 +190,52 @@ const RecoveryDashboard: React.FC = () => {
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
+                    <table className="w-full text-left border-separate border-spacing-0">
                         <thead>
-                            <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
-                                <th className="px-6 py-5">Potencial Membro</th>
-                                <th className="px-6 py-5">Evento</th>
-                                <th className="px-6 py-5">Abandono</th>
-                                <th className="px-6 py-5 text-center">Status / Admin</th>
-                                <th className="px-6 py-4 text-right">Ação</th>
+                            <tr className="bg-dark/50 text-[9px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
+                                <th className="px-4 py-5 w-[45%]">Potencial Membro</th>
+                                <th className="px-4 py-5 text-center w-[35%]">Status / Admin</th>
+                                <th className="px-4 py-4 text-right">Ação</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {isLoading ? (
-                                <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs animate-pulse">Buscando leads...</td></tr>
+                                <tr><td colSpan={3} className="text-center py-20 text-gray-500 font-black uppercase text-xs animate-pulse">Buscando leads...</td></tr>
                             ) : filteredLeads.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhum lead pendente encontrado</td></tr>
+                                <tr><td colSpan={3} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhum registro pendente</td></tr>
                             ) : filteredLeads.map(p => {
                                 const pRec = (p as any).recoveryStatus || 'none';
-                                const pAdmin = (p as any).recoveryAdminEmail ? (p as any).recoveryAdminEmail.split('@')[0] : null;
+                                const pAdmin = (p as any).recoveryAdminEmail ? (p as any).recoveryAdminEmail.split('@')[0].toUpperCase() : null;
                                 return (
                                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
-                                        <td className="px-6 py-5">
-                                            <p className="text-sm font-black text-white uppercase truncate">{p.promoterName}</p>
-                                            <p className="text-[10px] text-primary font-bold">{p.promoterWhatsapp}</p>
-                                        </td>
-                                        <td className="px-6 py-5">
-                                            <p className="text-xs text-white font-bold uppercase">{p.vipEventName}</p>
-                                        </td>
-                                        <td className="px-6 py-5">
-                                            <div className="flex items-center gap-2 text-gray-500 text-[10px] font-black uppercase">
-                                                <ClockIcon className="w-3.5 h-3.5" /> {getTimeAgo(p.submittedAt)}
+                                        <td className="px-4 py-5">
+                                            <div className="min-w-0 max-w-[180px] md:max-w-xs">
+                                                <p className="text-sm font-black text-white uppercase truncate">{p.promoterName}</p>
+                                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                    <p className="text-[9px] text-primary font-bold">{p.promoterWhatsapp}</p>
+                                                    <p className="text-[8px] text-gray-600 font-black uppercase truncate">{p.vipEventName}</p>
+                                                </div>
                                             </div>
                                         </td>
-                                        <td className="px-6 py-5 text-center">
+                                        <td className="px-4 py-5 text-center">
                                             <div className="flex flex-col items-center gap-1.5">
-                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${pRec === 'contacted' ? 'bg-blue-900/40 text-blue-400 border-blue-800' : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
-                                                    {pRec === 'contacted' ? 'ABORDADO' : 'NOVO'}
-                                                </span>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-1 text-gray-500 text-[8px] font-black uppercase bg-dark px-2 py-0.5 rounded-full">
+                                                        <ClockIcon className="w-3 h-3" /> {getTimeAgo(p.submittedAt)}
+                                                    </div>
+                                                    <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${pRec === 'contacted' ? 'bg-blue-900/40 text-blue-400 border-blue-800' : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
+                                                        {pRec === 'contacted' ? 'ABORDADO' : 'NOVO'}
+                                                    </span>
+                                                </div>
                                                 {pAdmin && (
-                                                    <span className="text-[7px] font-black text-gray-600 uppercase tracking-widest bg-dark px-1.5 py-0.5 rounded">POR: {pAdmin}</span>
+                                                    <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">POR: {pAdmin}</span>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="px-6 py-5 text-right">
-                                            <button onClick={() => handleStartRecovery(p)} className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-green-500 shadow-lg shadow-green-900/20 transition-all"><WhatsAppIcon className="w-4 h-4" /> CONTATAR</button>
+                                        <td className="px-4 py-5 text-right whitespace-nowrap">
+                                            <button onClick={() => handleStartRecovery(p)} className="inline-flex items-center gap-2 px-5 py-3 bg-green-600 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-green-500 shadow-lg shadow-green-900/20 transition-all transform active:scale-95">
+                                                <WhatsAppIcon className="w-4 h-4" /> <span className="hidden sm:inline">CONTATAR</span>
+                                            </button>
                                         </td>
                                     </tr>
                                 );
@@ -243,7 +245,7 @@ const RecoveryDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* MODAIS */}
+            {/* Modais omitidos para brevidade (mantêm a lógica anterior) */}
             {isManageTemplatesOpen && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[150] flex items-center justify-center p-6" onClick={() => setIsManageTemplatesOpen(false)}>
                     <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>

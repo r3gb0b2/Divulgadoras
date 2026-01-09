@@ -56,7 +56,6 @@ const PromoterRecoveryPage: React.FC = () => {
         fetchData();
     }, [fetchData]);
 
-    // Lista de admins únicos que já interagiram com leads para o filtro
     const uniqueAdmins = useMemo(() => {
         const admins = leads
             .map(l => l.recoveryAdminEmail)
@@ -97,12 +96,14 @@ const PromoterRecoveryPage: React.FC = () => {
         }
     };
 
-    const handleStartRecovery = (lead: Promoter) => {
+    const handleStartRecovery = async (lead: Promoter) => {
         setSelectedLead(lead);
+        // Atualiza no banco que este admin está abordando agora
+        await handleUpdateStatus(lead.id, 'contacted');
+
         if (templates.length === 0) {
             const firstName = lead.name.split(' ')[0];
             const msg = `Olá ${firstName}! Vi que você iniciou o cadastro para nossa equipe, mas ainda não concluímos. 👋\n\nPrecisa de ajuda para finalizar ou ficou com alguma dúvida?`;
-            handleUpdateStatus(lead.id, 'contacted');
             window.open(`https://wa.me/55${lead.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
         } else {
             setIsSelectTemplateOpen(true);
@@ -116,7 +117,6 @@ const PromoterRecoveryPage: React.FC = () => {
             .replace(/{{nome}}/g, firstName)
             .replace(/{{evento}}/g, selectedLead.campaignName || 'evento');
 
-        handleUpdateStatus(selectedLead.id, 'contacted');
         window.open(`https://wa.me/55${selectedLead.whatsapp.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
         setIsSelectTemplateOpen(false);
     };
@@ -144,10 +144,10 @@ const PromoterRecoveryPage: React.FC = () => {
         const date = (ts && typeof ts.toDate === 'function') ? ts.toDate() : (ts?.seconds ? new Date(ts.seconds * 1000) : new Date(ts));
         if (!date || isNaN(date.getTime())) return '---';
         const diff = Math.floor((new Date().getTime() - date.getTime()) / 60000);
-        if (diff < 60) return `há ${diff} min`;
+        if (diff < 60) return `${diff}m`;
         const hours = Math.floor(diff / 60);
-        if (hours < 24) return `há ${hours} h`;
-        return `há ${Math.floor(hours/24)} dias`;
+        if (hours < 24) return `${hours}h`;
+        return `${Math.floor(hours/24)}d`;
     };
 
     return (
@@ -155,7 +155,7 @@ const PromoterRecoveryPage: React.FC = () => {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
                 <div>
                     <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
-                        <WhatsAppIcon className="w-8 h-8 text-green-500" /> Recuperação de Equipe
+                        <WhatsAppIcon className="w-8 h-8 text-green-500" /> Recuperação Equipe
                     </h1>
                     <p className="text-gray-500 text-xs font-black uppercase tracking-widest mt-1">Gestão de contatos e suporte às candidatas</p>
                 </div>
@@ -200,95 +200,75 @@ const PromoterRecoveryPage: React.FC = () => {
                         {uniqueAdmins.map(admin => <option key={admin} value={admin}>{admin.split('@')[0].toUpperCase()}</option>)}
                     </select>
                 </div>
-
-                <div className="flex items-center gap-4 px-2 border-t border-white/5 pt-4">
-                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        <FilterIcon className="w-3 h-3"/> Filtrar abordagem:
-                    </p>
-                    <div className="flex gap-2">
-                        {(['all', 'none', 'contacted', 'purchased'] as const).map(s => (
-                            <button 
-                                key={s} 
-                                onClick={() => setRecoveryStatusFilter(s)}
-                                className={`px-3 py-1.5 rounded-full text-[8px] font-black uppercase tracking-tighter transition-all border ${recoveryStatusFilter === s ? 'bg-primary border-primary text-white shadow-lg shadow-primary/20' : 'bg-transparent border-gray-800 text-gray-600 hover:text-gray-400'}`}
-                            >
-                                {s === 'all' ? 'Tudo' : s === 'none' ? 'Novos' : s === 'contacted' ? 'Abordados' : 'Concluídos'}
-                            </button>
-                        ))}
-                    </div>
-                </div>
             </div>
 
-            <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-4 border border-white/5 shadow-2xl overflow-hidden">
+            <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-2 border border-white/5 shadow-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-separate border-spacing-0">
                         <thead>
-                            <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                <th className="px-4 py-5 border-b border-white/5 w-[35%] md:w-[30%]">Candidata / Perfil</th>
-                                <th className="px-4 py-5 border-b border-white/5 w-[20%] md:w-[25%] hidden sm:table-cell">Evento</th>
-                                <th className="px-4 py-5 border-b border-white/5 w-[15%] text-center">Abandono</th>
-                                <th className="px-4 py-5 border-b border-white/5 w-[15%] text-center hidden md:table-cell">Admin</th>
-                                <th className="px-4 py-4 border-b border-white/5 w-px whitespace-nowrap text-right">Abordagem</th>
+                            <tr className="bg-dark/50 text-[9px] font-black text-gray-500 uppercase tracking-widest">
+                                <th className="px-4 py-5 border-b border-white/5 w-[45%]">Candidata / Perfil</th>
+                                <th className="px-4 py-5 border-b border-white/5 text-center w-[35%]">Status da Abordagem</th>
+                                <th className="px-4 py-4 border-b border-white/5 w-px whitespace-nowrap text-right">Ação</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {isLoading ? (
-                                <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs animate-pulse">Carregando lista de recuperação...</td></tr>
+                                <tr><td colSpan={3} className="text-center py-20 text-gray-500 font-black uppercase text-xs animate-pulse">Carregando lista...</td></tr>
                             ) : filteredLeads.length === 0 ? (
-                                <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhuma candidata encontrada com esses filtros</td></tr>
-                            ) : filteredLeads.map(p => (
-                                <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
-                                    <td className="px-4 py-5">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-lg overflow-hidden bg-gray-800 border border-gray-700 flex-shrink-0">
-                                                {p.facePhotoUrl ? <img src={p.facePhotoUrl} className="w-full h-full object-cover" alt=""/> : <UserIcon className="w-full h-full p-2 text-gray-600"/>}
-                                            </div>
-                                            <div className="min-w-0 max-w-[120px] md:max-w-none">
-                                                <p className="text-xs font-black text-white uppercase truncate">{p.name}</p>
-                                                <div className="flex flex-wrap items-center gap-2 mt-1">
-                                                    <span className={`text-[6px] font-black uppercase px-1.5 py-0.5 rounded-full border ${getStatusStyle(p.status)}`}>
-                                                        {p.status === 'approved' ? 'OK' : p.status === 'pending' ? 'PEND' : p.status === 'rejected_editable' ? 'REV' : 'REP'}
-                                                    </span>
-                                                    <p className="text-[9px] text-primary font-bold">{p.whatsapp}</p>
+                                <tr><td colSpan={3} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhum registro encontrado</td></tr>
+                            ) : filteredLeads.map(p => {
+                                const adminName = p.recoveryAdminEmail ? p.recoveryAdminEmail.split('@')[0].toUpperCase() : null;
+                                return (
+                                    <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
+                                        <td className="px-4 py-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-800 border border-gray-700 flex-shrink-0">
+                                                    {p.facePhotoUrl ? <img src={p.facePhotoUrl} className="w-full h-full object-cover" alt=""/> : <UserIcon className="w-full h-full p-2 text-gray-600"/>}
+                                                </div>
+                                                <div className="min-w-0 max-w-[150px] md:max-w-xs">
+                                                    <p className="text-xs font-black text-white uppercase truncate">{p.name}</p>
+                                                    <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                        <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded-full border ${getStatusStyle(p.status)}`}>
+                                                            {p.status === 'approved' ? 'OK' : p.status === 'pending' ? 'PEND' : p.status === 'rejected_editable' ? 'REV' : 'REP'}
+                                                        </span>
+                                                        <p className="text-[9px] text-primary font-bold">{p.whatsapp}</p>
+                                                        <p className="text-[8px] text-gray-600 font-black uppercase truncate">{p.campaignName || 'Direta'}</p>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-5 hidden sm:table-cell">
-                                        <p className="text-[10px] text-white font-bold uppercase truncate max-w-[120px]">{p.campaignName || 'Inscrição Direta'}</p>
-                                        <p className="text-[8px] text-gray-500 font-black uppercase mt-0.5">{p.state}</p>
-                                    </td>
-                                    <td className="px-4 py-5 text-center">
-                                        <div className="flex flex-col items-center gap-1">
-                                            <div className="flex items-center gap-1 text-gray-500 text-[9px] font-black uppercase">
-                                                <ClockIcon className="w-3 h-3" /> {getTimeAgo(p.createdAt)}
+                                        </td>
+                                        <td className="px-4 py-5 text-center">
+                                            <div className="flex flex-col items-center gap-1.5">
+                                                <div className="flex items-center gap-2">
+                                                     <div className="flex items-center gap-1 text-gray-500 text-[8px] font-black uppercase bg-dark px-2 py-0.5 rounded-full">
+                                                        <ClockIcon className="w-3 h-3" /> {getTimeAgo(p.createdAt)}
+                                                    </div>
+                                                    <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${p.recoveryStatus === 'contacted' ? 'bg-blue-900/40 text-blue-400 border-blue-800' : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
+                                                        {p.recoveryStatus === 'contacted' ? 'ABORDADO' : 'NOVO'}
+                                                    </span>
+                                                </div>
+                                                {adminName && (
+                                                    <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
+                                                        POR: {adminName}
+                                                    </span>
+                                                )}
                                             </div>
-                                            <div className="flex justify-center gap-1 mt-1">
-                                                <button onClick={() => handleUpdateStatus(p.id, 'none')} className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase border transition-all ${p.recoveryStatus === 'none' || !p.recoveryStatus ? 'bg-gray-700 text-white border-gray-600' : 'bg-transparent text-gray-600 border-gray-800'}`}>Novo</button>
-                                                <button onClick={() => handleUpdateStatus(p.id, 'contacted')} className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase border transition-all ${p.recoveryStatus === 'contacted' ? 'bg-blue-600 text-white border-blue-500 shadow-lg' : 'bg-transparent text-gray-600 border-gray-800'}`}>Falei</button>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-5 text-center hidden md:table-cell">
-                                        {p.recoveryAdminEmail ? (
-                                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest bg-dark px-2 py-1 rounded-full">{p.recoveryAdminEmail.split('@')[0]}</span>
-                                        ) : (
-                                            <span className="text-[8px] text-gray-600 font-black uppercase">-</span>
-                                        )}
-                                    </td>
-                                    <td className="px-4 py-5 text-right whitespace-nowrap">
-                                        <button onClick={() => handleStartRecovery(p)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-green-500 shadow-lg transition-all transform active:scale-95">
-                                            <WhatsAppIcon className="w-3.5 h-3.5" /> <span className="hidden sm:inline">CONTATAR</span>
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                                        </td>
+                                        <td className="px-4 py-5 text-right whitespace-nowrap">
+                                            <button onClick={() => handleStartRecovery(p)} className="inline-flex items-center gap-2 px-5 py-3 bg-green-600 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-green-500 shadow-lg transition-all transform active:scale-95">
+                                                <WhatsAppIcon className="w-4 h-4" /> <span className="hidden sm:inline">CONTATAR</span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {/* Modal Gerenciar Modelos */}
+            {/* Modais omitidos para brevidade (mantêm a lógica anterior) */}
             {isManageTemplatesOpen && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-6" onClick={() => setIsManageTemplatesOpen(false)}>
                     <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
@@ -327,7 +307,6 @@ const PromoterRecoveryPage: React.FC = () => {
                 </div>
             )}
 
-            {/* Modal Selecionar Modelo */}
             {isSelectTemplateOpen && selectedLead && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-6" onClick={() => setIsSelectTemplateOpen(false)}>
                     <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -340,9 +319,6 @@ const PromoterRecoveryPage: React.FC = () => {
                                     <p className="text-gray-500 text-[11px] truncate mt-1 italic">{t.text.substring(0, 80)}...</p>
                                 </button>
                             ))}
-                            {templates.length === 0 && (
-                                <p className="text-center py-10 text-gray-600 font-bold uppercase text-xs">Nenhum modelo cadastrado.</p>
-                            )}
                         </div>
                         <button onClick={() => setIsSelectTemplateOpen(false)} className="w-full mt-6 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-[10px] tracking-widest hover:text-white transition-all">Fechar</button>
                     </div>
