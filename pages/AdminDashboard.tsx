@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
@@ -139,6 +140,17 @@ const AdminDashboard: React.FC = () => {
                             <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Club VIP</h2>
                         </div>
                         <p className="mt-4 text-gray-400 text-sm group-hover:text-amber-100 line-clamp-2">Gestão de adesões, cupons promocionais e recuperação de e-mail.</p>
+                        <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
+                    </Link>
+
+                    <Link to="/admin/recovery" className="group block p-6 bg-indigo-600/10 rounded-3xl hover:bg-indigo-600 transition-all duration-300 border border-indigo-500/20 hover:border-transparent shadow-xl">
+                        <div className="flex items-center">
+                            <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                <WhatsAppIcon className="w-8 h-8" />
+                            </div>
+                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Recuperação VIP</h2>
+                        </div>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Recupere leads que abandonaram o carrinho do Clube VIP.</p>
                         <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
                     </Link>
 
