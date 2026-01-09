@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { auth } from '../firebase/config';
@@ -34,7 +33,9 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const isSuperAdmin = adminData?.role === 'superadmin';
+    // Garantindo que a role seja tratada de forma robusta
+    const userRole = adminData?.role || '';
+    const isSuperAdmin = userRole === 'superadmin';
 
     return (
         <div className="pb-20">
@@ -47,9 +48,16 @@ const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="bg-secondary/40 backdrop-blur-xl shadow-3xl rounded-[2.5rem] p-6 md:p-10 border border-white/5">
-                <p className="text-gray-400 mb-8 font-medium">
-                    Olá, <span className="text-white font-bold">{adminData?.email}</span>. Gerencie sua operação abaixo.
-                </p>
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                    <p className="text-gray-400 font-medium">
+                        Olá, <span className="text-white font-bold">{adminData?.email}</span>. Gerencie sua operação abaixo.
+                    </p>
+                    {isSuperAdmin && (
+                        <div className="px-3 py-1 bg-primary/20 border border-primary/30 rounded-full">
+                            <p className="text-[10px] font-black text-primary uppercase tracking-widest">Acesso SuperAdmin Ativado</p>
+                        </div>
+                    )}
+                </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {/* CARDS EXCLUSIVOS SUPERADMIN NO DASHBOARD PRINCIPAL */}
@@ -62,7 +70,7 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                     <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Super Painel</h2>
                                 </div>
-                                <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Gestão global do sistema e configurações de rede.</p>
+                                <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Gestão global do sistema, organizações e configurações de rede.</p>
                                 <div className="text-xs text-indigo-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Acesso Restrito &rarr;</div>
                             </Link>
 
@@ -73,7 +81,7 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                     <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Alunos Greenlife</h2>
                                 </div>
-                                <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Gestão de cupons, estoque e ingressos exclusivos Greenlife.</p>
+                                <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Gestão de cupons, estoque e ingressos exclusivos para parceiros Greenlife.</p>
                                 <div className="text-xs text-green-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Gerenciar Agora &rarr;</div>
                             </Link>
 
@@ -84,7 +92,7 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                     <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Campanhas WhatsApp</h2>
                                 </div>
-                                <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Envios em massa para toda a base com IA.</p>
+                                <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Envios em massa para toda a base global com auxílio de IA.</p>
                                 <div className="text-xs text-green-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Disparar Agora &rarr;</div>
                             </Link>
                         </>
@@ -97,7 +105,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Smart Cobrança</h2>
                         </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-orange-100 line-clamp-2">Cobrar prints esquecidos via WhatsApp.</p>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-orange-100 line-clamp-2">Detecte atrasos e cobre prints esquecidos via WhatsApp.</p>
                         <div className="text-xs text-orange-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Sincronizar Atrasos &rarr;</div>
                     </Link>
 
@@ -108,7 +116,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Equipe</h2>
                         </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-purple-100 line-clamp-2">Aprovar cadastros e gerenciar histórico.</p>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-purple-100 line-clamp-2">Aprovar cadastros, gerenciar histórico e perfis individuais.</p>
                         <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
                     </Link>
 
@@ -119,7 +127,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Recuperação Equipe</h2>
                         </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Contatar candidatas pendentes e suporte rápido.</p>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Contatar candidatas pendentes e oferecer suporte rápido.</p>
                         <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
                     </Link>
 
@@ -130,7 +138,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Club VIP</h2>
                         </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-amber-100 line-clamp-2">Gestão de adesões, cupons e recuperação de e-mail.</p>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-amber-100 line-clamp-2">Gestão de adesões, cupons promocionais e recuperação de e-mail.</p>
                         <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
                     </Link>
 
@@ -141,7 +149,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Postagens</h2>
                         </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Criar tarefas e validar prints.</p>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Criar tarefas, agendar posts e validar prints de comprovação.</p>
                         <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
                     </Link>
 
@@ -152,7 +160,7 @@ const AdminDashboard: React.FC = () => {
                             </div>
                             <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Ajustes</h2>
                         </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-white line-clamp-2">Configurações globais do sistema.</p>
+                        <p className="mt-4 text-gray-400 text-sm group-hover:text-white line-clamp-2">Configurações globais, regras de sistema e manutenção.</p>
                         <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
                     </Link>
                 </div>

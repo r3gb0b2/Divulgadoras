@@ -26,6 +26,7 @@ export interface VipEvent {
   pixelId?: string;
   eventTime?: string;
   eventLocation?: string;
+  attractions?: string; // Novo campo para atrações do dia
   createdAt: Timestamp | FieldValue;
 }
 

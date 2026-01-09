@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, scheduleProofPushReminder } from '../services/postService';
@@ -128,7 +127,7 @@ const PostCard: React.FC<{
         setIsConfirming(true);
         try { 
             await confirmAssignment(assignment.id); 
-            await onConfirm(assignment); 
+            onConfirm(assignment); 
         }
         catch (err: any) { alert(err.message); } finally { setIsConfirming(false); }
     };
@@ -258,67 +257,71 @@ const PostCard: React.FC<{
             <div className="px-5 pb-5">
                 {!assignment.proofSubmittedAt && !assignment.justification && (
                     <div className="flex flex-col gap-4">
-                         {assignment.status === 'pending' ? (
-                            <button onClick={handleConfirm} disabled={isConfirming} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all text-lg">{isConfirming ? 'GRAVANDO...' : 'EU POSTEI! 🚀'}</button>
-                        ) : (
-                            <div className="space-y-4">
-                                <button 
-                                    onClick={() => navigate(`/proof/${assignment.id}`)} 
-                                    disabled={!isProofButtonEnabled} 
-                                    className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 disabled:opacity-30 text-lg transition-all"
-                                >
-                                    {isProofButtonEnabled ? 'ENVIAR PRINT' : 'AGUARDE O TEMPO'}
-                                </button>
-                                
-                                <div className="flex items-center justify-center gap-2 py-2 bg-dark/30 rounded-xl">
-                                    <ClockIcon className={`w-4 h-4 ${countdownColor}`} />
-                                    <span className={`text-[10px] font-black uppercase tracking-widest ${countdownColor}`}>{timeLeftForProof}</span>
-                                </div>
-
-                                {assignment.post?.allowJustification !== false && (
-                                    <button 
-                                        onClick={() => setShowJustifyForm(!showJustifyForm)}
-                                        className="w-full py-3 bg-transparent border-2 border-orange-500/30 text-orange-400 font-bold rounded-2xl text-xs uppercase tracking-widest hover:bg-orange-500/10 transition-all flex items-center justify-center gap-2"
-                                    >
-                                        <AlertTriangleIcon className="w-4 h-4" />
-                                        {showJustifyForm ? 'CANCELAR JUSTIFICATIVA' : 'JUSTIFICAR AUSÊNCIA'}
-                                    </button>
-                                )}
-
-                                {showJustifyForm && (
-                                    <form onSubmit={handleSubmitJustification} className="p-5 bg-dark/50 rounded-3xl border border-orange-500/20 space-y-4 animate-slideDown">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Descreva o motivo:</label>
-                                            <textarea 
-                                                required
-                                                value={justificationText}
-                                                onChange={e => setJustificationText(e.target.value)}
-                                                className="w-full p-4 bg-gray-900 border border-gray-700 rounded-xl text-white text-sm outline-none focus:ring-1 focus:ring-orange-500"
-                                                placeholder="Ex: Problemas com Instagram, doente, etc..."
-                                                rows={3}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Anexo opcional (print do erro):</label>
-                                            <input 
-                                                type="file" 
-                                                accept="image/*"
-                                                onChange={e => {
-                                                    if(e.target.files) setJustificationFiles(Array.from(e.target.files));
-                                                }}
-                                                className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-gray-700 file:text-white hover:file:bg-gray-600"
-                                            />
-                                        </div>
+                         {!showJustifyForm && (
+                             <>
+                                {assignment.status === 'pending' ? (
+                                    <button onClick={handleConfirm} disabled={isConfirming} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all text-lg">{isConfirming ? 'GRAVANDO...' : 'EU POSTEI! 🚀'}</button>
+                                ) : (
+                                    <div className="space-y-4">
                                         <button 
-                                            type="submit"
-                                            disabled={isSubmittingJustification}
-                                            className="w-full py-3 bg-orange-600 text-white font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-orange-500 transition-all shadow-lg shadow-orange-900/40"
+                                            onClick={() => navigate(`/proof/${assignment.id}`)} 
+                                            disabled={!isProofButtonEnabled} 
+                                            className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 disabled:opacity-30 text-lg transition-all"
                                         >
-                                            {isSubmittingJustification ? 'ENVIANDO...' : 'CONFIRMAR JUSTIFICATIVA'}
+                                            {isProofButtonEnabled ? 'ENVIAR PRINT' : 'AGUARDE O TEMPO'}
                                         </button>
-                                    </form>
+                                        
+                                        <div className="flex items-center justify-center gap-2 py-2 bg-dark/30 rounded-xl">
+                                            <ClockIcon className={`w-4 h-4 ${countdownColor}`} />
+                                            <span className={`text-[10px] font-black uppercase tracking-widest ${countdownColor}`}>{timeLeftForProof}</span>
+                                        </div>
+                                    </div>
                                 )}
-                            </div>
+                             </>
+                         )}
+
+                        {assignment.post?.allowJustification !== false && (
+                            <button 
+                                onClick={() => setShowJustifyForm(!showJustifyForm)}
+                                className={`w-full py-3 bg-transparent border-2 font-bold rounded-2xl text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${showJustifyForm ? 'border-gray-600 text-gray-400 hover:bg-gray-800' : 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10'}`}
+                            >
+                                {showJustifyForm ? <XIcon className="w-4 h-4" /> : <AlertTriangleIcon className="w-4 h-4" />}
+                                {showJustifyForm ? 'CANCELAR JUSTIFICATIVA' : 'JUSTIFICAR AUSÊNCIA'}
+                            </button>
+                        )}
+
+                        {showJustifyForm && (
+                            <form onSubmit={handleSubmitJustification} className="p-5 bg-dark/50 rounded-3xl border border-orange-500/20 space-y-4 animate-slideDown">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Descreva o motivo:</label>
+                                    <textarea 
+                                        required
+                                        value={justificationText}
+                                        onChange={e => setJustificationText(e.target.value)}
+                                        className="w-full p-4 bg-gray-900 border border-gray-700 rounded-xl text-white text-sm outline-none focus:ring-1 focus:ring-orange-500"
+                                        placeholder="Ex: Problemas com Instagram, doente, etc..."
+                                        rows={3}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Anexo opcional (print do erro):</label>
+                                    <input 
+                                        type="file" 
+                                        accept="image/*"
+                                        onChange={e => {
+                                            if(e.target.files) setJustificationFiles(Array.from(e.target.files));
+                                        }}
+                                        className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-gray-700 file:text-white hover:file:bg-gray-600"
+                                    />
+                                </div>
+                                <button 
+                                    type="submit"
+                                    disabled={isSubmittingJustification}
+                                    className="w-full py-3 bg-orange-600 text-white font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-orange-500 transition-all shadow-lg shadow-orange-900/40"
+                                >
+                                    {isSubmittingJustification ? 'ENVIANDO...' : 'CONFIRMAR JUSTIFICATIVA'}
+                                </button>
+                            </form>
                         )}
                     </div>
                 )}
@@ -519,7 +522,7 @@ const PostCheck: React.FC = () => {
                                 <SparklesIcon className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
                                 <h3 className="text-xl font-black text-white uppercase">Seja Membro VIP!</h3>
                                 <p className="text-gray-400 text-sm mt-2 mb-6">Acesse benefícios exclusivos e ingressos promocionais.</p>
-                                <Link to="/clubvip" className="block w-full py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg">QUERO SER MEMBRO</Link>
+                                <Link to="/clubvip" className="block w-full py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg">QUERO SER MEBRO</Link>
                             </div>
                         )}
                     </div>

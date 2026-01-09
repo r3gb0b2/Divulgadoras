@@ -101,11 +101,13 @@ const GreenlifeHome: React.FC = () => {
                             <div className="grid gap-4">
                                 {events.map(ev => (
                                     <button key={ev.id} onClick={() => { setSelectedEvent(ev); setStep('identify'); }} className="bg-dark/60 p-8 rounded-[2rem] border border-white/5 flex justify-between items-center group hover:border-green-500 transition-all">
-                                        <div className="text-left">
-                                            <p className="font-black text-xl text-white uppercase group-hover:text-green-400 transition-colors">{ev.name}</p>
-                                            <p className="text-[10px] text-gray-500 font-black uppercase">Adesão Online</p>
+                                        <div className="text-left min-w-0 flex-grow pr-4">
+                                            <p className="font-black text-xl text-white uppercase group-hover:text-green-400 transition-colors truncate">{ev.name}</p>
+                                            <p className="text-[10px] text-green-500/70 font-black uppercase mt-1 truncate">
+                                                {ev.attractions || 'Adesão Online'}
+                                            </p>
                                         </div>
-                                        <p className="text-green-500 font-black text-2xl">R$ {ev.price.toFixed(2)}</p>
+                                        <p className="text-green-500 font-black text-2xl flex-shrink-0">R$ {ev.price.toFixed(2)}</p>
                                     </button>
                                 ))}
                                 {events.length === 0 && !isLoading && <p className="text-center text-gray-500 py-10 font-black uppercase text-xs">Nenhuma oferta ativa.</p>}
