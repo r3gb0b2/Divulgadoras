@@ -11,6 +11,15 @@ import {
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
 
+const toDateSafe = (timestamp: any): Date | null => {
+    if (!timestamp) return null;
+    if (typeof timestamp.toDate === 'function') return timestamp.toDate();
+    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return new Date(timestamp.seconds * 1000);
+    const date = new Date(timestamp);
+    if (!isNaN(date.getTime())) return date;
+    return null;
+};
+
 const PromoterRecoveryPage: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, selectedOrgId } = useAdminAuth();
@@ -89,7 +98,7 @@ const PromoterRecoveryPage: React.FC = () => {
                 recoveryUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
             setLeads(prev => prev.map(p => 
-                p.id === id ? { ...p, recoveryStatus: status, recoveryAdminEmail: adminData?.email } : p
+                p.id === id ? { ...p, recoveryStatus: status, recoveryAdminEmail: adminData?.email, recoveryUpdatedAt: firebase.firestore.Timestamp.now() } : p
             ));
         } catch (e) {
             alert("Erro ao atualizar status.");
@@ -98,7 +107,6 @@ const PromoterRecoveryPage: React.FC = () => {
 
     const handleStartRecovery = async (lead: Promoter) => {
         setSelectedLead(lead);
-        // Atualiza no banco que este admin está abordando agora
         await handleUpdateStatus(lead.id, 'contacted');
 
         if (templates.length === 0) {
@@ -141,8 +149,8 @@ const PromoterRecoveryPage: React.FC = () => {
     };
 
     const getTimeAgo = (ts: any) => {
-        const date = (ts && typeof ts.toDate === 'function') ? ts.toDate() : (ts?.seconds ? new Date(ts.seconds * 1000) : new Date(ts));
-        if (!date || isNaN(date.getTime())) return '---';
+        const date = toDateSafe(ts);
+        if (!date) return null;
         const diff = Math.floor((new Date().getTime() - date.getTime()) / 60000);
         if (diff < 60) return `${diff}m`;
         const hours = Math.floor(diff / 60);
@@ -187,12 +195,10 @@ const PromoterRecoveryPage: React.FC = () => {
                         {campaigns.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
                     </select>
 
-                    <select value={promoterStatusFilter} onChange={e => setPromoterStatusFilter(e.target.value as any)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-primary cursor-pointer">
-                        <option value="all">STATUS PERFIL (TODOS)</option>
-                        <option value="pending">⏳ PENDENTES</option>
-                        <option value="rejected_editable">⚠️ REVISAR</option>
-                        <option value="approved">✅ APROVADOS</option>
-                        <option value="rejected">❌ REPROVADOS</option>
+                    <select value={recoveryStatusFilter} onChange={e => setRecoveryStatusFilter(e.target.value as any)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-primary cursor-pointer">
+                        <option value="all">ABORDAGEM (TODOS)</option>
+                        <option value="none">🆕 NOVOS</option>
+                        <option value="contacted">💬 ABORDADOS</option>
                     </select>
 
                     <select value={adminFilter} onChange={e => setAdminFilter(e.target.value)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-2xl text-[10px] font-black uppercase outline-none focus:border-primary cursor-pointer">
@@ -207,18 +213,23 @@ const PromoterRecoveryPage: React.FC = () => {
                     <table className="w-full text-left border-separate border-spacing-0">
                         <thead>
                             <tr className="bg-dark/50 text-[9px] font-black text-gray-500 uppercase tracking-widest">
-                                <th className="px-4 py-5 border-b border-white/5 w-[45%]">Candidata / Perfil</th>
-                                <th className="px-4 py-5 border-b border-white/5 text-center w-[35%]">Status da Abordagem</th>
+                                <th className="px-4 py-5 border-b border-white/5 w-[30%]">Candidata / Perfil</th>
+                                <th className="px-4 py-5 border-b border-white/5 text-center w-[15%]">Início</th>
+                                <th className="px-4 py-5 border-b border-white/5 text-center w-[15%]">Contato</th>
+                                <th className="px-4 py-5 border-b border-white/5 text-center w-[20%]">Status / Admin</th>
                                 <th className="px-4 py-4 border-b border-white/5 w-px whitespace-nowrap text-right">Ação</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {isLoading ? (
-                                <tr><td colSpan={3} className="text-center py-20 text-gray-500 font-black uppercase text-xs animate-pulse">Carregando lista...</td></tr>
+                                <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs animate-pulse">Carregando lista...</td></tr>
                             ) : filteredLeads.length === 0 ? (
-                                <tr><td colSpan={3} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhum registro encontrado</td></tr>
+                                <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhum registro encontrado</td></tr>
                             ) : filteredLeads.map(p => {
                                 const adminName = p.recoveryAdminEmail ? p.recoveryAdminEmail.split('@')[0].toUpperCase() : null;
+                                const abordAgo = getTimeAgo(p.recoveryUpdatedAt);
+                                const iniciaAgo = getTimeAgo(p.createdAt);
+
                                 return (
                                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
                                         <td className="px-4 py-5">
@@ -233,25 +244,31 @@ const PromoterRecoveryPage: React.FC = () => {
                                                             {p.status === 'approved' ? 'OK' : p.status === 'pending' ? 'PEND' : p.status === 'rejected_editable' ? 'REV' : 'REP'}
                                                         </span>
                                                         <p className="text-[9px] text-primary font-bold">{p.whatsapp}</p>
-                                                        <p className="text-[8px] text-gray-600 font-black uppercase truncate">{p.campaignName || 'Direta'}</p>
                                                     </div>
                                                 </div>
                                             </div>
                                         </td>
                                         <td className="px-4 py-5 text-center">
-                                            <div className="flex flex-col items-center gap-1.5">
-                                                <div className="flex items-center gap-2">
-                                                     <div className="flex items-center gap-1 text-gray-500 text-[8px] font-black uppercase bg-dark px-2 py-0.5 rounded-full">
-                                                        <ClockIcon className="w-3 h-3" /> {getTimeAgo(p.createdAt)}
-                                                    </div>
-                                                    <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${p.recoveryStatus === 'contacted' ? 'bg-blue-900/40 text-blue-400 border-blue-800' : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
-                                                        {p.recoveryStatus === 'contacted' ? 'ABORDADO' : 'NOVO'}
-                                                    </span>
+                                            <div className="inline-flex items-center gap-1.5 text-gray-400 text-[10px] font-black uppercase bg-dark px-2.5 py-1 rounded-full">
+                                                <ClockIcon className="w-3 h-3" /> {iniciaAgo}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-5 text-center">
+                                            {abordAgo ? (
+                                                <div className="inline-flex items-center gap-1.5 text-blue-400 text-[10px] font-black uppercase bg-blue-900/20 px-2.5 py-1 rounded-full border border-blue-800/30">
+                                                    <CheckCircleIcon className="w-3 h-3" /> {abordAgo}
                                                 </div>
+                                            ) : (
+                                                <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">---</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-5 text-center">
+                                            <div className="flex flex-col items-center gap-1.5">
+                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${p.recoveryStatus === 'contacted' ? 'bg-indigo-900/40 text-indigo-400 border-indigo-800' : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
+                                                    {p.recoveryStatus === 'contacted' ? 'ABORDADO' : 'NOVO'}
+                                                </span>
                                                 {adminName && (
-                                                    <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
-                                                        POR: {adminName}
-                                                    </span>
+                                                    <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">POR: {adminName}</span>
                                                 )}
                                             </div>
                                         </td>

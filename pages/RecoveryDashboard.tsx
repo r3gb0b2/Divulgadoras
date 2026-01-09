@@ -99,14 +99,13 @@ const RecoveryDashboard: React.FC = () => {
                 recoveryUpdatedAt: firebase.firestore.FieldValue.serverTimestamp()
             } as any);
             setLeads(prev => prev.map(p => 
-                p.id === membershipId ? { ...p, recoveryStatus: status, recoveryAdminEmail: adminData?.email } as any : p
+                p.id === membershipId ? { ...p, recoveryStatus: status, recoveryAdminEmail: adminData?.email, recoveryUpdatedAt: firebase.firestore.Timestamp.now() } as any : p
             ));
         } catch (e) { console.error(e); }
     };
 
     const handleStartRecovery = async (lead: VipMembership) => {
         setSelectedLead(lead);
-        // Atualiza imediatamente quem abordou
         await handleUpdateStatus(lead.id, 'contacted');
 
         if (templates.length === 0) {
@@ -140,7 +139,7 @@ const RecoveryDashboard: React.FC = () => {
 
     const getTimeAgo = (ts: any) => {
         const date = toDateSafe(ts);
-        if (!date) return '---';
+        if (!date) return null;
         const diff = Math.floor((new Date().getTime() - date.getTime()) / 60000);
         if (diff < 60) return `${diff}m`;
         const hours = Math.floor(diff / 60);
@@ -193,19 +192,24 @@ const RecoveryDashboard: React.FC = () => {
                     <table className="w-full text-left border-separate border-spacing-0">
                         <thead>
                             <tr className="bg-dark/50 text-[9px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
-                                <th className="px-4 py-5 w-[45%]">Potencial Membro</th>
-                                <th className="px-4 py-5 text-center w-[35%]">Status / Admin</th>
+                                <th className="px-4 py-5 w-[35%]">Potencial Membro</th>
+                                <th className="px-4 py-5 text-center w-[20%]">Abandono</th>
+                                <th className="px-4 py-5 text-center w-[20%]">Últ. Contato</th>
+                                <th className="px-4 py-5 text-center w-[15%]">Responsável</th>
                                 <th className="px-4 py-4 text-right">Ação</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
                             {isLoading ? (
-                                <tr><td colSpan={3} className="text-center py-20 text-gray-500 font-black uppercase text-xs animate-pulse">Buscando leads...</td></tr>
+                                <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs animate-pulse">Buscando leads...</td></tr>
                             ) : filteredLeads.length === 0 ? (
-                                <tr><td colSpan={3} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhum registro pendente</td></tr>
+                                <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhum registro pendente</td></tr>
                             ) : filteredLeads.map(p => {
                                 const pRec = (p as any).recoveryStatus || 'none';
                                 const pAdmin = (p as any).recoveryAdminEmail ? (p as any).recoveryAdminEmail.split('@')[0].toUpperCase() : null;
+                                const abordAgo = getTimeAgo((p as any).recoveryUpdatedAt);
+                                const abandAgo = getTimeAgo(p.submittedAt);
+                                
                                 return (
                                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
                                         <td className="px-4 py-5">
@@ -218,22 +222,31 @@ const RecoveryDashboard: React.FC = () => {
                                             </div>
                                         </td>
                                         <td className="px-4 py-5 text-center">
-                                            <div className="flex flex-col items-center gap-1.5">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="flex items-center gap-1 text-gray-500 text-[8px] font-black uppercase bg-dark px-2 py-0.5 rounded-full">
-                                                        <ClockIcon className="w-3 h-3" /> {getTimeAgo(p.submittedAt)}
-                                                    </div>
-                                                    <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${pRec === 'contacted' ? 'bg-blue-900/40 text-blue-400 border-blue-800' : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
-                                                        {pRec === 'contacted' ? 'ABORDADO' : 'NOVO'}
-                                                    </span>
+                                            <div className="inline-flex items-center gap-1.5 text-gray-400 text-[10px] font-black uppercase bg-dark px-2.5 py-1 rounded-full">
+                                                <ClockIcon className="w-3 h-3" /> {abandAgo}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-5 text-center">
+                                            {abordAgo ? (
+                                                <div className="inline-flex items-center gap-1.5 text-blue-400 text-[10px] font-black uppercase bg-blue-900/20 px-2.5 py-1 rounded-full border border-blue-800/30">
+                                                    <CheckCircleIcon className="w-3 h-3" /> {abordAgo}
                                                 </div>
+                                            ) : (
+                                                <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest">---</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-5 text-center">
+                                            <div className="flex flex-col items-center gap-1.5">
+                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${pRec === 'contacted' ? 'bg-indigo-900/40 text-indigo-400 border-indigo-800' : 'bg-gray-800 text-gray-500 border-gray-700'}`}>
+                                                    {pRec === 'contacted' ? 'ABORDADO' : 'NOVO'}
+                                                </span>
                                                 {pAdmin && (
-                                                    <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">POR: {pAdmin}</span>
+                                                    <span className="text-[7px] font-black text-gray-500 uppercase tracking-widest">POR: {pAdmin}</span>
                                                 )}
                                             </div>
                                         </td>
                                         <td className="px-4 py-5 text-right whitespace-nowrap">
-                                            <button onClick={() => handleStartRecovery(p)} className="inline-flex items-center gap-2 px-5 py-3 bg-green-600 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-green-500 shadow-lg shadow-green-900/20 transition-all transform active:scale-95">
+                                            <button onClick={() => handleStartRecovery(p)} className="inline-flex items-center gap-2 px-5 py-3 bg-green-600 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-green-500 shadow-lg transition-all transform active:scale-95">
                                                 <WhatsAppIcon className="w-4 h-4" /> <span className="hidden sm:inline">CONTATAR</span>
                                             </button>
                                         </td>
