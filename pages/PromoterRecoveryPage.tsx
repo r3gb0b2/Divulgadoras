@@ -140,6 +140,16 @@ const PromoterRecoveryPage: React.FC = () => {
         }
     };
 
+    const getTimeAgo = (ts: any) => {
+        const date = (ts && typeof ts.toDate === 'function') ? ts.toDate() : (ts?.seconds ? new Date(ts.seconds * 1000) : new Date(ts));
+        if (!date || isNaN(date.getTime())) return '---';
+        const diff = Math.floor((new Date().getTime() - date.getTime()) / 60000);
+        if (diff < 60) return `há ${diff} min`;
+        const hours = Math.floor(diff / 60);
+        if (hours < 24) return `há ${hours} h`;
+        return `há ${Math.floor(hours/24)} dias`;
+    };
+
     return (
         <div className="pb-40">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
@@ -151,7 +161,7 @@ const PromoterRecoveryPage: React.FC = () => {
                 </div>
                 <div className="flex gap-2">
                     <button onClick={() => setIsManageTemplatesOpen(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 flex items-center gap-2 transition-all">
-                        <DocumentDuplicateIcon className="w-4 h-4" /> Modelos de Mensagem
+                        <DocumentDuplicateIcon className="w-4 h-4" /> Modelos
                     </button>
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
                         <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
@@ -162,7 +172,6 @@ const PromoterRecoveryPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* BARRA DE FILTROS AVANÇADA */}
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6 mb-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
                     <div className="lg:col-span-2 relative">
@@ -210,16 +219,16 @@ const PromoterRecoveryPage: React.FC = () => {
                 </div>
             </div>
 
-            <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl overflow-hidden">
+            <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-4 border border-white/5 shadow-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-separate border-spacing-0">
                         <thead>
                             <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest">
-                                <th className="px-6 py-5 border-b border-white/5">Candidata / Perfil</th>
-                                <th className="px-6 py-5 border-b border-white/5">Evento Vinculado</th>
-                                <th className="px-6 py-5 border-b border-white/5 text-center">Status Recuperação</th>
-                                <th className="px-6 py-5 border-b border-white/5 text-center">Admin Responsável</th>
-                                <th className="px-6 py-4 border-b border-white/5 text-right">Abordagem</th>
+                                <th className="px-4 py-5 border-b border-white/5 w-[35%] md:w-[30%]">Candidata / Perfil</th>
+                                <th className="px-4 py-5 border-b border-white/5 w-[20%] md:w-[25%] hidden sm:table-cell">Evento</th>
+                                <th className="px-4 py-5 border-b border-white/5 w-[15%] text-center">Abandono</th>
+                                <th className="px-4 py-5 border-b border-white/5 w-[15%] text-center hidden md:table-cell">Admin</th>
+                                <th className="px-4 py-4 border-b border-white/5 w-px whitespace-nowrap text-right">Abordagem</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
@@ -229,49 +238,47 @@ const PromoterRecoveryPage: React.FC = () => {
                                 <tr><td colSpan={5} className="text-center py-20 text-gray-500 font-black uppercase text-xs">Nenhuma candidata encontrada com esses filtros</td></tr>
                             ) : filteredLeads.map(p => (
                                 <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
-                                    <td className="px-6 py-5">
+                                    <td className="px-4 py-5">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-800 border border-gray-700 flex-shrink-0">
+                                            <div className="w-9 h-9 rounded-lg overflow-hidden bg-gray-800 border border-gray-700 flex-shrink-0">
                                                 {p.facePhotoUrl ? <img src={p.facePhotoUrl} className="w-full h-full object-cover" alt=""/> : <UserIcon className="w-full h-full p-2 text-gray-600"/>}
                                             </div>
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-black text-white uppercase truncate">{p.name}</p>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className={`text-[7px] font-black uppercase px-2 py-0.5 rounded-full border ${getStatusStyle(p.status)}`}>
-                                                        {p.status === 'approved' ? 'Aprovado' : p.status === 'pending' ? 'Pendente' : p.status === 'rejected_editable' ? 'Revisar' : 'Reprovado'}
+                                            <div className="min-w-0 max-w-[120px] md:max-w-none">
+                                                <p className="text-xs font-black text-white uppercase truncate">{p.name}</p>
+                                                <div className="flex flex-wrap items-center gap-2 mt-1">
+                                                    <span className={`text-[6px] font-black uppercase px-1.5 py-0.5 rounded-full border ${getStatusStyle(p.status)}`}>
+                                                        {p.status === 'approved' ? 'OK' : p.status === 'pending' ? 'PEND' : p.status === 'rejected_editable' ? 'REV' : 'REP'}
                                                     </span>
-                                                    <p className="text-[10px] text-primary font-bold">{p.whatsapp}</p>
+                                                    <p className="text-[9px] text-primary font-bold">{p.whatsapp}</p>
                                                 </div>
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-5">
-                                        <div className="flex items-center gap-2">
-                                            <MegaphoneIcon className="w-3 h-3 text-gray-600" />
-                                            <p className="text-xs text-white font-bold uppercase truncate max-w-[150px]">{p.campaignName || 'Inscrição Direta'}</p>
-                                        </div>
-                                        <p className="text-[8px] text-gray-500 font-black uppercase mt-1">{p.state}</p>
+                                    <td className="px-4 py-5 hidden sm:table-cell">
+                                        <p className="text-[10px] text-white font-bold uppercase truncate max-w-[120px]">{p.campaignName || 'Inscrição Direta'}</p>
+                                        <p className="text-[8px] text-gray-500 font-black uppercase mt-0.5">{p.state}</p>
                                     </td>
-                                    <td className="px-6 py-5 text-center">
-                                        <div className="flex justify-center gap-1">
-                                            <button onClick={() => handleUpdateStatus(p.id, 'none')} className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border transition-all ${p.recoveryStatus === 'none' || !p.recoveryStatus ? 'bg-gray-700 text-white border-gray-600' : 'bg-transparent text-gray-600 border-gray-800'}`}>Novo</button>
-                                            <button onClick={() => handleUpdateStatus(p.id, 'contacted')} className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border transition-all ${p.recoveryStatus === 'contacted' ? 'bg-blue-600 text-white border-blue-500 shadow-lg shadow-blue-900/20' : 'bg-transparent text-gray-600 border-gray-800'}`}>Abordado</button>
-                                            <button onClick={() => handleUpdateStatus(p.id, 'purchased')} className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border transition-all ${p.recoveryStatus === 'purchased' ? 'bg-green-600 text-white border-green-500 shadow-lg shadow-green-900/20' : 'bg-transparent text-gray-600 border-gray-800'}`}>Concluído</button>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-5 text-center">
-                                        {p.recoveryAdminEmail ? (
-                                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-dark rounded-full border border-white/5">
-                                                <div className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></div>
-                                                <span className="text-[9px] font-black text-gray-300 uppercase tracking-widest">{p.recoveryAdminEmail.split('@')[0]}</span>
+                                    <td className="px-4 py-5 text-center">
+                                        <div className="flex flex-col items-center gap-1">
+                                            <div className="flex items-center gap-1 text-gray-500 text-[9px] font-black uppercase">
+                                                <ClockIcon className="w-3 h-3" /> {getTimeAgo(p.createdAt)}
                                             </div>
+                                            <div className="flex justify-center gap-1 mt-1">
+                                                <button onClick={() => handleUpdateStatus(p.id, 'none')} className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase border transition-all ${p.recoveryStatus === 'none' || !p.recoveryStatus ? 'bg-gray-700 text-white border-gray-600' : 'bg-transparent text-gray-600 border-gray-800'}`}>Novo</button>
+                                                <button onClick={() => handleUpdateStatus(p.id, 'contacted')} className={`px-1.5 py-0.5 rounded text-[7px] font-black uppercase border transition-all ${p.recoveryStatus === 'contacted' ? 'bg-blue-600 text-white border-blue-500 shadow-lg' : 'bg-transparent text-gray-600 border-gray-800'}`}>Falei</button>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-4 py-5 text-center hidden md:table-cell">
+                                        {p.recoveryAdminEmail ? (
+                                            <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest bg-dark px-2 py-1 rounded-full">{p.recoveryAdminEmail.split('@')[0]}</span>
                                         ) : (
-                                            <span className="text-[9px] text-gray-600 font-black uppercase tracking-widest italic">- disponível -</span>
+                                            <span className="text-[8px] text-gray-600 font-black uppercase">-</span>
                                         )}
                                     </td>
-                                    <td className="px-6 py-5 text-right">
-                                        <button onClick={() => handleStartRecovery(p)} className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-2xl text-[10px] font-black uppercase hover:bg-green-500 shadow-lg shadow-green-900/20 transition-all transform active:scale-95">
-                                            <WhatsAppIcon className="w-4 h-4" /> CONTATAR
+                                    <td className="px-4 py-5 text-right whitespace-nowrap">
+                                        <button onClick={() => handleStartRecovery(p)} className="inline-flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-green-500 shadow-lg transition-all transform active:scale-95">
+                                            <WhatsAppIcon className="w-3.5 h-3.5" /> <span className="hidden sm:inline">CONTATAR</span>
                                         </button>
                                     </td>
                                 </tr>
