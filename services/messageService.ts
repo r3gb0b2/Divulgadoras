@@ -12,14 +12,15 @@ export interface WhatsAppCampaignFilters {
 export const sendWhatsAppCampaign = async (
     messageTemplate: string,
     filters: WhatsAppCampaignFilters,
-    organizationId: string
+    organizationId: string,
+    platform: 'whatsapp' | 'instagram' = 'whatsapp'
 ): Promise<{ success: boolean; count: number; failures: number; message: string }> => {
     try {
         const sendFunc = httpsCallable(functions, 'sendWhatsAppCampaign');
-        const result = await sendFunc({ messageTemplate, filters, organizationId });
+        const result = await sendFunc({ messageTemplate, filters, organizationId, platform });
         return result.data as { success: boolean; count: number; failures: number; message: string };
     } catch (error: any) {
-        console.error("Error sending WhatsApp campaign:", error);
+        console.error("Error sending campaign:", error);
         const errorMessage = error.details?.message || error.message || 'Falha ao enviar campanha.';
         throw new Error(errorMessage);
     }
