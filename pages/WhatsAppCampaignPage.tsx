@@ -215,7 +215,7 @@ const WhatsAppCampaignPage: React.FC = () => {
                                         <div className="text-left">
                                             <p className="text-amber-200 text-[10px] font-black uppercase tracking-tight">Política da Meta</p>
                                             <p className="text-amber-100 text-[9px] leading-tight mt-1">
-                                                O Direct só funcionará se a divulgadora tiver interagido com seu perfil nas últimas 24 horas. Caso contrário, a API retornará falha.
+                                                O Direct só funcionará se a divulgadora tiver interagido com seu perfil comercial nas últimas 24 horas.
                                             </p>
                                         </div>
                                     </div>

@@ -6,10 +6,10 @@ import { ASAAS_CONFIG } from "./credentials.js";
 admin.initializeApp();
 const db = admin.firestore();
 
-// Helper para chamadas à API Sure/Babysuri
+// Helper robusto para chamadas à API Sure/Babysuri
 const sureFetch = async (endpoint, method, body, config) => {
     if (!config || !config.apiUrl || !config.apiToken) {
-        throw new Error("Configuração da API Sure incompleta no banco de dados.");
+        throw new Error("Configuração da API Sure incompleta.");
     }
     
     const url = `${config.apiUrl.replace(/\/$/, '')}${endpoint}`;
@@ -25,11 +25,23 @@ const sureFetch = async (endpoint, method, body, config) => {
         body: JSON.stringify(body)
     });
     
-    const responseData = await res.json();
+    // Captura resposta como texto primeiro para evitar "Unexpected end of JSON"
+    const responseText = await res.text();
+    let responseData = {};
+    
+    if (responseText) {
+        try {
+            responseData = JSON.parse(responseText);
+        } catch (e) {
+            // Se não for JSON, armazena o texto bruto para depuração
+            responseData = { message: responseText };
+        }
+    }
     
     if (!res.ok) {
-        console.error(`[SureAPI] Erro na Resposta:`, responseData);
-        throw new Error(responseData.message || `Erro na API Sure: ${res.status}`);
+        console.error(`[SureAPI] Erro ${res.status}:`, responseText);
+        // Retorna o erro amigável da API ou o status code
+        throw new Error(responseData.message || responseData.error || `Erro HTTP ${res.status}`);
     }
     
     return responseData;
@@ -51,12 +63,11 @@ export const sureWebhook = functions.region("southamerica-east1").https.onReques
 export const sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { messageTemplate, filters, organizationId, platform = 'whatsapp' } = data;
     
-    // Busca config da API
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
     
     if (!config || !config.isActive) {
-        throw new Error("O módulo de mensagens externas está desativado.");
+        throw new Error("Módulo de mensagens externas desativado.");
     }
 
     const { promoterIds } = filters;
@@ -72,7 +83,6 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
 
             let destination = "";
             if (platform === 'instagram') {
-                // Limpeza agressiva do Instagram
                 destination = (p.instagram || "")
                     .replace(/https?:\/\/(www\.)?instagram\.com\//i, '')
                     .replace(/@/g, '')
@@ -84,6 +94,7 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
             }
 
             if (!destination) {
+                console.warn(`[Campaign] Destino vazio para ${pid}`);
                 failureCount++;
                 continue;
             }
@@ -105,7 +116,7 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
             await sureFetch('/api/messages/sendText', 'POST', payload, config);
             successCount++;
         } catch (err) {
-            console.error(`[Campaign] Falha para ${pid}:`, err.message);
+            console.error(`[Campaign] Falha no envio para ${pid}:`, err.message);
             lastError = err.message;
             failureCount++;
         }
@@ -115,7 +126,7 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
         success: successCount > 0, 
         count: successCount, 
         failures: failureCount, 
-        message: `Concluído via ${platform.toUpperCase()}. Sucessos: ${successCount}, Falhas: ${failureCount}. ${lastError ? 'Último erro: ' + lastError : ''}` 
+        message: `Concluído via ${platform.toUpperCase()}. Sucessos: ${successCount}, Falhas: ${failureCount}. ${lastError ? 'Mensagem da API: ' + lastError : ''}` 
     };
 });
 
