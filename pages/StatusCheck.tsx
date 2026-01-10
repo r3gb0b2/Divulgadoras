@@ -2,9 +2,9 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { checkPromoterStatus, confirmPromoterGroupEntry } from '../services/promoterService';
-import { getAllVipMemberships } from '../services/vipService';
+import { getAllVipMemberships, getActiveVipEvents } from '../services/vipService';
 import { getAllCampaigns } from '../services/settingsService';
-import { Promoter, Campaign, VipMembership } from '../types';
+import { Promoter, Campaign, VipMembership, VipEvent } from '../types';
 import { WhatsAppIcon, ArrowLeftIcon, LogoutIcon, CheckCircleIcon, ClockIcon, XIcon, PencilIcon, SearchIcon, AlertTriangleIcon, SparklesIcon, MegaphoneIcon, TicketIcon } from '../components/Icons';
 import { getOrganizations } from '../services/organizationService';
 import VipTicket from '../components/VipTicket';
@@ -190,21 +190,33 @@ const StatusCheck: React.FC = () => {
         setIsLoading(true); setError(null); setSearched(true);
         try {
             const trimmed = searchEmail.toLowerCase().trim();
-            const [result, orgs, campaigns, allVip] = await Promise.all([
+            const [result, orgs, campaigns, allMemb, allEvents] = await Promise.all([
                 checkPromoterStatus(trimmed),
                 getOrganizations(),
                 getAllCampaigns(),
-                getAllVipMemberships('all')
+                getAllVipMemberships('all'),
+                getActiveVipEvents()
             ]);
             
             setPromoters(result);
-            setVipMemberships(allVip.filter(m => m.promoterEmail === trimmed && m.status === 'confirmed'));
+            
+            // Enriquecer as adesões com dados atuais do evento (Local e Hora)
+            const confirmedMemb = allMemb.filter(m => m.promoterEmail === trimmed && m.status === 'confirmed');
+            const enrichedMemb = confirmedMemb.map(m => {
+                const ev = allEvents.find(e => e.id === m.vipEventId);
+                return {
+                    ...m,
+                    eventTime: ev?.eventTime || m.eventTime,
+                    eventLocation: ev?.eventLocation || m.eventLocation
+                };
+            });
+            setVipMemberships(enrichedMemb);
             
             const map = orgs.reduce((acc, org) => { acc[org.id] = org.name; return acc; }, {} as Record<string, string>);
             setOrgMap(map);
             setAllCampaigns(campaigns);
             
-            if (result.length > 0 || allVip.some(m => m.promoterEmail === trimmed)) {
+            if (result.length > 0 || enrichedMemb.length > 0) {
                 localStorage.setItem('saved_promoter_email', trimmed);
             }
         } catch (err: any) {

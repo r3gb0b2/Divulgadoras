@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
@@ -300,13 +301,25 @@ const PostCheck: React.FC = () => {
             setPromoter(activePromoter);
             localStorage.setItem('saved_promoter_email', searchEmail.toLowerCase().trim());
             
-            const [fetchedAssignments, vips] = await Promise.all([
+            const [fetchedAssignments, vips, allEvents] = await Promise.all([
                 getAssignmentsForPromoterByEmail(searchEmail),
-                getAllVipMemberships()
+                getAllVipMemberships(),
+                getActiveVipEvents()
             ]);
 
             setAssignments(fetchedAssignments.map(a => ({ ...a, promoterHasJoinedGroup: activePromoter.hasJoinedGroup || false })));
-            setVipMemberships(vips.filter(m => m.promoterEmail === searchEmail.toLowerCase().trim() && m.status === 'confirmed'));
+            
+            // Enriquecer adesões com local e hora do evento
+            const userVips = vips.filter(m => m.promoterEmail === searchEmail.toLowerCase().trim() && m.status === 'confirmed');
+            const enrichedVips = userVips.map(m => {
+                const ev = allEvents.find(e => e.id === m.vipEventId);
+                return {
+                    ...m,
+                    eventTime: ev?.eventTime || m.eventTime,
+                    eventLocation: ev?.eventLocation || m.eventLocation
+                };
+            });
+            setVipMemberships(enrichedVips);
 
         } catch (err) { alert("Erro ao carregar portal."); } finally { setIsLoading(false); }
     }, []);
@@ -361,8 +374,8 @@ const PostCheck: React.FC = () => {
 
             <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 overflow-x-auto custom-scrollbar">
                 <button onClick={() => setActiveTab('pending')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Pendentes ({pending.length})</button>
-                <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Histórico</button>
-                <button onClick={() => setActiveTab('vip')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'vip' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500'}`}>
+                <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Histórico</button>
+                <button onClick={() => setActiveTab('vip')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'vip' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400'}`}>
                     <SparklesIcon className="w-3 h-3" /> Clube VIP ({vipMemberships.length})
                 </button>
             </div>
