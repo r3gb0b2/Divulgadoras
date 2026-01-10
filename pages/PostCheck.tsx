@@ -1,21 +1,20 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification, scheduleProofPushReminder } from '../services/postService';
-import { findPromotersByEmail, changePromoterEmail } from '../services/promoterService';
-import { getActiveVipEvents, getAllVipMemberships } from '../services/vipService';
-import { testSelfPush } from '../services/messageService';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { getAssignmentsForPromoterByEmail, confirmAssignment, submitJustification } from '../services/postService';
+import { findPromotersByEmail } from '../services/promoterService';
+import { getActiveVipEvents, getAllVipMemberships, trackVipTicketAction } from '../services/vipService';
 import { PostAssignment, Promoter, VipMembership, VipEvent } from '../types';
 import { 
     ArrowLeftIcon, CameraIcon, DownloadIcon, ClockIcon, 
     ExternalLinkIcon, CheckCircleIcon, WhatsAppIcon, MegaphoneIcon, 
     LogoutIcon, DocumentDuplicateIcon, SearchIcon, ChartBarIcon, 
-    XIcon, FaceIdIcon, RefreshIcon, AlertTriangleIcon, PencilIcon, TicketIcon,
+    XIcon, RefreshIcon, AlertTriangleIcon, TicketIcon,
     SparklesIcon
 } from '../components/Icons';
 import StorageMedia from '../components/StorageMedia';
 import { storage } from '../firebase/config';
 import PromoterPublicStatsModal from '../components/PromoterPublicStatsModal';
-import { initPushNotifications, clearPushListeners, PushStatus } from '../services/pushService';
+import VipTicket from '../components/VipTicket';
 
 const toDateSafe = (timestamp: any): Date | null => {
     if (!timestamp) return null;
@@ -50,9 +49,8 @@ const PostCard: React.FC<{
     assignment: PostAssignment & { promoterHasJoinedGroup: boolean }, 
     promoter: Promoter,
     onConfirm: (assignment: PostAssignment) => void, 
-    onJustify: (assignment: PostAssignment) => void, 
     onRefresh: () => void 
-}> = ({ assignment, promoter, onConfirm, onJustify, onRefresh }) => {
+}> = ({ assignment, promoter, onConfirm, onRefresh }) => {
     const navigate = useNavigate();
     const [isConfirming, setIsConfirming] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -61,7 +59,6 @@ const PostCard: React.FC<{
     const [isProofButtonEnabled, setIsProofButtonEnabled] = useState(false);
     const [countdownColor, setCountdownColor] = useState('text-gray-400');
     
-    // Estados para Justificativa
     const [showJustifyForm, setShowJustifyForm] = useState(false);
     const [justificationText, setJustificationText] = useState('');
     const [justificationFiles, setJustificationFiles] = useState<File[]>([]);
@@ -148,7 +145,7 @@ const PostCard: React.FC<{
         }
     };
 
-    const handleDownloadLink1 = async () => {
+    const handleDownloadMedia = async () => {
         if (!assignment.post?.mediaUrl) return;
         setIsDownloading(true);
         try {
@@ -165,16 +162,6 @@ const PostCard: React.FC<{
         }
     };
 
-    const handleDownloadLink2 = () => {
-        if (!assignment.post?.googleDriveUrl) return;
-        window.open(assignment.post.googleDriveUrl, '_blank');
-    };
-
-    const handleOpenPostLink = () => {
-        if (!assignment.post?.postLink) return;
-        window.open(assignment.post.postLink, '_blank');
-    };
-
     const handleCopyPostLink = () => {
         const linkToCopy = assignment.post?.copyLink || assignment.post?.postLink;
         if (!linkToCopy) return;
@@ -183,72 +170,42 @@ const PostCard: React.FC<{
         setTimeout(() => setLinkCopied(false), 2000);
     };
 
-    if (!assignment.promoterHasJoinedGroup) {
-        return (
-            <div className="bg-dark/50 p-6 rounded-3xl border-2 border-yellow-900/50 mb-4 animate-fadeIn">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-black text-white uppercase tracking-tight">{assignment.post?.campaignName}</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></span>
-                      <p className="text-yellow-500 text-xs font-black uppercase tracking-widest">Ação necessária!</p>
-                    </div>
-                  </div>
-                  <button onClick={onRefresh} className="p-2 bg-gray-800 rounded-full text-gray-400 hover:text-white transition-colors">
-                    <RefreshIcon className="w-4 h-4" />
-                  </button>
-                </div>
-                <p className="text-gray-400 text-xs leading-relaxed mb-6">
-                  Você precisa entrar no grupo oficial desta produtora para que as tarefas sejam liberadas.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <Link to={`/status?email=${encodeURIComponent(assignment.promoterEmail)}`} className="flex-1 flex items-center justify-center gap-2 py-3 bg-yellow-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest hover:yellow-500 transition-colors">ACEITAR REGRAS</Link>
-                </div>
-            </div>
-        );
-    }
-
     return (
-        <div className="bg-secondary rounded-3xl shadow-xl overflow-hidden border border-gray-800 mb-6 animate-fadeIn">
+        <div className="bg-secondary rounded-3xl shadow-xl overflow-hidden border border-white/5 mb-6 animate-fadeIn">
             <div className="p-5 flex justify-between items-start bg-white/5">
                 <div>
                     <p className="font-black text-white uppercase tracking-tight">{assignment.post?.campaignName}</p>
                     <p className="text-xs text-primary font-bold">{assignment.post?.eventName || 'Tarefa Designada'}</p>
                 </div>
+                <div className="p-2 bg-primary/10 rounded-xl text-primary"><MegaphoneIcon className="w-5 h-5"/></div>
             </div>
             <div className="p-5 space-y-4">
-                <div className="bg-gray-800/50 p-4 rounded-2xl border border-gray-700/50 text-sm text-gray-300 whitespace-pre-wrap italic">{assignment.post?.instructions}</div>
+                <div className="bg-dark/50 p-4 rounded-2xl border border-white/5 text-sm text-gray-300 whitespace-pre-wrap italic font-medium">{assignment.post?.instructions}</div>
                 
                 <div className="space-y-3">
                     {assignment.post?.type !== 'text' && (
-                        <div className="rounded-2xl overflow-hidden border border-gray-700">
-                             <StorageMedia path={assignment.post?.mediaUrl || assignment.post?.googleDriveUrl || ''} type={assignment.post?.type as any} className="w-full h-auto max-h-64 object-contain bg-black" />
+                        <div className="rounded-2xl overflow-hidden border border-white/5 bg-black">
+                             <StorageMedia path={assignment.post?.mediaUrl || ''} type={assignment.post?.type as any} className="w-full h-auto max-h-64 object-contain mx-auto" />
                         </div>
                     )}
                     
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {assignment.post?.mediaUrl && (
-                            <button onClick={handleDownloadLink1} disabled={isDownloading} className="flex items-center justify-center gap-2 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-xl text-xs font-bold transition-all">
+                            <button onClick={handleDownloadMedia} disabled={isDownloading} className="flex items-center justify-center gap-2 py-4 bg-gray-800 hover:bg-gray-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all">
                                 <DownloadIcon className="w-4 h-4" /> BAIXAR MÍDIA
                             </button>
                         )}
                         
-                        {assignment.post?.googleDriveUrl && (
-                            <button onClick={handleDownloadLink2} className="flex items-center justify-center gap-2 py-3 bg-indigo-900/40 border border-indigo-700/50 hover:bg-indigo-900/60 text-indigo-300 rounded-xl text-xs font-bold transition-all">
-                                <ExternalLinkIcon className="w-4 h-4" /> LINK DRIVE
-                            </button>
-                        )}
-
-                        {assignment.post?.postLink && (
-                            <button onClick={handleOpenPostLink} className="flex items-center justify-center gap-2 py-3 bg-blue-900/40 border border-blue-700/50 hover:bg-blue-900/60 text-blue-300 rounded-xl text-xs font-bold transition-all">
-                                <ExternalLinkIcon className="w-4 h-4" /> ABRIR PARA INTERAÇÃO
-                            </button>
-                        )}
-
                         {(assignment.post?.copyLink || assignment.post?.postLink) && (
-                            <button onClick={handleCopyPostLink} className={`flex items-center justify-center gap-2 py-3 rounded-xl text-xs font-bold transition-all border ${linkCopied ? 'bg-green-600 text-white border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.4)]' : 'bg-orange-900/40 border-orange-700/50 text-orange-300 hover:bg-orange-900/60'}`}>
-                                <DocumentDuplicateIcon className="w-4 h-4" /> {linkCopied ? 'COPIADO!' : 'COPIAR PARA POSTAGEM'}
+                            <button onClick={handleCopyPostLink} className={`flex items-center justify-center gap-2 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${linkCopied ? 'bg-green-600 text-white border-green-500 shadow-lg shadow-green-900/20' : 'bg-primary/10 border-primary/20 text-primary hover:bg-primary/20'}`}>
+                                <DocumentDuplicateIcon className="w-4 h-4" /> {linkCopied ? 'COPIADO!' : 'COPIAR LINK/CTA'}
                             </button>
+                        )}
+                        
+                        {assignment.post?.postLink && (
+                            <a href={assignment.post.postLink} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 py-4 bg-blue-600/10 border border-blue-500/20 text-blue-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all">
+                                <ExternalLinkIcon className="w-4 h-4" /> ABRIR NO INSTAGRAM
+                            </a>
                         )}
                     </div>
                 </div>
@@ -260,20 +217,20 @@ const PostCard: React.FC<{
                          {!showJustifyForm && (
                              <>
                                 {assignment.status === 'pending' ? (
-                                    <button onClick={handleConfirm} disabled={isConfirming} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all text-lg">{isConfirming ? 'GRAVANDO...' : 'EU POSTEI! 🚀'}</button>
+                                    <button onClick={handleConfirm} disabled={isConfirming} className="w-full py-5 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 hover:scale-[1.01] active:scale-95 transition-all text-sm uppercase tracking-widest">{isConfirming ? 'GRAVANDO...' : 'EU JÁ POSTEI! 🚀'}</button>
                                 ) : (
                                     <div className="space-y-4">
                                         <button 
                                             onClick={() => navigate(`/proof/${assignment.id}`)} 
                                             disabled={!isProofButtonEnabled} 
-                                            className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-lg shadow-primary/20 disabled:opacity-30 text-lg transition-all"
+                                            className="w-full py-5 bg-primary text-white font-black rounded-2xl shadow-xl shadow-primary/20 disabled:opacity-30 text-sm uppercase tracking-widest transition-all"
                                         >
                                             {isProofButtonEnabled ? 'ENVIAR PRINT' : 'AGUARDE O TEMPO'}
                                         </button>
                                         
-                                        <div className="flex items-center justify-center gap-2 py-2 bg-dark/30 rounded-xl">
+                                        <div className="flex items-center justify-center gap-2 py-3 bg-dark/50 rounded-2xl border border-white/5">
                                             <ClockIcon className={`w-4 h-4 ${countdownColor}`} />
-                                            <span className={`text-[10px] font-black uppercase tracking-widest ${countdownColor}`}>{timeLeftForProof}</span>
+                                            <span className={`text-[10px] font-black uppercase tracking-[0.2em] ${countdownColor}`}>{timeLeftForProof}</span>
                                         </div>
                                     </div>
                                 )}
@@ -283,56 +240,34 @@ const PostCard: React.FC<{
                         {assignment.post?.allowJustification !== false && (
                             <button 
                                 onClick={() => setShowJustifyForm(!showJustifyForm)}
-                                className={`w-full py-3 bg-transparent border-2 font-bold rounded-2xl text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${showJustifyForm ? 'border-gray-600 text-gray-400 hover:bg-gray-800' : 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10'}`}
+                                className={`w-full py-4 bg-transparent border-2 font-black rounded-2xl text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${showJustifyForm ? 'border-gray-600 text-gray-500 hover:bg-gray-800' : 'border-orange-500/20 text-orange-400 hover:bg-orange-500/10'}`}
                             >
                                 {showJustifyForm ? <XIcon className="w-4 h-4" /> : <AlertTriangleIcon className="w-4 h-4" />}
-                                {showJustifyForm ? 'CANCELAR JUSTIFICATIVA' : 'JUSTIFICAR AUSÊNCIA'}
+                                {showJustifyForm ? 'CANCELAR' : 'JUSTIFICAR AUSÊNCIA'}
                             </button>
                         )}
 
                         {showJustifyForm && (
                             <form onSubmit={handleSubmitJustification} className="p-5 bg-dark/50 rounded-3xl border border-orange-500/20 space-y-4 animate-slideDown">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Descreva o motivo:</label>
-                                    <textarea 
-                                        required
-                                        value={justificationText}
-                                        onChange={e => setJustificationText(e.target.value)}
-                                        className="w-full p-4 bg-gray-900 border border-gray-700 rounded-xl text-white text-sm outline-none focus:ring-1 focus:ring-orange-500"
-                                        placeholder="Ex: Problemas com Instagram, doente, etc..."
-                                        rows={3}
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Anexo opcional (print do erro):</label>
-                                    <input 
-                                        type="file" 
-                                        accept="image/*"
-                                        onChange={e => {
-                                            if(e.target.files) setJustificationFiles(Array.from(e.target.files));
-                                        }}
-                                        className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[10px] file:font-black file:bg-gray-700 file:text-white hover:file:bg-gray-600"
-                                    />
-                                </div>
-                                <button 
-                                    type="submit"
-                                    disabled={isSubmittingJustification}
-                                    className="w-full py-3 bg-orange-600 text-white font-black rounded-xl text-[10px] uppercase tracking-widest hover:bg-orange-500 transition-all shadow-lg shadow-orange-900/40"
-                                >
-                                    {isSubmittingJustification ? 'ENVIANDO...' : 'CONFIRMAR JUSTIFICATIVA'}
+                                <textarea 
+                                    required value={justificationText} onChange={e => setJustificationText(e.target.value)}
+                                    className="w-full p-4 bg-gray-900 border border-gray-700 rounded-xl text-white text-sm outline-none focus:ring-1 focus:ring-orange-500"
+                                    placeholder="Explique por que não pôde postar..." rows={3}
+                                />
+                                <button type="submit" disabled={isSubmittingJustification} className="w-full py-4 bg-orange-600 text-white font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-orange-500">
+                                    {isSubmittingJustification ? 'ENVIANDO...' : 'ENVIAR JUSTIFICATIVA'}
                                 </button>
                             </form>
                         )}
                     </div>
                 )}
 
-                {assignment.justification && (
-                    <div className="mt-2 p-4 bg-orange-900/10 rounded-2xl border border-orange-500/20 flex items-center gap-3">
-                        <CheckCircleIcon className="w-5 h-5 text-orange-400" />
-                        <div>
-                            <p className="text-[10px] text-orange-400 font-black uppercase tracking-widest">Justificativa Enviada</p>
-                            <p className="text-[9px] text-gray-500 font-bold uppercase">Aguardando análise da produção.</p>
-                        </div>
+                {(assignment.proofSubmittedAt || assignment.justification) && (
+                    <div className="p-4 bg-green-500/10 rounded-2xl border border-green-500/20 flex items-center gap-3">
+                        <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                        <p className="text-[10px] text-green-400 font-black uppercase tracking-widest">
+                            {assignment.proofSubmittedAt ? 'Tarefa Concluída!' : 'Justificativa em Análise'}
+                        </p>
                     </div>
                 )}
             </div>
@@ -344,56 +279,47 @@ const PostCheck: React.FC = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [email, setEmail] = useState('');
-    const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[]>([]);
     const [promoter, setPromoter] = useState<Promoter | null>(null);
+    const [assignments, setAssignments] = useState<(PostAssignment & { promoterHasJoinedGroup: boolean })[]>([]);
+    const [vipMemberships, setVipMemberships] = useState<VipMembership[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [searched, setSearched] = useState(false);
-    const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'rewards'>('pending');
+    const [activeTab, setActiveTab] = useState<'pending' | 'history' | 'vip'>('pending');
     const [isStatsModalOpen, setIsStatsModalOpen] = useState(false);
-    
-    const [vipMemberships, setVipMemberships] = useState<VipMembership[]>([]);
-    const [vipEventsMap, setVipEventsMap] = useState<Record<string, VipEvent>>({});
-
-    const handleCopy = (text: string) => {
-        navigator.clipboard.writeText(text);
-        alert("Código copiado!");
-    };
+    const [showTicketFor, setShowTicketFor] = useState<VipMembership | null>(null);
 
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
         setIsLoading(true); setSearched(true);
         try {
             const profiles = await findPromotersByEmail(searchEmail);
-            if (profiles.length === 0) { 
-              alert("E-mail não encontrado."); setSearched(false); setIsLoading(false); return; 
+            if (profiles.length === 0) {
+              alert("E-mail não encontrado."); setSearched(false); setIsLoading(false); return;
             }
-            
             const activePromoter = profiles[0];
             setPromoter(activePromoter);
             localStorage.setItem('saved_promoter_email', searchEmail.toLowerCase().trim());
             
-            const [fetchedAssignments, vipData, allVipEvents] = await Promise.all([
+            const [fetchedAssignments, vips] = await Promise.all([
                 getAssignmentsForPromoterByEmail(searchEmail),
-                getAllVipMemberships(),
-                getActiveVipEvents()
+                getAllVipMemberships()
             ]);
 
-            const userVips = vipData.filter(m => m.promoterEmail === searchEmail.toLowerCase().trim() && m.status === 'confirmed');
-            setVipMemberships(userVips);
-            
-            const eventMap = allVipEvents.reduce((acc, ev) => ({...acc, [ev.id]: ev}), {} as Record<string, VipEvent>);
-            setVipEventsMap(eventMap);
+            setAssignments(fetchedAssignments.map(a => ({ ...a, promoterHasJoinedGroup: activePromoter.hasJoinedGroup || false })));
+            setVipMemberships(vips.filter(m => m.promoterEmail === searchEmail.toLowerCase().trim() && m.status === 'confirmed'));
 
-            setAssignments(fetchedAssignments.map(a => ({...a, promoterHasJoinedGroup: true})));
-        } catch (err: any) { alert("Erro ao carregar dados."); } finally { setIsLoading(false); }
+        } catch (err) { alert("Erro ao carregar portal."); } finally { setIsLoading(false); }
     }, []);
 
     useEffect(() => {
         const queryParams = new URLSearchParams(location.search);
         const emailFromQuery = queryParams.get('email');
+        const initialTab = queryParams.get('tab') as any;
+        if (initialTab) setActiveTab(initialTab);
+        
         const savedEmail = localStorage.getItem('saved_promoter_email');
-        if (emailFromQuery) { setEmail(emailFromQuery); performSearch(emailFromQuery); }
-        else if (savedEmail) { setEmail(savedEmail); performSearch(savedEmail); }
+        if (emailFromQuery) performSearch(emailFromQuery);
+        else if (savedEmail) performSearch(savedEmail);
     }, [location.search, performSearch]);
 
     const handleLogout = () => {
@@ -407,12 +333,13 @@ const PostCheck: React.FC = () => {
     if (!searched || !promoter) {
         return (
             <div className="max-w-md mx-auto py-10 px-4">
-                <div className="bg-secondary shadow-2xl rounded-3xl p-8 border border-gray-800 text-center">
+                <div className="bg-secondary/40 backdrop-blur-xl shadow-2xl rounded-[3rem] p-10 border border-white/5 text-center">
                     <MegaphoneIcon className="w-16 h-16 text-primary mx-auto mb-6" />
-                    <h1 className="text-3xl font-black text-white uppercase mb-2">Portal da Equipe</h1>
+                    <h1 className="text-3xl font-black text-white uppercase mb-2 tracking-tighter">Portal da Equipe</h1>
+                    <p className="text-gray-500 text-sm mb-8 font-medium">Gerencie suas tarefas e benefícios.</p>
                     <form onSubmit={(e) => { e.preventDefault(); performSearch(email); }} className="space-y-4">
-                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail de cadastro" className="w-full px-4 py-4 border border-gray-700 rounded-2xl bg-gray-800 text-white" required />
-                        <button type="submit" disabled={isLoading} className="w-full py-4 bg-primary text-white font-black rounded-2xl shadow-xl">{isLoading ? 'BUSCANDO...' : 'ACESSAR AGORA'}</button>
+                        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="E-mail de cadastro" className="w-full px-6 py-5 border border-gray-700 rounded-3xl bg-dark text-white font-bold outline-none focus:ring-2 focus:ring-primary" required />
+                        <button type="submit" disabled={isLoading} className="w-full py-5 bg-primary text-white font-black rounded-3xl shadow-xl uppercase text-xs tracking-widest">{isLoading ? 'BUSCANDO...' : 'ACESSAR AGORA'}</button>
                     </form>
                 </div>
             </div>
@@ -420,120 +347,112 @@ const PostCheck: React.FC = () => {
     }
 
     return (
-        <div className="max-w-xl mx-auto pb-20">
-            <div className="flex justify-between items-start mb-8 px-2">
+        <div className="max-w-xl mx-auto pb-20 px-2">
+            <div className="flex justify-between items-center mb-8">
                 <div className="min-w-0 flex-1 mr-4">
                     <h1 className="text-2xl font-black text-white uppercase truncate">Olá, {promoter.name.split(' ')[0]}!</h1>
-                    <p className="text-xs text-gray-500 font-mono truncate">{promoter.email}</p>
+                    <p className="text-[10px] text-gray-500 font-mono mt-1">{promoter.email}</p>
                 </div>
                 <div className="flex gap-2">
-                    <button 
-                        onClick={() => setIsStatsModalOpen(true)}
-                        className="p-3 bg-gray-800 text-primary rounded-2xl hover:bg-gray-700 transition-colors shadow-lg border border-white/5"
-                        title="Ver meu desempenho"
-                    >
-                        <ChartBarIcon className="w-6 h-6" />
-                    </button>
-                    <button 
-                        onClick={handleLogout} 
-                        className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-red-400 transition-colors shadow-lg border border-white/5"
-                        title="Trocar conta"
-                    >
-                        <LogoutIcon className="w-6 h-6" />
-                    </button>
+                    <button onClick={() => setIsStatsModalOpen(true)} className="p-3 bg-gray-800 text-primary rounded-2xl hover:bg-gray-700 border border-white/5 transition-all"><ChartBarIcon className="w-6 h-6"/></button>
+                    <button onClick={handleLogout} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-red-400 border border-white/5 transition-all"><LogoutIcon className="w-6 h-6"/></button>
                 </div>
             </div>
 
-            <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-gray-700/50">
-                <button onClick={() => setActiveTab('pending')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'pending' ? 'bg-primary text-white' : 'text-gray-500'}`}>Ativas</button>
-                <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'history' ? 'bg-primary text-white' : 'text-gray-500'}`}>Histórico</button>
-                <button onClick={() => setActiveTab('rewards')} className={`flex-1 py-3 text-xs font-black uppercase rounded-xl transition-all flex items-center justify-center gap-2 ${activeTab === 'rewards' ? 'bg-primary text-white' : 'text-gray-500'}`}>
-                    <SparklesIcon className="w-3 h-3" /> Clube VIP
+            <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 overflow-x-auto custom-scrollbar">
+                <button onClick={() => setActiveTab('pending')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Pendentes ({pending.length})</button>
+                <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Histórico</button>
+                <button onClick={() => setActiveTab('vip')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'vip' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-500'}`}>
+                    <SparklesIcon className="w-3 h-3" /> Clube VIP ({vipMemberships.length})
                 </button>
             </div>
 
-            <div className="space-y-2">
-                {activeTab === 'pending' ? (
-                    pending.length > 0 ? pending.map(a => <PostCard key={a.id} assignment={a} promoter={promoter} onConfirm={() => performSearch(email)} onJustify={()=>{}} onRefresh={() => performSearch(email)} />) 
-                    : <div className="text-center py-20 text-gray-400 font-bold">Sem tarefas pendentes.</div>
-                ) : activeTab === 'history' ? (
-                    history.length > 0 ? history.map(a => <PostCard key={a.id} assignment={a} promoter={promoter} onConfirm={()=>{}} onJustify={()=>{}} onRefresh={()=>{}} />) 
-                    : <p className="text-center text-gray-500 py-10 font-bold">Histórico Vazio</p>
-                ) : (
-                    <div className="space-y-4 animate-fadeIn">
-                        {vipMemberships.length > 0 ? vipMemberships.map(m => {
-                            const event = vipEventsMap[m.vipEventId];
-                            const directLink = event?.externalSlug && m.benefitCode 
-                                ? `https://stingressos.com.br/eventos/${event.externalSlug}?cupom=${m.benefitCode}`
-                                : null;
+            {activeTab === 'pending' && (
+                <div className="space-y-4">
+                    {pending.length === 0 ? (
+                        <div className="bg-secondary/40 p-10 rounded-[2.5rem] border border-white/5 text-center">
+                            <CheckCircleIcon className="w-12 h-12 text-green-600 mx-auto mb-4" />
+                            <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Tudo em dia! Nenhuma tarefa pendente.</p>
+                        </div>
+                    ) : pending.map(a => <PostCard key={a.id} assignment={a} promoter={promoter} onConfirm={() => performSearch(promoter.email)} onRefresh={() => performSearch(promoter.email)} />)}
+                </div>
+            )}
 
-                            return (
-                                <div key={m.id} className="bg-secondary p-6 rounded-[2rem] border border-white/5 shadow-xl">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="w-12 h-12 bg-primary/20 rounded-2xl flex items-center justify-center text-primary">
-                                            <SparklesIcon className="w-6 h-6" />
+            {activeTab === 'history' && (
+                <div className="space-y-3">
+                    {history.length === 0 ? (
+                        <p className="text-center text-gray-600 font-bold uppercase text-[10px] py-10 tracking-widest">Nenhum histórico disponível.</p>
+                    ) : history.map(a => (
+                        <div key={a.id} className="bg-dark/40 p-5 rounded-2xl border border-white/5 flex justify-between items-center group">
+                            <div className="min-w-0">
+                                <p className="text-white font-black text-xs uppercase truncate">{a.post?.campaignName || 'Evento'}</p>
+                                <p className="text-[9px] text-gray-500 uppercase font-bold tracking-widest mt-1">{toDateSafe(a.proofSubmittedAt || a.createdAt)?.toLocaleDateString('pt-BR')}</p>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase border ${a.proofSubmittedAt || a.justificationStatus === 'accepted' ? 'bg-green-900/30 text-green-400 border-green-800' : 'bg-red-900/30 text-red-400 border-red-800'}`}>
+                                {a.proofSubmittedAt ? 'Enviado' : a.justificationStatus === 'accepted' ? 'Justificado' : 'Perdido'}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {activeTab === 'vip' && (
+                <div className="space-y-6">
+                    <div className="flex items-center gap-3 ml-4">
+                        <div className="w-8 h-8 bg-indigo-500/20 rounded-xl flex items-center justify-center text-indigo-400">
+                            <SparklesIcon className="w-4 h-4" />
+                        </div>
+                        <h2 className="text-lg font-black text-white uppercase tracking-tight">Meus Ingressos VIP</h2>
+                    </div>
+                    
+                    {vipMemberships.length === 0 ? (
+                        <div className="bg-secondary/40 p-10 rounded-[2.5rem] border border-white/5 text-center">
+                            <TicketIcon className="w-12 h-12 text-gray-600 mx-auto mb-4" />
+                            <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Nenhuma adesão confirmada.</p>
+                            <Link to="/clubvip" className="mt-6 inline-block text-primary font-black uppercase text-[10px] tracking-widest hover:underline">Ver Clube VIP</Link>
+                        </div>
+                    ) : (
+                        <div className="grid gap-6">
+                            {vipMemberships.map(m => (
+                                <div key={m.id} className="bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-8 border border-indigo-500/20 shadow-2xl relative overflow-hidden group">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="text-left">
+                                            <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">{m.vipEventName}</h2>
+                                            <p className="text-[9px] text-indigo-400 font-black uppercase tracking-[0.3em] mt-2">Membro Clube VIP ✅</p>
                                         </div>
-                                        <div>
-                                            <h3 className="text-lg font-black text-white uppercase">{m.vipEventName}</h3>
-                                            <p className="text-[10px] text-primary font-black uppercase">Membro Oficial</p>
-                                        </div>
+                                        <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400"><TicketIcon className="w-6 h-6"/></div>
                                     </div>
-
-                                    <div className="space-y-6">
-                                        {m.isBenefitActive ? (
-                                            <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-2xl text-center">
-                                                <p className="text-green-400 font-black uppercase text-sm">INGRESSO PROMOCIONAL DISPONÍVEL! 🚀</p>
-                                            </div>
-                                        ) : (
-                                            <div className="p-4 bg-orange-900/20 border border-orange-500/30 rounded-2xl text-center">
-                                                <p className="text-white font-black uppercase text-sm">LIBERAÇÃO EM ANDAMENTO</p>
-                                            </div>
-                                        )}
-                                        
-                                        <div className="bg-dark/50 p-5 rounded-2xl border border-white/5 space-y-4">
-                                            <div>
-                                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2 ml-1">Seu Código:</p>
-                                                <div 
-                                                    onClick={() => m.isBenefitActive && m.benefitCode && handleCopy(m.benefitCode)}
-                                                    className={`p-3 bg-black/40 rounded-xl border border-primary/20 text-center select-all flex items-center justify-between transition-all ${m.isBenefitActive ? 'cursor-pointer hover:bg-black/60' : ''}`}
-                                                >
-                                                    <p className="text-lg font-black text-primary font-mono">{m.isBenefitActive ? (m.benefitCode || '---') : '******'}</p>
-                                                    {m.isBenefitActive && <div className="p-2 text-gray-500 hover:text-white"><DocumentDuplicateIcon className="w-4 h-4"/></div>}
-                                                </div>
-                                                {m.isBenefitActive && <p className="text-[8px] text-gray-500 uppercase font-black text-center mt-2 tracking-widest">Clique no código para copiar</p>}
-                                            </div>
-
-                                            {m.isBenefitActive && directLink && (
-                                                <a 
-                                                    href={directLink} 
-                                                    target="_blank" 
-                                                    rel="noreferrer"
-                                                    className="block w-full py-4 bg-green-600 text-white font-black rounded-2xl text-center shadow-lg hover:bg-green-500 transition-all uppercase text-xs tracking-widest flex items-center justify-center gap-2"
-                                                >
-                                                    <ExternalLinkIcon className="w-4 h-4" /> RESGATAR INGRESSO PROMOCIONAL
-                                                </a>
-                                            )}
+                                    
+                                    <div className="p-4 bg-dark/60 rounded-2xl border border-white/5 space-y-4">
+                                        <div className="text-center">
+                                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Código de Acesso</p>
+                                            <p className="text-2xl font-black text-indigo-400 font-mono">{m.benefitCode || '---'}</p>
                                         </div>
+                                        <button 
+                                            onClick={() => {
+                                                setShowTicketFor(m);
+                                                trackVipTicketAction(m.id, 'view').catch(() => {});
+                                            }}
+                                            className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-500 transition-all transform active:scale-95"
+                                        >
+                                            VER MEU INGRESSO DIGITAL
+                                        </button>
                                     </div>
                                 </div>
-                            );
-                        }) : (
-                            <div className="bg-secondary p-8 rounded-[2.5rem] border border-white/5 shadow-xl text-center">
-                                <SparklesIcon className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-                                <h3 className="text-xl font-black text-white uppercase">Seja Membro VIP!</h3>
-                                <p className="text-gray-400 text-sm mt-2 mb-6">Acesse benefícios exclusivos e ingressos promocionais.</p>
-                                <Link to="/clubvip" className="block w-full py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg">QUERO SER MEBRO</Link>
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
-            <PromoterPublicStatsModal 
-                isOpen={isStatsModalOpen} 
-                onClose={() => setIsStatsModalOpen(false)} 
-                promoter={promoter} 
-            />
+            <PromoterPublicStatsModal isOpen={isStatsModalOpen} onClose={() => setIsStatsModalOpen(false)} promoter={promoter} />
+            
+            {showTicketFor && (
+                <VipTicket 
+                    membership={showTicketFor} 
+                    onClose={() => setShowTicketFor(null)} 
+                />
+            )}
         </div>
     );
 };
