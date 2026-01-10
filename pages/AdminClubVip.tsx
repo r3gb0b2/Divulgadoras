@@ -9,6 +9,7 @@ import {
     updateVipEvent, 
     deleteVipEvent,
     refundVipMembership,
+    transferVipMembership,
     addVipCodes,
     getVipCodeStats,
     getVipEventCodes
@@ -24,12 +25,68 @@ import {
     CogIcon, UndoIcon, ChartBarIcon, SparklesIcon, EnvelopeIcon
 } from '../components/Icons';
 
-const toDateSafe = (timestamp: any): Date | null => {
-    if (!timestamp) return null;
-    if (typeof timestamp.toDate === 'function') return timestamp.toDate();
-    if (typeof timestamp === 'object' && timestamp.seconds !== undefined) return new Date(timestamp.seconds * 1000);
-    const date = new Date(timestamp);
-    return isNaN(date.getTime()) ? null : date;
+// Modal para Transferência
+const TransferModal: React.FC<{ isOpen: boolean, onClose: () => void, membership: VipMembership, events: VipEvent[], onTransferred: () => void }> = ({ isOpen, onClose, membership, events, onTransferred }) => {
+    const [selectedId, setSelectedId] = useState('');
+    const [isSaving, setIsSaving] = useState(false);
+
+    if (!isOpen) return null;
+
+    const handleTransfer = async () => {
+        const newEvent = events.find(e => e.id === selectedId);
+        if (!newEvent) return alert("Selecione um evento de destino.");
+        
+        setIsSaving(true);
+        try {
+            await transferVipMembership(membership.id, newEvent);
+            // Após transferir os dados, chama a ativação para pegar um novo código do estoque do novo evento
+            const activateVip = httpsCallable(functions, 'activateVipMembership');
+            await activateVip({ membershipId: membership.id, forceNew: true });
+            
+            alert(`Sucesso! Adesão transferida para: ${newEvent.name}`);
+            onTransferred();
+            onClose();
+        } catch (e: any) {
+            alert("Erro ao transferir: " + e.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[150] flex items-center justify-center p-6" onClick={onClose}>
+            <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
+                <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Transferir Ingresso</h2>
+                <p className="text-[10px] text-gray-500 font-bold uppercase mb-6">Membro: {membership.promoterName}</p>
+                
+                <div className="space-y-4">
+                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Selecione o Novo Evento</label>
+                    <select 
+                        value={selectedId}
+                        onChange={e => setSelectedId(e.target.value)}
+                        className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary"
+                    >
+                        <option value="">Escolha o destino...</option>
+                        {events.filter(e => e.id !== membership.vipEventId && e.isActive).map(e => (
+                            <option key={e.id} value={e.id}>{e.name} (R$ {e.price.toFixed(2)})</option>
+                        ))}
+                    </select>
+                    <div className="p-4 bg-primary/10 border border-primary/20 rounded-2xl">
+                        <p className="text-[10px] text-primary font-black uppercase leading-tight">
+                            Ao transferir, o faturamento deste membro passará a contar para o novo evento e um novo código de acesso será gerado a partir do estoque do destino.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="mt-8 flex gap-3">
+                    <button onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-xs">Cancelar</button>
+                    <button onClick={handleTransfer} disabled={isSaving || !selectedId} className="flex-2 py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg shadow-primary/20 disabled:opacity-50">
+                        {isSaving ? 'TRANSFERINDO...' : 'CONFIRMAR TRANSFERÊNCIA'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 };
 
 // Modal para gerenciar códigos em lote
@@ -132,8 +189,11 @@ const AdminClubVip: React.FC = () => {
     const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+    
     const [editingEvent, setEditingEvent] = useState<Partial<VipEvent> | null>(null);
     const [eventForCodes, setEventForCodes] = useState<VipEvent | null>(null);
+    const [membershipToTransfer, setMembershipToTransfer] = useState<VipMembership | null>(null);
 
     const isSuperAdmin = adminData?.role === 'superadmin';
 
@@ -193,11 +253,6 @@ const AdminClubVip: React.FC = () => {
         alert("Link do portal copiado!");
     };
 
-    const handleOpenClientPortal = (membership: VipMembership) => {
-        const url = `${window.location.origin}/#/clubvip/status?email=${encodeURIComponent(membership.promoterEmail)}`;
-        window.open(url, '_blank');
-    };
-
     const handleDownloadEventStock = async (event: VipEvent) => {
         setIsBulkProcessing(true);
         try {
@@ -249,7 +304,7 @@ const AdminClubVip: React.FC = () => {
     };
 
     const handleRefundAction = async (membership: VipMembership) => {
-        if (!window.confirm(`Estornar adesão de ${membership.promoterName}?`)) return;
+        if (!window.confirm(`ESTORNAR ADESÃO: Tem certeza? O código '${membership.benefitCode || 'N/A'}' será removido e o ingresso invalidado.`)) return;
         setIsProcessingId(membership.id);
         try {
             await refundVipMembership(membership.id);
@@ -372,6 +427,15 @@ const AdminClubVip: React.FC = () => {
                                                     <button onClick={() => handleCopyTicketLink(m)} className="p-2 bg-indigo-900/30 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all border border-indigo-800/30" title="Copiar Link do Portal">
                                                         <LinkIcon className="w-4 h-4" />
                                                     </button>
+                                                    {m.status === 'confirmed' && (
+                                                        <button 
+                                                            onClick={() => { setMembershipToTransfer(m); setIsTransferModalOpen(true); }}
+                                                            className="p-2 bg-purple-900/30 text-purple-400 rounded-xl border border-purple-800/50 hover:bg-purple-600 hover:text-white transition-all"
+                                                            title="Transferir para outro Evento"
+                                                        >
+                                                            <RefreshIcon className="w-4 h-4 rotate-90" />
+                                                        </button>
+                                                    )}
                                                     {m.status === 'pending' ? (
                                                         <button onClick={() => handleManualActivateOrSwap(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">ATIVAR</button>
                                                     ) : (
@@ -379,7 +443,7 @@ const AdminClubVip: React.FC = () => {
                                                             <RefreshIcon className={`w-4 h-4 ${isBulkProcessing && isProcessingId === m.id ? 'animate-spin' : ''}`} />
                                                         </button>
                                                     )}
-                                                    <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30" title="Estornar">
+                                                    <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30" title="Estornar e Invalidar">
                                                         <UndoIcon className="w-4 h-4" />
                                                     </button>
                                                 </div>
@@ -416,7 +480,7 @@ const AdminClubVip: React.FC = () => {
                                         </div>
                                     </div>
                                     <div className="flex gap-2">
-                                        <button onClick={() => { setEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-1 py-3 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
+                                        <button onClick={() => { setEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-1 py-3 bg-indigo-900/30 text-indigo-400 border border-indigo-800/30 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
                                             <CogIcon className="w-4 h-4" /> CÓDIGOS
                                         </button>
                                         <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-primary transition-all"><PencilIcon className="w-4 h-4" /></button>
@@ -515,9 +579,18 @@ const AdminClubVip: React.FC = () => {
                 </div>
             )}
 
-            {/* FIX: Rename selectedEventForCodes to eventForCodes to match the state definition. */}
             {isCodesModalOpen && eventForCodes && (
                 <ManageCodesModal isOpen={isCodesModalOpen} onClose={() => setIsCodesModalOpen(false)} event={eventForCodes} onSaved={fetchData} onDownloadStock={handleDownloadEventStock} />
+            )}
+
+            {isTransferModalOpen && membershipToTransfer && (
+                <TransferModal 
+                    isOpen={isTransferModalOpen} 
+                    onClose={() => { setIsTransferModalOpen(false); setMembershipToTransfer(null); }} 
+                    membership={membershipToTransfer} 
+                    events={vipEvents} 
+                    onTransferred={fetchData}
+                />
             )}
         </div>
     );

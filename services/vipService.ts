@@ -1,3 +1,4 @@
+
 import firebase from 'firebase/compat/app';
 import { firestore, storage, functions } from '../firebase/config';
 import { VipEvent, VipMembership } from '../types';
@@ -103,8 +104,19 @@ export const updateVipMembership = async (id: string, data: Partial<VipMembershi
 export const refundVipMembership = async (membershipId: string) => {
     return firestore.collection(COLLECTION_MEMBERSHIPS).doc(membershipId).update({
         status: 'refunded',
+        benefitCode: null, // Remove o código do ingresso
         isBenefitActive: false,
         refundedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+};
+
+export const transferVipMembership = async (membershipId: string, newEvent: VipEvent) => {
+    return firestore.collection(COLLECTION_MEMBERSHIPS).doc(membershipId).update({
+        vipEventId: newEvent.id,
+        vipEventName: newEvent.name,
+        benefitCode: null, // Limpa para forçar a nova atribuição de código
+        isBenefitActive: false,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 };
