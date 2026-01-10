@@ -2,10 +2,12 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { checkPromoterStatus, confirmPromoterGroupEntry } from '../services/promoterService';
+import { getAllVipMemberships } from '../services/vipService';
 import { getAllCampaigns } from '../services/settingsService';
-import { Promoter, Campaign } from '../types';
-import { WhatsAppIcon, ArrowLeftIcon, LogoutIcon, CheckCircleIcon, ClockIcon, XIcon, PencilIcon, SearchIcon, AlertTriangleIcon, SparklesIcon, MegaphoneIcon } from '../components/Icons';
+import { Promoter, Campaign, VipMembership } from '../types';
+import { WhatsAppIcon, ArrowLeftIcon, LogoutIcon, CheckCircleIcon, ClockIcon, XIcon, PencilIcon, SearchIcon, AlertTriangleIcon, SparklesIcon, MegaphoneIcon, TicketIcon } from '../components/Icons';
 import { getOrganizations } from '../services/organizationService';
+import VipTicket from '../components/VipTicket';
 
 interface RulesModalProps {
   isOpen: boolean;
@@ -174,29 +176,36 @@ const StatusCheck: React.FC = () => {
     const navigate = useNavigate();
     const [email, setEmail] = useState('');
     const [promoters, setPromoters] = useState<Promoter[]>([]);
+    const [vipMemberships, setVipMemberships] = useState<VipMembership[]>([]);
     const [orgMap, setOrgMap] = useState<Record<string, string>>({});
     const [allCampaigns, setAllCampaigns] = useState<Campaign[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [searched, setSearched] = useState(false);
     
+    const [showTicketFor, setShowTicketFor] = useState<VipMembership | null>(null);
+    
     const performSearch = useCallback(async (searchEmail: string) => {
         if (!searchEmail) return;
         setIsLoading(true); setError(null); setSearched(true);
         try {
-            const [result, orgs, campaigns] = await Promise.all([
-                checkPromoterStatus(searchEmail),
+            const trimmed = searchEmail.toLowerCase().trim();
+            const [result, orgs, campaigns, allVip] = await Promise.all([
+                checkPromoterStatus(trimmed),
                 getOrganizations(),
-                getAllCampaigns()
+                getAllCampaigns(),
+                getAllVipMemberships('all')
             ]);
             
             setPromoters(result);
+            setVipMemberships(allVip.filter(m => m.promoterEmail === trimmed && m.status === 'confirmed'));
+            
             const map = orgs.reduce((acc, org) => { acc[org.id] = org.name; return acc; }, {} as Record<string, string>);
             setOrgMap(map);
             setAllCampaigns(campaigns);
             
-            if (result.length > 0) {
-                localStorage.setItem('saved_promoter_email', searchEmail.toLowerCase().trim());
+            if (result.length > 0 || allVip.some(m => m.promoterEmail === trimmed)) {
+                localStorage.setItem('saved_promoter_email', trimmed);
             }
         } catch (err: any) {
             setError('Ocorreu um erro ao buscar seus dados.');
@@ -215,29 +224,21 @@ const StatusCheck: React.FC = () => {
     
     const handleLogout = () => {
         localStorage.removeItem('saved_promoter_email');
-        setPromoters([]); setSearched(false); setEmail('');
+        setPromoters([]); setVipMemberships([]); setSearched(false); setEmail('');
     };
 
     const groupedPromoters = useMemo(() => {
         return promoters.reduce((acc, p) => {
+            if (p.organizationId === 'club-vip-global') return acc; // Ignora o modelo antigo de registro VIP
             if (!acc[p.organizationId]) acc[p.organizationId] = [];
             acc[p.organizationId].push(p);
             return acc;
         }, {} as Record<string, Promoter[]>);
     }, [promoters]);
 
-    const isOnlyVip = useMemo(() => {
-        return promoters.length > 0 && promoters.every(p => p.organizationId === 'club-vip-global');
-    }, [promoters]);
-
     const hasAnyApprovedJob = useMemo(() => {
         return promoters.some(p => p.status === 'approved' && p.organizationId !== 'club-vip-global');
     }, [promoters]);
-
-    const handleCopy = (text: string) => {
-        navigator.clipboard.writeText(text);
-        alert("Código copiado!");
-    };
 
     return (
         <div className="max-w-xl mx-auto py-6 px-4">
@@ -245,7 +246,7 @@ const StatusCheck: React.FC = () => {
                 <button onClick={() => navigate('/')} className="flex items-center gap-2 text-[10px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
                     <ArrowLeftIcon className="w-4 h-4" /> <span>Início</span>
                 </button>
-                {searched && promoters.length > 0 && (
+                {searched && (promoters.length > 0 || vipMemberships.length > 0) && (
                     <button onClick={handleLogout} className="flex items-center gap-2 text-[10px] font-black text-red-500/70 uppercase tracking-widest hover:text-red-400 transition-colors">
                         <LogoutIcon className="w-4 h-4" /> TROCAR CONTA
                     </button>
@@ -258,7 +259,7 @@ const StatusCheck: React.FC = () => {
                         <SearchIcon className="w-8 h-8" />
                     </div>
                     <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-tighter">MEU STATUS</h1>
-                    <p className="text-gray-400 text-sm mb-8 font-medium">Consulte suas aprovações pendentes.</p>
+                    <p className="text-gray-400 text-sm mb-8 font-medium">Consulte suas aprovações e ingressos VIP.</p>
                     <form onSubmit={(e) => { e.preventDefault(); performSearch(email); }} className="space-y-4">
                         <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Seu e-mail cadastrado" className="w-full px-6 py-5 border border-gray-700 rounded-[1.5rem] bg-gray-800/50 text-white focus:ring-2 focus:ring-primary outline-none transition-all font-bold" required />
                         <button type="submit" disabled={isLoading} className="w-full py-5 bg-primary text-white font-black rounded-[1.5rem] hover:bg-primary-dark transition-all shadow-xl shadow-primary/20 disabled:opacity-50 uppercase text-xs tracking-widest">
@@ -267,99 +268,94 @@ const StatusCheck: React.FC = () => {
                     </form>
                 </div>
             ) : (
-                <div className="space-y-8 animate-fadeIn">
+                <div className="space-y-10 animate-fadeIn pb-20">
                     <div className="text-center">
-                        <h1 className="text-3xl font-black text-white uppercase tracking-tighter">SUAS INSCRIÇÕES</h1>
-                        <p className="text-[10px] text-gray-500 font-mono mt-2 bg-gray-800/50 inline-block px-3 py-1 rounded-full">{email}</p>
+                        <h1 className="text-3xl font-black text-white uppercase tracking-tighter">SUA CONTA</h1>
+                        <p className="text-[10px] text-gray-500 font-mono mt-2 bg-gray-800/50 inline-block px-3 py-1 rounded-full uppercase">{email}</p>
                     </div>
 
-                    {promoters.length > 0 ? (
+                    {/* SEÇÃO VIP - NOVO MODELO */}
+                    {vipMemberships.length > 0 && (
                         <div className="space-y-6">
-                            {(Object.entries(groupedPromoters) as [string, Promoter[]][]).map(([orgId, registrations]) => {
-                                if (orgId === 'club-vip-global') {
-                                    const p = registrations[0];
-                                    return (
-                                        <div key={orgId} className="bg-gradient-to-br from-indigo-900/40 to-purple-900/20 backdrop-blur-lg rounded-[2.5rem] p-8 border border-primary/20 shadow-2xl overflow-hidden relative group">
-                                            <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl group-hover:bg-primary/20 transition-all"></div>
-                                            <div className="flex items-center gap-4 mb-6">
-                                                <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center text-primary shadow-lg border border-primary/20">
-                                                    <SparklesIcon className="w-8 h-8" />
-                                                </div>
-                                                <div className="text-left">
-                                                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">Membro VIP</h2>
-                                                    <p className="text-[9px] text-primary font-black uppercase tracking-[0.3em] mt-2">Status Oficial</p>
-                                                </div>
+                            <div className="flex items-center gap-3 ml-4">
+                                <div className="w-8 h-8 bg-primary/20 rounded-xl flex items-center justify-center">
+                                    <SparklesIcon className="w-4 h-4 text-primary" />
+                                </div>
+                                <h2 className="text-lg font-black text-white uppercase tracking-tight">Meus Ingressos VIP</h2>
+                            </div>
+                            
+                            <div className="grid gap-6">
+                                {vipMemberships.map(m => (
+                                    <div key={m.id} className="bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-8 border border-primary/20 shadow-2xl relative group overflow-hidden">
+                                        <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl group-hover:bg-primary/20 transition-all"></div>
+                                        <div className="flex justify-between items-start mb-6">
+                                            <div className="text-left">
+                                                <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">{m.vipEventName}</h2>
+                                                <p className="text-[9px] text-primary font-black uppercase tracking-[0.3em] mt-2">Confirmado ✅</p>
                                             </div>
-
-                                            {p.emocoesStatus === 'pending' ? (
-                                                <div className="p-5 bg-dark/40 rounded-2xl border border-white/5 text-center">
-                                                    <ClockIcon className="w-6 h-6 text-amber-500 mx-auto mb-2" />
-                                                    <p className="text-white font-bold text-sm">Aguardando Aprovação</p>
-                                                    <p className="text-gray-400 text-[10px] mt-1 uppercase font-bold">Seu pagamento está na fila de verificação.</p>
-                                                </div>
-                                            ) : p.emocoesStatus === 'confirmed' ? (
-                                                <div className="space-y-4">
-                                                    <div className="p-4 bg-green-500/10 rounded-2xl border border-green-500/30 text-center">
-                                                        <CheckCircleIcon className="w-6 h-6 text-green-500 mx-auto mb-2" />
-                                                        <p className="text-green-400 font-black uppercase tracking-widest text-xs">Acesso VIP Ativado!</p>
-                                                    </div>
-                                                    <div className="bg-dark/60 p-4 rounded-2xl border border-white/5 space-y-3">
-                                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest text-center">Seu Ingresso Promocional</p>
-                                                        {p.emocoesBenefitActive ? (
-                                                            <div 
-                                                                onClick={() => handleCopy(p.emocoesBenefitCode || '')}
-                                                                className="p-3 bg-black/40 rounded-xl border border-primary/20 text-center cursor-pointer hover:bg-black/60 transition-colors group/code"
-                                                                title="Clique para copiar"
-                                                            >
-                                                                <p className="text-lg font-black text-primary font-mono group-hover/code:scale-105 transition-transform">{p.emocoesBenefitCode || '---'}</p>
-                                                                <p className="text-[8px] text-gray-400 uppercase mt-1">Clique para copiar</p>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="p-4 bg-amber-900/10 rounded-xl border border-amber-500/20 text-center">
-                                                                <p className="text-amber-400 font-black text-[10px] uppercase">LIBERAÇÃO EM ANDAMENTO</p>
-                                                                <p className="text-gray-500 text-[8px] mt-2 leading-tight uppercase font-bold">
-                                                                    O envio do código é manual e <b>pode levar algumas horas</b> para chegar no seu e-mail.
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ) : null}
+                                            <div className="p-3 bg-primary/10 rounded-xl text-primary"><TicketIcon className="w-6 h-6"/></div>
                                         </div>
-                                    );
-                                }
-
-                                return (
-                                    <div key={orgId} className="space-y-4">
-                                        <div className="flex items-center gap-3 ml-4">
-                                            <div className="w-8 h-8 bg-white/5 rounded-xl flex items-center justify-center">
-                                                <MegaphoneIcon className="w-4 h-4 text-primary" />
+                                        
+                                        <div className="p-4 bg-dark/60 rounded-2xl border border-white/5 space-y-4">
+                                            <div className="text-center">
+                                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Código de Acesso</p>
+                                                <p className="text-2xl font-black text-primary font-mono">{m.benefitCode || '---'}</p>
                                             </div>
-                                            <h2 className="text-lg font-black text-white uppercase tracking-tight">{orgMap[orgId] || 'Outra Organização'}</h2>
-                                        </div>
-                                        <div className="space-y-3">
-                                            {registrations.map(p => (
-                                                <RegistrationItem key={p.id} promoter={p} orgName={orgMap[orgId]} allCampaigns={allCampaigns} />
-                                            ))}
+                                            <button 
+                                                onClick={() => setShowTicketFor(m)}
+                                                className="w-full py-4 bg-primary text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg hover:bg-primary-dark transition-all transform active:scale-95"
+                                            >
+                                                VER MEU INGRESSO DIGITAL
+                                            </button>
                                         </div>
                                     </div>
-                                );
-                            })}
-
-                            {!isOnlyVip && hasAnyApprovedJob && (
-                                <button onClick={() => navigate('/posts')} className="w-full py-5 bg-white text-dark font-black rounded-3xl shadow-xl hover:bg-gray-100 transition-all uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-2">
-                                    ACESSAR MEU PORTAL <ArrowLeftIcon className="w-4 h-4 rotate-180" />
-                                </button>
-                            )}
+                                ))}
+                            </div>
                         </div>
-                    ) : (
+                    )}
+
+                    {/* SEÇÃO EQUIPE */}
+                    {(Object.entries(groupedPromoters) as [string, Promoter[]][]).length > 0 && (
+                        <div className="space-y-6 pt-4 border-t border-white/5">
+                            {(Object.entries(groupedPromoters) as [string, Promoter[]][]).map(([orgId, registrations]) => (
+                                <div key={orgId} className="space-y-4">
+                                    <div className="flex items-center gap-3 ml-4">
+                                        <div className="w-8 h-8 bg-white/5 rounded-xl flex items-center justify-center">
+                                            <MegaphoneIcon className="w-4 h-4 text-primary" />
+                                        </div>
+                                        <h2 className="text-lg font-black text-white uppercase tracking-tight">{orgMap[orgId] || 'Produtora'}</h2>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {registrations.map(p => (
+                                            <RegistrationItem key={p.id} promoter={p} orgName={orgMap[orgId]} allCampaigns={allCampaigns} />
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {!promoters.length && !vipMemberships.length && (
                         <div className="bg-secondary/40 p-10 rounded-[2.5rem] border border-white/5 text-center">
                             <XIcon className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-                            <p className="text-gray-400 font-bold uppercase text-xs tracking-widest">Nenhum cadastro encontrado.</p>
+                            <p className="text-gray-400 font-bold uppercase text-xs tracking-widest">Nenhum registro encontrado.</p>
                             <button onClick={() => navigate('/')} className="mt-6 text-primary font-black uppercase text-[10px] tracking-widest hover:underline">Ir para Início</button>
                         </div>
                     )}
+
+                    {hasAnyApprovedJob && (
+                        <button onClick={() => navigate('/posts')} className="w-full py-5 bg-white text-dark font-black rounded-3xl shadow-xl hover:bg-gray-100 transition-all uppercase text-xs tracking-[0.2em] flex items-center justify-center gap-2">
+                            PORTAL DE TAREFAS <ArrowLeftIcon className="w-4 h-4 rotate-180" />
+                        </button>
+                    )}
                 </div>
+            )}
+
+            {showTicketFor && (
+                <VipTicket 
+                    membership={showTicketFor} 
+                    onClose={() => setShowTicketFor(null)} 
+                />
             )}
         </div>
     );

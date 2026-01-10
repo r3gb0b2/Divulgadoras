@@ -26,7 +26,7 @@ const VipTicket: React.FC<VipTicketProps> = ({ membership, onClose, isExporting 
         }
     }, [membership.benefitCode]);
 
-    // Container com dimensões travadas para garantir 1 página única no PDF
+    // Container com dimensões travadas para garantir 1 página única no PDF ou layout consistente
     const ticketStyle = isExporting 
         ? { width: '400px', height: '700px', margin: '0', display: 'flex', flexDirection: 'column' as const } 
         : { width: '100%', maxWidth: '380px' };
@@ -34,7 +34,7 @@ const VipTicket: React.FC<VipTicketProps> = ({ membership, onClose, isExporting 
     const content = (
         <div 
             id={`ticket-content-${membership.id}`} 
-            className="relative bg-[#000000] border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl flex flex-col"
+            className="relative bg-[#000000] border border-white/10 rounded-[3rem] overflow-hidden shadow-2xl flex flex-col mx-auto"
             style={ticketStyle}
         >
             {/* CABEÇALHO COM LOGO (HERO) */}
@@ -43,12 +43,12 @@ const VipTicket: React.FC<VipTicketProps> = ({ membership, onClose, isExporting 
                 <div className="relative z-10 flex flex-col items-center">
                     
                     {/* Logo Principal com tamanho fixo para estabilidade no PDF */}
-                    <LogoIcon width="220" height="44" className="text-white brightness-150 mb-6" />
+                    <LogoIcon width="200" height="40" className="text-white brightness-150 mb-6" />
 
-                    <h1 className="text-3xl font-black text-white uppercase tracking-tighter leading-none mb-2">
+                    <h1 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight mb-1">
                         {membership.vipEventName}
                     </h1>
-                    <p className="text-primary-light text-[10px] font-black uppercase tracking-[0.3em] opacity-80">Acesso Exclusivo Credenciado</p>
+                    <p className="text-primary text-[10px] font-black uppercase tracking-[0.3em] opacity-80">Acesso Exclusivo Credenciado</p>
                 </div>
             </div>
 
@@ -64,13 +64,13 @@ const VipTicket: React.FC<VipTicketProps> = ({ membership, onClose, isExporting 
                 
                 <div className="space-y-1">
                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-[0.4em]">Proprietário(a)</p>
-                    <h2 className="text-2xl font-black text-white uppercase truncate px-2">{membership.promoterName}</h2>
+                    <h2 className="text-xl font-black text-white uppercase truncate px-2">{membership.promoterName}</h2>
                 </div>
 
                 <div className="flex justify-center my-4">
                     <div className="p-5 bg-white/5 rounded-[2.5rem] border border-white/10 shadow-2xl relative">
                         <div className="absolute -inset-1 bg-gradient-to-r from-primary/30 to-accent/30 rounded-[2.5rem] blur opacity-20"></div>
-                        <div ref={qrRef} className="bg-transparent relative z-10"></div>
+                        <div ref={qrRef} className="bg-transparent relative z-10 mx-auto"></div>
                         <div className="mt-4 pt-3 border-t border-white/5 relative z-10">
                             <p className="text-xs font-mono font-black text-primary tracking-[0.4em]">{membership.benefitCode}</p>
                         </div>
@@ -90,7 +90,7 @@ const VipTicket: React.FC<VipTicketProps> = ({ membership, onClose, isExporting 
                         <p className="text-[8px] font-black text-gray-600 uppercase mb-1 tracking-widest">Onde</p>
                         <div className="flex items-center justify-center gap-1.5 text-gray-300">
                             <MapPinIcon className="w-3 h-3 text-primary flex-shrink-0" />
-                            <span className="text-[10px] font-black uppercase truncate">{membership.eventLocation || 'Marina Park'}</span>
+                            <span className="text-[10px] font-black uppercase truncate">{membership.eventLocation || 'Verificar Local'}</span>
                         </div>
                     </div>
                 </div>
