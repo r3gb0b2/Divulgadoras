@@ -6,22 +6,27 @@ admin.initializeApp();
 const db = admin.firestore();
 
 /**
- * Helper Definitivo para API BabySuri Azure (Padrão Suporte 2024)
- * @param {string} endpoint - O caminho após o /api (ex: 'messages/send')
- * @param {object} payload - O corpo da requisição formatado
- * @param {object} config - Configurações da API (url, token, instanceId)
+ * Helper de Conexão Oficial para BabySuri/Sure (Padrão Postman Documenter)
+ * Resolve problemas de 404 e 400 adaptando o JSON para o modelo Omni-channel.
  */
 const sureFetch = async (endpoint, payload, config) => {
     if (!config || !config.apiUrl || !config.apiToken) {
-        throw new Error("Configuração da API incompleta no banco de dados.");
+        throw new Error("Configuração da API incompleta.");
     }
     
-    // Limpeza da URL: remove barras duplicadas e garante o final limpo
-    const baseUrl = config.apiUrl.trim().replace(/\/+$/, '');
-    const cleanEndpoint = endpoint.replace(/^\/+/, '');
-    const url = `${baseUrl}/${cleanEndpoint}`;
+    // 1. Limpeza rigorosa da URL
+    // Remove qualquer barra no final e qualquer "/api" excedente
+    let baseUrl = config.apiUrl.trim().replace(/\/+$/, '');
+    if (baseUrl.endsWith('/api')) {
+        baseUrl = baseUrl.substring(0, baseUrl.length - 4);
+    }
     
-    console.log(`[SureAPI] Enviando para: ${url}`);
+    // 2. Montagem exata: https://dominio.azurewebsites.net/api/messages/send
+    const cleanEndpoint = endpoint.replace(/^\/+/, '');
+    const url = `${baseUrl}/api/${cleanEndpoint}`;
+    
+    console.log(`[SureAPI] Request URL: ${url}`);
+    console.log(`[SureAPI] Payload:`, JSON.stringify(payload));
     
     try {
         const res = await fetch(url, {
@@ -30,22 +35,22 @@ const sureFetch = async (endpoint, payload, config) => {
                 'Authorization': `Bearer ${config.apiToken}`,
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'User-Agent': 'EquipeCerta-Integration/1.1'
+                'User-Agent': 'EquipeCerta-Integration/1.3'
             },
             body: JSON.stringify(payload)
         });
         
         const responseText = await res.text();
-        console.log(`[SureAPI] Resposta (${res.status}):`, responseText);
+        console.log(`[SureAPI] HTTP ${res.status}:`, responseText);
 
         if (!res.ok) {
-            throw new Error(`Falha na API (${res.status}): ${responseText}`);
+            throw new Error(`Erro API BabySuri (${res.status}): ${responseText}`);
         }
         
         try {
             return JSON.parse(responseText);
         } catch (e) {
-            return { message: responseText };
+            return { raw: responseText };
         }
     } catch (err) {
         console.error(`[SureAPI] Erro Crítico:`, err.message);
@@ -53,13 +58,13 @@ const sureFetch = async (endpoint, payload, config) => {
     }
 };
 
-// --- DISPARO DE CAMPANHA (Refatorado para Novo Padrão) ---
+// --- DISPARO DE CAMPANHA (Padrão Omni-channel) ---
 export const sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { messageTemplate, filters, platform = 'whatsapp' } = data;
     
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
-    if (!config || !config.isActive) throw new Error("Módulo de mensagens desativado.");
+    if (!config || !config.isActive) throw new Error("Módulo desativado.");
 
     const { promoterIds } = filters;
     let successCount = 0;
@@ -74,33 +79,32 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
             const destination = (p.whatsapp || "").replace(/\D/g, '');
             if (!destination) { failureCount++; continue; }
 
-            const personalizedMessage = messageTemplate
+            const text = messageTemplate
                 .replace(/{{name}}/g, p.name.split(' ')[0])
                 .replace(/{{fullName}}/g, p.name)
                 .replace(/{{campaignName}}/g, p.campaignName || 'Evento')
                 .replace(/{{portalLink}}/g, `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`);
 
-            // ESTRUTURA EXATA DO SUPORTE
+            // ESTRUTURA IDENTICA AO POSTMAN ENVIADO
             const payload = {
                 "user": {
                     "name": p.name,
                     "phone": destination,
-                    "email": p.email,
+                    "email": p.email || null,
                     "gender": 0,
-                    "channelId": config.instanceId, // O ID do bot/canal
-                    "channelType": platform === 'instagram' ? 3 : 1, // 1 para Whats, 3 costuma ser Insta
+                    "channelId": config.instanceId, // ID da instância/bot
+                    "channelType": platform === 'instagram' ? 3 : 1, // 1=Whats, 3=Insta
                     "defaultDepartmentId": null
                 },
                 "message": {
-                    "text": personalizedMessage // Enviando como texto livre
-                    // Se você for usar templates futuramente, o campo seria "templateId": "..."
+                    "text": text
                 }
             };
 
             await sureFetch('messages/send', payload, config);
             successCount++;
         } catch (err) {
-            console.error(`Falha no envio para ${pid}:`, err.message);
+            console.error(`Falha em ${pid}:`, err.message);
             failureCount++;
         }
     }
@@ -108,7 +112,7 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
     return { success: successCount > 0, count: successCount, failures: failureCount };
 });
 
-// --- TESTE DE CONEXÃO (Novo Padrão) ---
+// --- TESTE DE CONEXÃO (Padrão Omni-channel) ---
 export const testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
@@ -122,17 +126,17 @@ export const testWhatsAppIntegration = functions.region("southamerica-east1").ht
                 "channelType": 1
             },
             "message": {
-                "text": "Teste de Conexão: Padrão Suporte BabySuri Azure ✅"
+                "text": "Conexão Equipe Certa 2024: Padrão Omni-channel Verificado ✅"
             }
         };
         const res = await sureFetch('messages/send', payload, config);
-        return { success: true, message: "Conexão estabelecida!", data: res };
+        return { success: true, message: "Conectado!", data: res };
     } catch (err) {
         return { success: false, message: err.message };
     }
 });
 
-// --- LEMBRETE INTELIGENTE (Novo Padrão) ---
+// --- LEMBRETE SMART (Padrão Omni-channel) ---
 export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId } = data;
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
@@ -140,8 +144,6 @@ export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").
     const pSnap = await db.collection('promoters').doc(promoterId).get();
     const p = pSnap.data();
     
-    const text = `Oi ${p.name.split(' ')[0]}! Vi aqui que falta o seu print. Envia lá no portal? 📸\nhttps://divulgadoras.vercel.app/#/posts`;
-
     const payload = {
         "user": {
             "name": p.name,
@@ -150,22 +152,22 @@ export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").
             "channelType": 1
         },
         "message": {
-            "text": text
+            "text": `Oi ${p.name.split(' ')[0]}! Passando para lembrar do seu print pendente no portal. 📸`
         }
     };
     return await sureFetch('messages/send', payload, config);
 });
 
-// Webhook para verificação (GET)
+// Webhook para homologação (Necessário para a Sure verificar a URL)
 export const sureWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     if (req.method === 'GET') {
-        const botId = req.query.id || req.query.botId || "ok";
+        const botId = req.query.id || req.query.botId || "verificado";
         return res.status(200).send(botId);
     }
     res.status(200).json({ success: true });
 });
 
-// Placeholders obrigatórios
-export const activateGreenlifeMembership = functions.region("southamerica-east1").https.onCall(async () => { return { success: true }; });
-export const createGreenlifeAsaasPix = functions.region("southamerica-east1").https.onCall(async () => { return { success: true }; });
-export const asaasWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => { res.status(200).send('OK'); });
+// Placeholders mandatórios para evitar erro de exportação
+export const activateGreenlifeMembership = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
+export const createGreenlifeAsaasPix = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
+export const asaasWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => res.status(200).send('OK'));
