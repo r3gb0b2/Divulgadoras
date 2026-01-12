@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { checkPromoterStatus, confirmPromoterGroupEntry } from '../services/promoterService';
-import { getAllVipMemberships, getActiveVipEvents } from '../services/vipService';
+import { getAllVipMemberships, getActiveVipEvents, trackVipTicketAction } from '../services/vipService';
 import { getAllCampaigns } from '../services/settingsService';
 import { Promoter, Campaign, VipMembership, VipEvent } from '../types';
 import { WhatsAppIcon, ArrowLeftIcon, LogoutIcon, CheckCircleIcon, ClockIcon, XIcon, PencilIcon, SearchIcon, AlertTriangleIcon, SparklesIcon, MegaphoneIcon, TicketIcon } from '../components/Icons';
@@ -201,7 +201,7 @@ const StatusCheck: React.FC = () => {
             setPromoters(result);
             
             // Enriquecer as adesões com dados atuais do evento (Local e Hora)
-            const confirmedMemb = allMemb.filter(m => m.promoterEmail === trimmed && m.status === 'confirmed');
+            const confirmedMemb = allMemb.filter(m => m.promoterEmail === trimmed && (m.status === 'confirmed' || m.status === 'refunded'));
             const enrichedMemb = confirmedMemb.map(m => {
                 const ev = allEvents.find(e => e.id === m.vipEventId);
                 return {
@@ -298,28 +298,38 @@ const StatusCheck: React.FC = () => {
                             
                             <div className="grid gap-6">
                                 {vipMemberships.map(m => (
-                                    <div key={m.id} className="bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-8 border border-primary/20 shadow-2xl relative group overflow-hidden">
+                                    <div key={m.id} className={`bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-8 border ${m.status === 'refunded' ? 'border-red-500/30 grayscale' : 'border-primary/20'} shadow-2xl relative group overflow-hidden`}>
                                         <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl group-hover:bg-primary/20 transition-all"></div>
                                         <div className="flex justify-between items-start mb-6">
                                             <div className="text-left">
                                                 <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">{m.vipEventName}</h2>
-                                                <p className="text-[9px] text-primary font-black uppercase tracking-[0.3em] mt-2">Confirmado ✅</p>
+                                                {m.status === 'refunded' ? (
+                                                    <p className="text-[9px] text-red-400 font-black uppercase tracking-[0.3em] mt-2">Estornado / Cancelado ❌</p>
+                                                ) : (
+                                                    <p className="text-[9px] text-primary font-black uppercase tracking-[0.3em] mt-2">Confirmado ✅</p>
+                                                )}
                                             </div>
-                                            <div className="p-3 bg-primary/10 rounded-xl text-primary"><TicketIcon className="w-6 h-6"/></div>
+                                            <div className={`p-3 rounded-xl ${m.status === 'refunded' ? 'bg-red-500/10 text-red-500' : 'bg-primary/10 text-primary'}`}><TicketIcon className="w-6 h-6"/></div>
                                         </div>
                                         
-                                        <div className="p-4 bg-dark/60 rounded-2xl border border-white/5 space-y-4">
-                                            <div className="text-center">
-                                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Código de Acesso</p>
-                                                <p className="text-2xl font-black text-primary font-mono">{m.benefitCode || '---'}</p>
+                                        {m.status !== 'refunded' ? (
+                                            <div className="p-4 bg-dark/60 rounded-2xl border border-white/5 space-y-4">
+                                                <div className="text-center">
+                                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Código de Acesso</p>
+                                                    <p className="text-2xl font-black text-primary font-mono">{m.benefitCode || '---'}</p>
+                                                </div>
+                                                <button 
+                                                    onClick={() => setShowTicketFor(m)}
+                                                    className="w-full py-4 bg-primary text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg hover:bg-primary-dark transition-all transform active:scale-95"
+                                                >
+                                                    VER MEU INGRESSO DIGITAL
+                                                </button>
                                             </div>
-                                            <button 
-                                                onClick={() => setShowTicketFor(m)}
-                                                className="w-full py-4 bg-primary text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg hover:bg-primary-dark transition-all transform active:scale-95"
-                                            >
-                                                VER MEU INGRESSO DIGITAL
-                                            </button>
-                                        </div>
+                                        ) : (
+                                            <div className="p-4 bg-red-900/10 rounded-2xl border border-red-500/20 text-center">
+                                                <p className="text-[10px] text-red-400 font-bold uppercase">Esta adesão foi estornada e o acesso invalidado.</p>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>

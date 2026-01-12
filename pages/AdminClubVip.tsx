@@ -418,8 +418,12 @@ const AdminClubVip: React.FC = () => {
                                                 <p className="text-[11px] text-primary font-mono font-black mt-1">{m.benefitCode || '---'}</p>
                                             </td>
                                             <td className="px-6 py-5 text-center">
-                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>
-                                                    {m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}
+                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${
+                                                    m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 
+                                                    m.status === 'refunded' ? 'bg-red-900/40 text-red-400 border-red-800' :
+                                                    'bg-orange-900/40 text-orange-400 border-orange-800'
+                                                }`}>
+                                                    {m.status === 'confirmed' ? 'PAGO' : m.status === 'refunded' ? 'ESTORNADO' : 'PENDENTE'}
                                                 </span>
                                             </td>
                                             <td className="px-6 py-5 text-right">
@@ -438,14 +442,16 @@ const AdminClubVip: React.FC = () => {
                                                     )}
                                                     {m.status === 'pending' ? (
                                                         <button onClick={() => handleManualActivateOrSwap(m)} disabled={isBulkProcessing} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-indigo-500">ATIVAR</button>
-                                                    ) : (
+                                                    ) : m.status !== 'refunded' && (
                                                         <button onClick={() => handleManualActivateOrSwap(m, true)} disabled={isBulkProcessing} className="p-2 bg-blue-900/30 text-blue-400 rounded-xl border border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all" title="Trocar / Renovar Código">
                                                             <RefreshIcon className={`w-4 h-4 ${isBulkProcessing && isProcessingId === m.id ? 'animate-spin' : ''}`} />
                                                         </button>
                                                     )}
-                                                    <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30" title="Estornar e Invalidar">
-                                                        <UndoIcon className="w-4 h-4" />
-                                                    </button>
+                                                    {m.status !== 'refunded' && (
+                                                        <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30" title="Estornar e Invalidar">
+                                                            <UndoIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -580,7 +586,7 @@ const AdminClubVip: React.FC = () => {
             )}
 
             {isCodesModalOpen && eventForCodes && (
-                <ManageCodesModal isOpen={isCodesModalOpen} onClose={() => setIsCodesModalOpen(false)} event={eventForCodes} onSaved={fetchData} onDownloadStock={handleDownloadEventStock} />
+                <ManageCodesModal isOpen={isCodesModalOpen} onClose={() => setIsCodesModalOpen(false)} event={eventForCodes} onSaved={fetchData} />
             )}
 
             {isTransferModalOpen && membershipToTransfer && (

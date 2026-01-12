@@ -112,7 +112,7 @@ const PostCard: React.FC<{
                 const diff = expireTime.getTime() - now.getTime();
                 const h = Math.floor(diff / 3600000);
                 const m = Math.floor((diff / 60000) % 60);
-                setTimeLeftForProof(`Envio Liberado! Expira em: ${h}h ${m}m`);
+                setTimeLeftForProof(`Envio Liberado! Em: ${h}h ${m}m`);
                 setIsProofButtonEnabled(true);
                 setCountdownColor('text-green-400 font-black');
             }
@@ -310,7 +310,7 @@ const PostCheck: React.FC = () => {
             setAssignments(fetchedAssignments.map(a => ({ ...a, promoterHasJoinedGroup: activePromoter.hasJoinedGroup || false })));
             
             // Enriquecer adesões com local e hora do evento
-            const userVips = vips.filter(m => m.promoterEmail === searchEmail.toLowerCase().trim() && m.status === 'confirmed');
+            const userVips = vips.filter(m => m.promoterEmail === searchEmail.toLowerCase().trim() && (m.status === 'confirmed' || m.status === 'refunded'));
             const enrichedVips = userVips.map(m => {
                 const ev = allEvents.find(e => e.id === m.vipEventId);
                 return {
@@ -376,7 +376,7 @@ const PostCheck: React.FC = () => {
                 <button onClick={() => setActiveTab('pending')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-primary text-white shadow-lg' : 'text-gray-500'}`}>Pendentes ({pending.length})</button>
                 <button onClick={() => setActiveTab('history')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap ${activeTab === 'history' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Histórico</button>
                 <button onClick={() => setActiveTab('vip')} className={`flex-1 py-3 px-4 text-[10px] font-black uppercase rounded-xl transition-all whitespace-nowrap flex items-center justify-center gap-2 ${activeTab === 'vip' ? 'bg-indigo-600 text-white shadow-lg' : 'text-gray-400'}`}>
-                    <SparklesIcon className="w-3 h-3" /> Clube VIP ({vipMemberships.length})
+                    <SparklesIcon className="w-3 h-3" /> Clube VIP ({vipMemberships.filter(m => m.status !== 'refunded').length})
                 </button>
             </div>
 
@@ -427,30 +427,40 @@ const PostCheck: React.FC = () => {
                     ) : (
                         <div className="grid gap-6">
                             {vipMemberships.map(m => (
-                                <div key={m.id} className="bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-8 border border-indigo-500/20 shadow-2xl relative overflow-hidden group">
+                                <div key={m.id} className={`bg-secondary/60 backdrop-blur-lg rounded-[2.5rem] p-8 border ${m.status === 'refunded' ? 'border-red-500/30 grayscale' : 'border-indigo-500/20'} shadow-2xl relative overflow-hidden group`}>
                                     <div className="flex justify-between items-start mb-6">
                                         <div className="text-left">
                                             <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-none">{m.vipEventName}</h2>
-                                            <p className="text-[9px] text-indigo-400 font-black uppercase tracking-[0.3em] mt-2">Membro Clube VIP ✅</p>
+                                            {m.status === 'refunded' ? (
+                                                <p className="text-[9px] text-red-400 font-black uppercase tracking-[0.3em] mt-2">Estornado ❌</p>
+                                            ) : (
+                                                <p className="text-[9px] text-indigo-400 font-black uppercase tracking-[0.3em] mt-2">Membro Clube VIP ✅</p>
+                                            )}
                                         </div>
-                                        <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400"><TicketIcon className="w-6 h-6"/></div>
+                                        <div className={`p-3 rounded-xl ${m.status === 'refunded' ? 'bg-red-500/10 text-red-500' : 'bg-indigo-500/10 text-indigo-400'}`}><TicketIcon className="w-6 h-6"/></div>
                                     </div>
                                     
-                                    <div className="p-4 bg-dark/60 rounded-2xl border border-white/5 space-y-4">
-                                        <div className="text-center">
-                                            <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Código de Acesso</p>
-                                            <p className="text-2xl font-black text-indigo-400 font-mono">{m.benefitCode || '---'}</p>
+                                    {m.status !== 'refunded' ? (
+                                        <div className="p-4 bg-dark/60 rounded-2xl border border-white/5 space-y-4">
+                                            <div className="text-center">
+                                                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Código de Acesso</p>
+                                                <p className="text-2xl font-black text-indigo-400 font-mono">{m.benefitCode || '---'}</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => {
+                                                    setShowTicketFor(m);
+                                                    trackVipTicketAction(m.id, 'view').catch(() => {});
+                                                }}
+                                                className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-500 transition-all transform active:scale-95"
+                                            >
+                                                VER MEU INGRESSO DIGITAL
+                                            </button>
                                         </div>
-                                        <button 
-                                            onClick={() => {
-                                                setShowTicketFor(m);
-                                                trackVipTicketAction(m.id, 'view').catch(() => {});
-                                            }}
-                                            className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl text-[10px] uppercase tracking-widest shadow-lg hover:bg-indigo-500 transition-all transform active:scale-95"
-                                        >
-                                            VER MEU INGRESSO DIGITAL
-                                        </button>
-                                    </div>
+                                    ) : (
+                                        <div className="p-4 bg-red-900/10 rounded-2xl border border-red-500/20 text-center">
+                                            <p className="text-[10px] text-red-400 font-bold uppercase">Este acesso foi cancelado e estornado.</p>
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>
