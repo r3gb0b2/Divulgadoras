@@ -12,24 +12,28 @@ const sureFetch = async (endpoint, method, body, config) => {
         throw new Error("Configuração da API Sure incompleta no painel administrativo.");
     }
     
-    // 1. Normalização da URL Base (Remove barra final)
+    // 1. Normalização da URL Base (Remove barra final e espaços)
     let baseUrl = config.apiUrl.trim().replace(/\/$/, '');
+    const instanceId = config.instanceId ? config.instanceId.trim() : '';
     
-    // 2. Normalização do Endpoint (Garante barra inicial e remove /api se a base já tiver)
-    let cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    // 2. Construção do Caminho
+    // Servidores Babysuri/Azure geralmente esperam: {base}/api/{instancia}/message/sendText
+    // Se a base já termina com /api, não repetimos.
     
-    // Se a baseUrl termina com /api e o endpoint começa com /api, remove do endpoint para não duplicar
-    if (baseUrl.toLowerCase().endsWith('/api') && cleanEndpoint.toLowerCase().startsWith('/api/')) {
-        cleanEndpoint = cleanEndpoint.substring(4); 
-    } 
-    // Se nenhum tem /api, adiciona ao endpoint (padrão Sure)
-    else if (!baseUrl.toLowerCase().endsWith('/api') && !cleanEndpoint.toLowerCase().startsWith('/api/')) {
-        cleanEndpoint = `/api${cleanEndpoint}`;
+    let path = "";
+    const cleanEndpoint = endpoint.replace(/^\//, ''); // Remove barra inicial do endpoint para controlar manualmente
+    
+    if (baseUrl.toLowerCase().endsWith('/api')) {
+        // Se a URL já tem /api, adicionamos a instância e o comando
+        path = instanceId ? `/${instanceId}/${cleanEndpoint}` : `/${cleanEndpoint}`;
+    } else {
+        // Se não tem /api, adicionamos
+        path = instanceId ? `/api/${instanceId}/${cleanEndpoint}` : `/api/${cleanEndpoint}`;
     }
     
-    const url = `${baseUrl}${cleanEndpoint}`;
+    const url = `${baseUrl}${path}`;
     
-    console.log(`[SureAPI] Tentando: ${method} ${url} | Instance: ${config.instanceId}`);
+    console.log(`[SureAPI] Tentando: ${method} ${url}`);
     
     try {
         const res = await fetch(url, {
@@ -57,7 +61,7 @@ const sureFetch = async (endpoint, method, body, config) => {
             console.error(`[SureAPI] Erro ${res.status} na URL ${url}:`, responseText);
             
             if (res.status === 404) {
-                throw new Error(`Endpoint não encontrado (404). A URL gerada foi: ${url}. A API Sure geralmente espera /api/message/sendText (no singular). Verifique se o endereço no painel está correto.`);
+                throw new Error(`Endpoint não encontrado (404). A URL tentada foi: ${url}. Verifique se o ID da Instância (${instanceId}) está correto no painel de Ajustes.`);
             }
             
             throw new Error(responseData.message || responseData.error || `Erro HTTP ${res.status}`);
@@ -65,7 +69,7 @@ const sureFetch = async (endpoint, method, body, config) => {
         
         return responseData;
     } catch (err) {
-        console.error(`[SureAPI] Erro crítico na chamada fetch:`, err.message);
+        console.error(`[SureAPI] Erro crítico:`, err.message);
         throw err;
     }
 };
@@ -136,8 +140,8 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
                 type: 'text'
             };
 
-            // CORREÇÃO: Usando /message/ (singular) em vez de /messages/ (plural)
-            await sureFetch('/api/message/sendText', 'POST', payload, config);
+            // O sureFetch agora cuida da montagem correta da URL incluindo a instância
+            await sureFetch('message/sendText', 'POST', payload, config);
             successCount++;
         } catch (err) {
             console.error(`[Campaign] Falha no envio para ${pid}:`, err.message);
@@ -176,7 +180,6 @@ const assignCodeGeneric = async (membershipId, membershipCollection, eventsColle
 };
 
 export const createGreenlifeAsaasPix = functions.region("southamerica-east1").https.onCall(async (data) => {
-    // Implementação mock para brevidade
     return { success: true }; 
 });
 
@@ -219,9 +222,8 @@ export const testWhatsAppIntegration = functions.region("southamerica-east1").ht
             type: 'text'
         };
         
-        // CORREÇÃO: Usando /message/ (singular)
-        const res = await sureFetch('/api/message/sendText', 'POST', payload, config);
-        return { success: true, message: "Conexão com a API Sure estabelecida com sucesso!", data: res };
+        const res = await sureFetch('message/sendText', 'POST', payload, config);
+        return { success: true, message: "Conexão estabelecida!", data: res };
     } catch (err) {
         return { success: false, message: err.message };
     }
@@ -258,5 +260,5 @@ export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").
         type: 'text'
     };
 
-    return await sureFetch('/api/message/sendText', 'POST', payload, config);
+    return await sureFetch('message/sendText', 'POST', payload, config);
 });
