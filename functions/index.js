@@ -7,69 +7,36 @@ import { ASAAS_CONFIG } from './credentials.js';
 admin.initializeApp();
 const db = admin.firestore();
 
+// Define a URL base baseada no ambiente configurado em credentials.js
 const ASAAS_URL = ASAAS_CONFIG.env === 'production' 
     ? 'https://www.asaas.com/api/v3' 
     : 'https://sandbox.asaas.com/api/v3';
 
 /**
- * Função de Diagnóstico de Segredos (Super Admin)
- */
-export const checkBackendStatus = functions
-    .region("southamerica-east1")
-    .runWith({ secrets: ["API_KEY", "ASAAS_API_KEY"] }) // Habilita acesso aos segredos
-    .https.onCall(async (data, context) => {
-        return {
-            geminiKeyConfigured: !!process.env.API_KEY,
-            asaasKeyConfigured: !!process.env.ASAAS_API_KEY,
-            timestamp: new Date().toISOString()
-        };
-    });
-
-/**
- * Função de Inteligência Artificial (Gemini)
- */
-export const askGemini = functions
-    .region("southamerica-east1")
-    .runWith({ secrets: ["API_KEY"] }) // Habilita acesso ao segredo
-    .https.onCall(async (data, context) => {
-        const { prompt } = data;
-        if (!prompt) throw new functions.https.HttpsError('invalid-argument', 'O prompt é obrigatório.');
-
-        const apiKey = process.env.API_KEY;
-        if (!apiKey) {
-            throw new functions.https.HttpsError('failed-precondition', 'Chave API_KEY não vinculada à função.');
-        }
-
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: prompt,
-            });
-
-            return { text: response.text };
-        } catch (err) {
-            console.error("Gemini Failure:", err.message);
-            throw new functions.https.HttpsError('internal', `Erro na IA: ${err.message}`);
-        }
-    });
-
-/**
- * Gera Cobrança Pix para Club VIP (Asaas)
+ * Função principal para criar cobrança Pix no Asaas
+ * O segredo ASAAS_API_KEY deve ser injetado via runWith
  */
 export const createVipAsaasPix = functions
     .region("southamerica-east1")
-    .runWith({ secrets: ["ASAAS_API_KEY"] }) // Habilita acesso ao segredo
+    .runWith({ 
+        secrets: ["ASAAS_API_KEY"], // CRÍTICO: Sem isso o process.env.ASAAS_API_KEY fica vazio no servidor
+        timeoutSeconds: 30,
+        memory: "256MB"
+    })
     .https.onCall(async (data, context) => {
         const { vipEventId, vipEventName, promoterId, email, name, whatsapp, taxId, amount } = data;
         const membershipId = `${promoterId}_${vipEventId}`;
+        
+        // Recupera a chave do segredo configurado no Firebase
         const asaasKey = process.env.ASAAS_API_KEY;
 
         if (!asaasKey) {
-            throw new functions.https.HttpsError('failed-precondition', 'Chave ASAAS_API_KEY não vinculada.');
+            console.error("ERRO DE CONFIGURAÇÃO: ASAAS_API_KEY não encontrada nos segredos do Firebase.");
+            throw new functions.https.HttpsError('failed-precondition', 'O servidor de pagamentos não está configurado corretamente.');
         }
 
         try {
+            // Helper para requisições fetch ao Asaas
             const asaasFetch = async (endpoint, method = 'GET', body = null) => {
                 const options = {
                     method,
@@ -80,37 +47,52 @@ export const createVipAsaasPix = functions
                     }
                 };
                 if (body) options.body = JSON.stringify(body);
-                const res = await fetch(`${ASAAS_URL}/${endpoint}`, options);
-                const result = await res.json();
-                if (!res.ok) throw new Error(result.errors?.[0]?.description || "Erro Asaas");
+                
+                const response = await fetch(`${ASAAS_URL}/${endpoint}`, options);
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    console.error("Erro na API do Asaas:", result);
+                    throw new Error(result.errors?.[0]?.description || "Erro na comunicação com Asaas");
+                }
                 return result;
             };
 
+            // 1. Criar ou atualizar o Cliente no Asaas
+            console.log(`[Asaas] Criando/Buscando cliente: ${email}`);
             const customerRes = await asaasFetch('customers', 'POST', {
                 name: name.trim(),
                 email: email.toLowerCase().trim(),
                 mobilePhone: whatsapp.replace(/\D/g, ''),
-                cpfCnpj: taxId.replace(/\D/g, '')
+                cpfCnpj: taxId.replace(/\D/g, ''),
+                notificationDisabled: true
             });
 
+            // 2. Gerar a cobrança Pix
+            console.log(`[Asaas] Gerando cobrança para cliente: ${customerRes.id}`);
             const paymentRes = await asaasFetch('payments', 'POST', {
                 customer: customerRes.id,
                 billingType: 'PIX',
                 value: amount,
                 dueDate: new Date().toISOString().split('T')[0],
                 description: `Adesão VIP: ${vipEventName}`,
-                externalReference: membershipId 
+                externalReference: membershipId // ID para rastreio no Webhook
             });
 
+            // 3. Obter o payload do QR Code
+            console.log(`[Asaas] Solicitando QR Code Pix: ${paymentRes.id}`);
             const qrCodeRes = await asaasFetch(`payments/${paymentRes.id}/pixQrCode`, 'GET');
 
+            // 4. Registrar a intenção de adesão no Firestore
             const docData = {
                 id: membershipId,
                 vipEventId: vipEventId || "",
-                vipEventName: vipEventName || "Evento",
+                vipEventName: vipEventName || "Evento VIP",
                 promoterId: promoterId || "",
                 promoterName: name || "",
                 promoterEmail: email.toLowerCase().trim(),
+                promoterWhatsapp: whatsapp,
+                promoterTaxId: taxId,
                 status: 'pending',
                 paymentId: paymentRes.id,
                 amount: amount || 0,
@@ -123,49 +105,50 @@ export const createVipAsaasPix = functions
 
             return { 
                 success: true, 
-                payload: qrCodeRes.payload, 
-                encodedImage: qrCodeRes.encodedImage,
+                payload: qrCodeRes.payload, // Texto do Copia e Cola
+                encodedImage: qrCodeRes.encodedImage, // Imagem em base64
                 paymentId: paymentRes.id 
             };
+
         } catch (err) {
-            console.error("Erro createVipAsaasPix:", err.message);
+            console.error("Falha no processo Asaas VIP:", err.message);
             throw new functions.https.HttpsError('internal', err.message);
         }
     });
 
 /**
- * Webhook do Asaas
+ * Webhook para processamento de pagamentos confirmados
  */
 export const asaasWebhook = functions
     .region("southamerica-east1")
     .runWith({ secrets: ["ASAAS_API_KEY"] })
     .https.onRequest(async (req, res) => {
         const event = req.body;
+        
+        // Só processamos recebimentos de pagamento
         if (event.event !== 'PAYMENT_RECEIVED' && event.event !== 'PAYMENT_CONFIRMED') {
             return res.status(200).send('Ignored');
         }
 
         const payment = event.payment;
         const membershipId = payment.externalReference;
-        if (!membershipId) return res.status(200).send('No reference');
+        
+        if (!membershipId) {
+            console.warn("[Webhook] Pagamento recebido sem referência externa.");
+            return res.status(200).send('No reference');
+        }
 
         try {
-            let collectionName = 'vipMemberships';
-            let membRef = db.collection(collectionName).doc(membershipId);
-            let membSnap = await membRef.get();
+            const membRef = db.collection('vipMemberships').doc(membershipId);
+            const membSnap = await membRef.get();
 
-            if (!membSnap.exists) {
-                collectionName = 'greenlifeMemberships';
-                membRef = db.collection(collectionName).doc(membershipId);
-                membSnap = await membRef.get();
-            }
-
-            if (!membSnap.exists) return res.status(404).send('Not found');
+            if (!membSnap.exists) return res.status(404).send('Membership not found');
+            
             const membData = membSnap.data();
-            if (membData.status === 'confirmed') return res.status(200).send('Processed');
+            if (membData.status === 'confirmed') return res.status(200).send('Already processed');
 
-            const eventCollection = collectionName === 'vipMemberships' ? 'vipEvents' : 'greenlifeEvents';
-            const codesRef = db.collection(eventCollection).doc(membData.vipEventId).collection('availableCodes');
+            // Lógica de atribuição de código VIP (estoque)
+            const codesRef = db.collection('vipEvents').doc(membData.vipEventId).collection('availableCodes');
             const availableCodeSnap = await codesRef.where('used', '==', false).limit(1).get();
 
             let assignedCode = "AGUARDANDO_ESTOQUE";
@@ -182,6 +165,7 @@ export const asaasWebhook = functions
                 });
             }
 
+            // Atualiza a adesão como confirmada
             await membRef.update({
                 status: 'confirmed',
                 benefitCode: assignedCode,
@@ -191,12 +175,14 @@ export const asaasWebhook = functions
 
             return res.status(200).send('OK');
         } catch (err) {
-            console.error("Webhook Error:", err.message);
+            console.error("[Webhook Error]:", err.message);
             return res.status(500).send(err.message);
         }
     });
 
-// Stubs
+// Funções Stubs para manter compatibilidade
+export const askGemini = functions.region("southamerica-east1").https.onCall(async () => ({ text: "Gemini is paused." }));
+export const checkBackendStatus = functions.region("southamerica-east1").runWith({ secrets: ["ASAAS_API_KEY"] }).https.onCall(async () => ({ asaasKeyPresent: !!process.env.ASAAS_API_KEY }));
 export const createGreenlifeAsaasPix = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
