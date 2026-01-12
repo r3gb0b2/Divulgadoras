@@ -12,8 +12,7 @@ const AdminWhatsAppSettings: React.FC = () => {
         apiUrl: '',
         apiToken: '',
         instanceId: '',
-        templateName: '',
-        templateLang: 'pt_BR', // Novo campo para idioma do template
+        templateName: '', // Campo para o nome do template aprovado na Meta
         isActive: false
     });
     const [success, setSuccess] = useState(false);
@@ -31,7 +30,6 @@ const AdminWhatsAppSettings: React.FC = () => {
                         apiToken: data?.apiToken || '',
                         instanceId: data?.instanceId || '',
                         templateName: data?.templateName || '',
-                        templateLang: data?.templateLang || 'pt_BR',
                         isActive: data?.isActive || false
                     });
                 }
@@ -77,7 +75,7 @@ const AdminWhatsAppSettings: React.FC = () => {
                     </div>
                     <div>
                         <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Configuração API</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Integração Omni-channel (BabySuri/Sure)</p>
+                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Integração Oficial Meta (via Middleware)</p>
                     </div>
                 </div>
                 <button onClick={() => navigate(-1)} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
@@ -103,11 +101,11 @@ const AdminWhatsAppSettings: React.FC = () => {
                         <form onSubmit={handleSave} className="space-y-6">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-2">
-                                    <LinkIcon className="w-3 h-3" /> URL da Instância (Middleware Azure)
+                                    <LinkIcon className="w-3 h-3" /> URL da API
                                 </label>
                                 <input 
                                     type="url" 
-                                    placeholder="https://wap-..."
+                                    placeholder="https://sua-api.azurewebsites.net"
                                     value={config.apiUrl}
                                     onChange={e => setConfig({...config, apiUrl: e.target.value})}
                                     className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-primary transition-all shadow-inner"
@@ -118,7 +116,7 @@ const AdminWhatsAppSettings: React.FC = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-2">
-                                        <KeyIcon className="w-3 h-3" /> Token de Autorização (Bearer)
+                                        <KeyIcon className="w-3 h-3" /> Token Bearer
                                     </label>
                                     <input 
                                         type="password" 
@@ -129,40 +127,30 @@ const AdminWhatsAppSettings: React.FC = () => {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">ID do Canal (Channel ID)</label>
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">ID do Canal (Instância)</label>
                                     <input 
                                         type="text" 
-                                        placeholder="Ex: cb129855986"
+                                        placeholder="Ex: cb12345"
                                         value={config.instanceId}
                                         onChange={e => setConfig({...config, instanceId: e.target.value})}
                                         className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-primary transition-all"
+                                        required
                                     />
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-primary uppercase ml-1">Nome do Template (Meta)</label>
-                                    <input 
-                                        type="text" 
-                                        placeholder="Ex: convocacao_equipe"
-                                        value={config.templateName}
-                                        onChange={e => setConfig({...config, templateName: e.target.value})}
-                                        className="w-full bg-dark border border-primary/30 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-primary transition-all shadow-inner"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Idioma do Template</label>
-                                    <select 
-                                        value={config.templateLang}
-                                        onChange={e => setConfig({...config, templateLang: e.target.value})}
-                                        className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-primary transition-all"
-                                    >
-                                        <option value="pt_BR">Português (Brasil)</option>
-                                        <option value="en_US">Inglês</option>
-                                        <option value="es_ES">Espanhol</option>
-                                    </select>
-                                </div>
+                            <div className="space-y-2 pt-2">
+                                <label className="text-[10px] font-black text-primary uppercase ml-1 flex items-center gap-2">
+                                    <CogIcon className="w-3 h-3" /> Nome do Template (Opcional)
+                                </label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Ex: notificacao_equipe"
+                                    value={config.templateName}
+                                    onChange={e => setConfig({...config, templateName: e.target.value})}
+                                    className="w-full bg-dark border border-primary/30 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-primary transition-all shadow-inner"
+                                />
+                                <p className="text-[9px] text-gray-500 uppercase font-black ml-1">Preencha se estiver usando API Oficial para evitar erro 400 (Channel not found).</p>
                             </div>
 
                             <div className="pt-4 border-t border-white/5">
@@ -174,7 +162,7 @@ const AdminWhatsAppSettings: React.FC = () => {
                                         className="w-6 h-6 rounded-lg bg-dark border-gray-700 text-primary focus:ring-0" 
                                     />
                                     <div className="flex flex-col">
-                                        <span className="text-xs font-black text-white uppercase tracking-tight group-hover:text-primary transition-colors">API Ativa para Automações</span>
+                                        <span className="text-xs font-black text-white uppercase tracking-tight group-hover:text-primary transition-colors">API Ativa</span>
                                     </div>
                                 </label>
                             </div>
@@ -193,14 +181,10 @@ const AdminWhatsAppSettings: React.FC = () => {
 
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-dark/40 p-6 rounded-[2rem] border border-white/5 shadow-xl">
-                        <h3 className="text-xs font-black text-primary uppercase tracking-widest mb-4">Manual Técnico</h3>
-                        <div className="space-y-4">
-                            <div className="p-4 bg-gray-800/50 rounded-2xl border border-white/5">
-                                <p className="text-[10px] text-gray-400 leading-relaxed">
-                                    A API Sure (BabySuri) permite envio de <strong>mensagens dinâmicas</strong>. O sistema agora suporta envio nativo de arquivos de mídia (imagem/vídeo) sem necessidade de que a divulgadora clique em links externos.
-                                </p>
-                            </div>
-                        </div>
+                        <h3 className="text-xs font-black text-primary uppercase tracking-widest mb-4">Nota Técnica</h3>
+                        <p className="text-[10px] text-gray-400 leading-relaxed">
+                            O erro <strong>"Channel not found"</strong> ocorre quando a API não reconhece a combinação de ID de Instância e Payload. Em APIs Oficiais Cloud, é obrigatório enviar o nome de um template pré-aprovado pela Meta.
+                        </p>
                     </div>
                     {success && (
                         <div className="bg-green-600 text-white p-4 rounded-2xl font-black text-[10px] uppercase text-center shadow-lg animate-fadeIn">

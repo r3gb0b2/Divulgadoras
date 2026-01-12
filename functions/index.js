@@ -35,6 +35,8 @@ const sureFetch = async (endpoint, payload, config) => {
         });
         
         const responseText = await res.text();
+        console.log(`[SureAPI] Resposta HTTP ${res.status}:`, responseText);
+
         if (!res.ok) {
             throw new Error(`Erro API BabySuri (${res.status}): ${responseText}`);
         }
@@ -45,30 +47,47 @@ const sureFetch = async (endpoint, payload, config) => {
             return { raw: responseText };
         }
     } catch (err) {
-        console.error(`[SureAPI] Falha crítica:`, err.message);
+        console.error(`[SureAPI] Falha:`, err.message);
         throw err;
     }
 };
 
 /**
- * Construtor de objeto de mensagem avançado conforme documentação
+ * Constrói o objeto de mensagem respeitando se é Template ou Texto Puro
  */
-const buildComplexMessage = (text, mediaUrl, type = 'text') => {
-    // Se for texto simples
-    if (!mediaUrl) return { text };
-
-    // Se for imagem ou vídeo (Enviando via URL conforme documentação Postman)
-    const mediaType = type === 'video' ? 'video' : 'image';
+const buildMessagePayload = (text, config, promoterName = "Divulgadora") => {
+    // Se houver um nome de template configurado, enviamos no formato oficial da Meta
+    if (config.templateName && config.templateName.trim() !== "") {
+        return {
+            "template": {
+                "name": config.templateName.trim(),
+                "language": {
+                    "code": "pt_BR"
+                },
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {
+                                "type": "text",
+                                "text": promoterName.split(' ')[0]
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+    }
+    
+    // Fallback para texto puro (APIs não-oficiais ou janelas abertas)
     return {
-        "type": mediaType,
-        "url": mediaUrl,
-        "caption": text // A API permite legenda em imagens/vídeos
+        "text": text
     };
 };
 
 // --- DISPARO DE CAMPANHA ---
 export const sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { messageTemplate, filters, platform = 'whatsapp', mediaUrl, mediaType } = data;
+    const { messageTemplate, filters, platform = 'whatsapp' } = data;
     
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
@@ -102,50 +121,44 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
                 "user": {
                     "name": p.name,
                     "phone": platform === 'whatsapp' ? destination : p.instagram,
-                    "email": p.email || null,
                     "channelId": channelId, 
                     "channelType": channelType
                 },
-                "message": buildComplexMessage(text, mediaUrl, mediaType)
+                "message": buildMessagePayload(text, config, p.name)
             };
 
             await sureFetch('messages/send', payload, config);
             successCount++;
         } catch (err) {
-            console.error(`Falha no envio para ${pid}:`, err.message);
+            console.error(`Erro no envio individual (${pid}):`, err.message);
             failureCount++;
         }
     }
 
-    return { 
-        success: successCount > 0, 
-        count: successCount, 
-        failures: failureCount, 
-        message: `Campanha processada: ${successCount} enviadas, ${failureCount} falhas.` 
-    };
+    return { success: successCount > 0, count: successCount, failures: failureCount };
 });
 
 // --- TESTE DE CONEXÃO ---
 export const testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
+    if (!config) throw new Error("Configuração não encontrada.");
+    
     const channelId = String(config.instanceId).trim();
     
     try {
         const payload = {
             "channelId": channelId,
             "user": {
-                "name": "Teste Equipe Certa",
+                "name": "Teste Sistema",
                 "phone": "5585982280780",
                 "channelId": channelId,
                 "channelType": 1
             },
-            "message": {
-                "text": "✅ Integração Equipe Certa x BabySuri: Conexão Estabelecida com Sucesso!"
-            }
+            "message": buildMessagePayload("Teste de Conexão Equipe Certa ✅", config, "Admin")
         };
         const res = await sureFetch('messages/send', payload, config);
-        return { success: true, message: "API Conectada!", data: res };
+        return { success: true, message: "Conectado!", data: res };
     } catch (err) {
         return { success: false, message: err.message };
     }
@@ -153,16 +166,15 @@ export const testWhatsAppIntegration = functions.region("southamerica-east1").ht
 
 // --- LEMBRETE SMART ---
 export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { promoterId, organizationId } = data;
-    
+    const { promoterId } = data;
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
-    if (!config || !config.isActive) return { success: false, message: "API Offline" };
-
     const pSnap = await db.collection('promoters').doc(promoterId).get();
     const p = pSnap.data();
     const channelId = String(config.instanceId).trim();
     
+    const text = `Oi ${p.name.split(' ')[0]}! Notamos que seu print ainda não foi enviado. Acesse o portal para regularizar.`;
+
     const payload = {
         "channelId": channelId,
         "user": {
@@ -171,9 +183,7 @@ export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").
             "channelId": channelId,
             "channelType": 1
         },
-        "message": {
-            "text": `Oi ${p.name.split(' ')[0]}! Aqui é da produção. 📸 Notamos que você ainda não enviou o print da última postagem. Acesse o portal para regularizar sua presença: https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`
-        }
+        "message": buildMessagePayload(text, config, p.name)
     };
     return await sureFetch('messages/send', payload, config);
 });
@@ -183,7 +193,6 @@ export const sureWebhook = functions.region("southamerica-east1").https.onReques
         const botId = req.query.id || req.query.botId || "verificado";
         return res.status(200).send(botId);
     }
-    // Lógica para processar status de entrega (Entregue/Lido) pode ser adicionada aqui
     res.status(200).json({ success: true });
 });
 
