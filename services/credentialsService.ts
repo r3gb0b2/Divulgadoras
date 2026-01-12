@@ -13,6 +13,15 @@ export const getStripePublishableKey = async (): Promise<string> => {
     }
 };
 
+export const checkBackendSecrets = async (): Promise<{ geminiKeyConfigured: boolean, asaasKeyConfigured: boolean }> => {
+    try {
+        const func = functions.httpsCallable('checkBackendStatus');
+        const result = await func();
+        return result.data as any;
+    } catch (e) {
+        return { geminiKeyConfigured: false, asaasKeyConfigured: false };
+    }
+};
 
 export const createStripeCheckoutSession = async (orgId: string, planId: string): Promise<{ sessionId: string }> => {
     try {
@@ -33,15 +42,7 @@ export const getStripeStatus = async (): Promise<any> => {
         return result.data;
     } catch (error: any) {
         console.error("Error getting Stripe status:", error);
-        let detailMessage = "Verifique os logs da função no Firebase para mais detalhes.";
-        if (error.code === 'unavailable') {
-            detailMessage = "O serviço está temporariamente indisponível. A função pode não ter sido implantada corretamente ou está com erro de inicialização.";
-        } else if (error.code === 'not-found') {
-            detailMessage = "A função 'getStripeStatus' não foi encontrada no servidor. Verifique se o deploy foi concluído com sucesso.";
-        } else if (error.message) {
-            detailMessage = `Detalhes: ${error.message}`;
-        }
-        throw new Error(`Não foi possível verificar o status da integração com Stripe. ${detailMessage}`);
+        throw new Error(`Não foi possível verificar o status da integração.`);
     }
 };
 
@@ -52,13 +53,10 @@ export const getEnvironmentConfig = async (): Promise<any> => {
         return result.data;
     } catch (error: any) {
         console.error("Error getting environment config:", error);
-        throw new Error(`Não foi possível buscar a configuração do servidor. Detalhes: ${error.message}`);
+        throw new Error(`Não foi possível buscar a configuração do servidor.`);
     }
 };
 
-/**
- * Recupera as credenciais da API Sure salva no Firestore.
- */
 export const getWhatsAppConfig = async () => {
     try {
         const doc = await firestore.collection('systemConfig').doc('whatsapp').get();

@@ -1,8 +1,9 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+import { checkBackendSecrets } from '../services/credentialsService';
 import { 
     UsersIcon, 
     BuildingOfficeIcon, 
@@ -17,7 +18,8 @@ import {
     ClipboardDocumentListIcon,
     TicketIcon,
     ChartBarIcon,
-    CogIcon
+    CogIcon,
+    ShieldCheckIcon
 } from '../components/Icons';
 
 const SuperAdminDashboard: React.FC = () => {
@@ -26,6 +28,16 @@ const SuperAdminDashboard: React.FC = () => {
     
     const [isTestingEmail, setIsTestingEmail] = useState(false);
     const [emailResult, setEmailResult] = useState<any>(null);
+
+    const [secretsStatus, setSecretsStatus] = useState({ geminiKeyConfigured: false, asaasKeyConfigured: false });
+    const [isLoadingSecrets, setIsLoadingSecrets] = useState(true);
+
+    useEffect(() => {
+        checkBackendSecrets().then(status => {
+            setSecretsStatus(status);
+            setIsLoadingSecrets(false);
+        });
+    }, []);
 
     const handleTestWhatsApp = async () => {
         setIsTestingWa(true);
@@ -57,7 +69,18 @@ const SuperAdminDashboard: React.FC = () => {
 
     return (
         <div className="space-y-6 pb-20">
-            <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Super Administração</h1>
+            <div className="flex justify-between items-center">
+                <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Super Administração</h1>
+                <div className="flex gap-4">
+                    <div className="flex items-center gap-2 bg-dark border border-white/5 px-4 py-2 rounded-2xl">
+                         <div className={`w-2 h-2 rounded-full ${secretsStatus.asaasKeyConfigured ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                         <span className="text-[9px] font-black text-gray-400 uppercase">ASAAS</span>
+                         <div className="w-px h-3 bg-gray-700 mx-1"></div>
+                         <div className={`w-2 h-2 rounded-full ${secretsStatus.geminiKeyConfigured ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                         <span className="text-[9px] font-black text-gray-400 uppercase">GEMINI</span>
+                    </div>
+                </div>
+            </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* WHATSAPP CARD */}
@@ -173,16 +196,6 @@ const SuperAdminDashboard: React.FC = () => {
                         <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Email Templates</h2>
                     </div>
                     <p className="mt-4 text-gray-400 text-sm group-hover:text-white">Edite o HTML dos e-mails de boas-vindas e análise.</p>
-                </Link>
-
-                <Link to="/admin/cleanup" className="group p-6 bg-secondary/60 backdrop-blur border border-white/5 rounded-[2rem] hover:bg-red-900 transition-all">
-                    <div className="flex items-center">
-                        <div className="p-3 rounded-2xl bg-red-500/20 text-red-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                            <TrashIcon className="w-8 h-8" />
-                        </div>
-                        <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Limpeza Storage</h2>
-                    </div>
-                    <p className="mt-4 text-gray-400 text-sm group-hover:text-red-100">Apague prints de eventos antigos para economizar espaço.</p>
                 </Link>
             </div>
         </div>
