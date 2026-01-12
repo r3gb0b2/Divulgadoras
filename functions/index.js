@@ -6,42 +6,39 @@ admin.initializeApp();
 const db = admin.firestore();
 
 /**
- * Helper de Conexão Oficial para BabySuri/Sure (Padrão Postman Documenter)
- * Resolve problemas de 404 e 400 adaptando o JSON para o modelo Omni-channel.
+ * Helper de Conexão Oficial para BabySuri/Sure (Padrão Omni-channel)
+ * Ajustado para resolver erro "Channel not found" com redundância de ID.
  */
 const sureFetch = async (endpoint, payload, config) => {
     if (!config || !config.apiUrl || !config.apiToken) {
         throw new Error("Configuração da API incompleta.");
     }
     
-    // 1. Limpeza rigorosa da URL
-    // Remove qualquer barra no final e qualquer "/api" excedente
+    // Limpeza de credenciais
+    const cleanToken = config.apiToken.trim();
     let baseUrl = config.apiUrl.trim().replace(/\/+$/, '');
     if (baseUrl.endsWith('/api')) {
         baseUrl = baseUrl.substring(0, baseUrl.length - 4);
     }
     
-    // 2. Montagem exata: https://dominio.azurewebsites.net/api/messages/send
-    const cleanEndpoint = endpoint.replace(/^\/+/, '');
-    const url = `${baseUrl}/api/${cleanEndpoint}`;
+    const url = `${baseUrl}/api/${endpoint.replace(/^\/+/, '')}`;
     
-    console.log(`[SureAPI] Request URL: ${url}`);
-    console.log(`[SureAPI] Payload:`, JSON.stringify(payload));
+    console.log(`[SureAPI] Enviando para: ${url}`);
+    console.log(`[SureAPI] Payload Body:`, JSON.stringify(payload));
     
     try {
         const res = await fetch(url, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${config.apiToken}`,
+                'Authorization': `Bearer ${cleanToken}`,
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'User-Agent': 'EquipeCerta-Integration/1.3'
+                'Accept': 'application/json'
             },
             body: JSON.stringify(payload)
         });
         
         const responseText = await res.text();
-        console.log(`[SureAPI] HTTP ${res.status}:`, responseText);
+        console.log(`[SureAPI] Resposta (${res.status}):`, responseText);
 
         if (!res.ok) {
             throw new Error(`Erro API BabySuri (${res.status}): ${responseText}`);
@@ -53,12 +50,12 @@ const sureFetch = async (endpoint, payload, config) => {
             return { raw: responseText };
         }
     } catch (err) {
-        console.error(`[SureAPI] Erro Crítico:`, err.message);
+        console.error(`[SureAPI] Erro:`, err.message);
         throw err;
     }
 };
 
-// --- DISPARO DE CAMPANHA (Padrão Omni-channel) ---
+// --- DISPARO DE CAMPANHA ---
 export const sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { messageTemplate, filters, platform = 'whatsapp' } = data;
     
@@ -67,6 +64,9 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
     if (!config || !config.isActive) throw new Error("Módulo desativado.");
 
     const { promoterIds } = filters;
+    const channelId = String(config.instanceId).trim();
+    const channelType = platform === 'instagram' ? 3 : 1;
+
     let successCount = 0;
     let failureCount = 0;
 
@@ -82,19 +82,18 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
             const text = messageTemplate
                 .replace(/{{name}}/g, p.name.split(' ')[0])
                 .replace(/{{fullName}}/g, p.name)
+                .replace(/{{email}}/g, p.email)
                 .replace(/{{campaignName}}/g, p.campaignName || 'Evento')
                 .replace(/{{portalLink}}/g, `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`);
 
-            // ESTRUTURA IDENTICA AO POSTMAN ENVIADO
             const payload = {
+                "channelId": channelId, // ID na raiz (Redundância para evitar Channel Not Found)
                 "user": {
                     "name": p.name,
                     "phone": destination,
                     "email": p.email || null,
-                    "gender": 0,
-                    "channelId": config.instanceId, // ID da instância/bot
-                    "channelType": platform === 'instagram' ? 3 : 1, // 1=Whats, 3=Insta
-                    "defaultDepartmentId": null
+                    "channelId": channelId, 
+                    "channelType": channelType
                 },
                 "message": {
                     "text": text
@@ -112,21 +111,23 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
     return { success: successCount > 0, count: successCount, failures: failureCount };
 });
 
-// --- TESTE DE CONEXÃO (Padrão Omni-channel) ---
+// --- TESTE DE CONEXÃO ---
 export const testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
+    const channelId = String(config.instanceId).trim();
     
     try {
         const payload = {
+            "channelId": channelId,
             "user": {
                 "name": "Teste Sistema",
                 "phone": "5585982280780",
-                "channelId": config.instanceId,
+                "channelId": channelId,
                 "channelType": 1
             },
             "message": {
-                "text": "Conexão Equipe Certa 2024: Padrão Omni-channel Verificado ✅"
+                "text": "Teste de Conexão: Padrão Omni-channel v2 ✅"
             }
         };
         const res = await sureFetch('messages/send', payload, config);
@@ -136,19 +137,21 @@ export const testWhatsAppIntegration = functions.region("southamerica-east1").ht
     }
 });
 
-// --- LEMBRETE SMART (Padrão Omni-channel) ---
+// --- LEMBRETE SMART ---
 export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { promoterId } = data;
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
     const pSnap = await db.collection('promoters').doc(promoterId).get();
     const p = pSnap.data();
+    const channelId = String(config.instanceId).trim();
     
     const payload = {
+        "channelId": channelId,
         "user": {
             "name": p.name,
             "phone": p.whatsapp.replace(/\D/g, ''),
-            "channelId": config.instanceId,
+            "channelId": channelId,
             "channelType": 1
         },
         "message": {
@@ -158,7 +161,6 @@ export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").
     return await sureFetch('messages/send', payload, config);
 });
 
-// Webhook para homologação (Necessário para a Sure verificar a URL)
 export const sureWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     if (req.method === 'GET') {
         const botId = req.query.id || req.query.botId || "verificado";
@@ -167,7 +169,6 @@ export const sureWebhook = functions.region("southamerica-east1").https.onReques
     res.status(200).json({ success: true });
 });
 
-// Placeholders mandatórios para evitar erro de exportação
 export const activateGreenlifeMembership = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const createGreenlifeAsaasPix = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const asaasWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => res.status(200).send('OK'));
