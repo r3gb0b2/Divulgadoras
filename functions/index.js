@@ -11,7 +11,7 @@ const ASAAS_URL = ASAAS_CONFIG.env === 'production'
     : 'https://sandbox.asaas.com/api/v3';
 
 /**
- * Helper para chamadas API Asaas
+ * Helper para chamadas API Asaas com tratamento de erro robusto
  */
 const asaasFetch = async (endpoint, method = 'GET', body = null) => {
     const options = {
@@ -23,94 +23,151 @@ const asaasFetch = async (endpoint, method = 'GET', body = null) => {
         }
     };
     if (body) options.body = JSON.stringify(body);
-    const res = await fetch(`${ASAAS_URL}/${endpoint}`, options);
-    return await res.json();
+    
+    try {
+        const res = await fetch(`${ASAAS_URL}/${endpoint}`, options);
+        const data = await res.json();
+
+        if (!res.ok) {
+            console.error(`[Asaas API Error] ${method} ${endpoint}:`, JSON.stringify(data));
+            const errorMsg = data.errors?.[0]?.description || "Erro na comunicação com Asaas";
+            throw new Error(errorMsg);
+        }
+
+        return data;
+    } catch (err) {
+        console.error(`[Asaas Fetch Exception] ${endpoint}:`, err.message);
+        throw err;
+    }
 };
 
 /**
- * Gera Cobrança Pix no Asaas para Club VIP
+ * Lógica Central de Criação de Cobrança Pix (Reutilizável)
  */
-export const createVipAsaasPix = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+const processAsaasPixRequest = async (data, collectionName) => {
     const { vipEventId, vipEventName, promoterId, email, name, whatsapp, taxId, amount } = data;
+    
+    // membershipId format: [promoterId]_[eventId]
     const membershipId = `${promoterId}_${vipEventId}`;
 
+    console.log(`[Asaas] Iniciando Pix para ${email} no evento ${vipEventName}`);
+
+    // 1. Criar ou atualizar cliente no Asaas
+    const customerRes = await asaasFetch('customers', 'POST', {
+        name: name.trim(),
+        email: email.toLowerCase().trim(),
+        mobilePhone: whatsapp.replace(/\D/g, ''),
+        cpfCnpj: taxId.replace(/\D/g, '')
+    });
+
+    if (!customerRes.id) throw new Error("Falha ao criar cliente no Asaas.");
+
+    // 2. Criar cobrança PIX
+    const paymentRes = await asaasFetch('payments', 'POST', {
+        customer: customerRes.id,
+        billingType: 'PIX',
+        value: amount,
+        dueDate: new Date().toISOString().split('T')[0],
+        description: `Adesão VIP: ${vipEventName}`,
+        externalReference: membershipId 
+    });
+
+    if (!paymentRes.id) throw new Error("Falha ao gerar cobrança no Asaas.");
+
+    // 3. Obter QR Code e Imagem
+    const qrCodeRes = await asaasFetch(`payments/${paymentRes.id}/pixQrCode`, 'GET');
+
+    // 4. Salvar registro pendente no Firestore (Limpando undefineds)
+    const docData = {
+        id: membershipId,
+        vipEventId: vipEventId || "",
+        vipEventName: vipEventName || "Evento",
+        promoterId: promoterId || "",
+        promoterName: name || "",
+        promoterEmail: email.toLowerCase().trim(),
+        promoterWhatsapp: whatsapp || "",
+        status: 'pending',
+        paymentId: paymentRes.id, // Garantido pelo check acima
+        amount: amount || 0,
+        isBenefitActive: false,
+        submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await db.collection(collectionName).doc(membershipId).set(docData, { merge: true });
+
+    return { 
+        success: true, 
+        payload: qrCodeRes.payload, 
+        encodedImage: qrCodeRes.encodedImage,
+        paymentId: paymentRes.id 
+    };
+};
+
+/**
+ * Gera Cobrança Pix para Club VIP
+ */
+export const createVipAsaasPix = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     try {
-        // 1. Criar ou atualizar cliente no Asaas
-        const customerRes = await asaasFetch('customers', 'POST', {
-            name, email, mobilePhone: whatsapp, cpfCnpj: taxId
-        });
-        const customerId = customerRes.id;
-
-        // 2. Criar cobrança PIX
-        const paymentRes = await asaasFetch('payments', 'POST', {
-            customer: customerId,
-            billingType: 'PIX',
-            value: amount,
-            dueDate: new Date().toISOString().split('T')[0],
-            description: `Adesão VIP: ${vipEventName}`,
-            externalReference: membershipId // Crucial para o webhook se localizar
-        });
-
-        // 3. Obter QR Code
-        const qrCodeRes = await asaasFetch(`payments/${paymentRes.id}/pixQrCode`, 'GET');
-
-        // 4. Salvar registro pendente no Firestore
-        await db.collection('vipMemberships').doc(membershipId).set({
-            id: membershipId,
-            vipEventId,
-            vipEventName,
-            promoterId,
-            promoterName: name,
-            promoterEmail: email.toLowerCase().trim(),
-            promoterWhatsapp: whatsapp,
-            status: 'pending',
-            paymentId: paymentRes.id,
-            amount: amount,
-            isBenefitActive: false,
-            submittedAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
-
-        return { 
-            success: true, 
-            payload: qrCodeRes.payload, 
-            encodedImage: qrCodeRes.encodedImage,
-            paymentId: paymentRes.id 
-        };
+        return await processAsaasPixRequest(data, 'vipMemberships');
     } catch (err) {
-        console.error("Erro ao gerar Pix Asaas:", err);
         throw new functions.https.HttpsError('internal', err.message);
     }
 });
 
 /**
- * Webhook do Asaas - Recebe confirmação de pagamento
+ * Gera Cobrança Pix para Greenlife
+ */
+export const createGreenlifeAsaasPix = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    try {
+        return await processAsaasPixRequest(data, 'greenlifeMemberships');
+    } catch (err) {
+        throw new functions.https.HttpsError('internal', err.message);
+    }
+});
+
+/**
+ * Webhook do Asaas - Recebe confirmação de pagamento (Unificado)
  */
 export const asaasWebhook = functions.region("southamerica-east1").https.onRequest(async (req, res) => {
     const event = req.body;
     
-    // Ignora eventos que não sejam de pagamento confirmado
+    console.log(`[Asaas Webhook] Evento recebido: ${event.event}`);
+
     if (event.event !== 'PAYMENT_RECEIVED' && event.event !== 'PAYMENT_CONFIRMED') {
-        return res.status(200).send('Event ignored');
+        return res.status(200).send('Ignored');
     }
 
     const payment = event.payment;
-    const membershipId = payment.externalReference; // Recupera o ID que salvamos na criação
+    const membershipId = payment.externalReference;
 
     if (!membershipId) return res.status(200).send('No reference');
 
     try {
-        const membRef = db.collection('vipMemberships').doc(membershipId);
-        const membSnap = await membRef.get();
+        // Tenta encontrar em VIP ou Greenlife
+        let collectionName = 'vipMemberships';
+        let membRef = db.collection(collectionName).doc(membershipId);
+        let membSnap = await membRef.get();
 
-        if (!membSnap.exists) return res.status(404).send('Membership not found');
+        if (!membSnap.exists) {
+            collectionName = 'greenlifeMemberships';
+            membRef = db.collection(collectionName).doc(membershipId);
+            membSnap = await membRef.get();
+        }
+
+        if (!membSnap.exists) {
+            console.error(`[Asaas Webhook] Referência ${membershipId} não encontrada em nenhuma coleção.`);
+            return res.status(404).send('Not found');
+        }
+
         const membData = membSnap.data();
-
-        if (membData.status === 'confirmed') return res.status(200).send('Already confirmed');
+        if (membData.status === 'confirmed') return res.status(200).send('Already processed');
 
         // --- LÓGICA DE ENTREGA DE CÓDIGO ---
-        // Busca um código disponível no estoque do evento
-        const codesRef = db.collection('vipEvents').doc(membData.vipEventId).collection('availableCodes');
+        // Define qual coleção de eventos usar
+        const eventCollection = collectionName === 'vipMemberships' ? 'vipEvents' : 'greenlifeEvents';
+        
+        const codesRef = db.collection(eventCollection).doc(membData.vipEventId).collection('availableCodes');
         const availableCodeSnap = await codesRef.where('used', '==', false).limit(1).get();
 
         let assignedCode = "AGUARDANDO_ESTOQUE";
@@ -121,7 +178,6 @@ export const asaasWebhook = functions.region("southamerica-east1").https.onReque
             assignedCode = codeDoc.data().code;
             isBenefitActive = true;
 
-            // Marca o código como usado
             await codeDoc.ref.update({
                 used: true,
                 usedBy: membData.promoterEmail,
@@ -129,7 +185,7 @@ export const asaasWebhook = functions.region("southamerica-east1").https.onReque
             });
         }
 
-        // Atualiza a adesão para CONFIRMADO
+        // Atualiza a adesão
         await membRef.update({
             status: 'confirmed',
             benefitCode: assignedCode,
@@ -137,14 +193,16 @@ export const asaasWebhook = functions.region("southamerica-east1").https.onReque
             updatedAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // Atualiza o status no perfil da divulgadora para facilitar busca
-        await db.collection('promoters').doc(membData.promoterId).update({
-            emocoesStatus: 'confirmed',
-            emocoesBenefitCode: assignedCode,
-            emocoesBenefitActive: isBenefitActive
-        });
+        // Se for VIP, atualiza também o perfil da divulgadora (opcional, dependendo do seu modelo)
+        if (collectionName === 'vipMemberships') {
+            await db.collection('promoters').doc(membData.promoterId).update({
+                emocoesStatus: 'confirmed',
+                emocoesBenefitCode: assignedCode,
+                emocoesBenefitActive: isBenefitActive
+            }).catch(() => console.log("Perfil não encontrado para atualização de status VIP"));
+        }
 
-        console.log(`[Asaas] Pagamento confirmado e código ${assignedCode} entregue para ${membData.promoterEmail}`);
+        console.log(`[Asaas Webhook] Pagamento OK! Código ${assignedCode} entregue para ${membData.promoterEmail}`);
         return res.status(200).send('OK');
 
     } catch (err) {
