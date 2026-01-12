@@ -12,46 +12,12 @@ const ASAAS_URL = ASAAS_CONFIG.env === 'production'
     : 'https://sandbox.asaas.com/api/v3';
 
 /**
- * Helper para chamadas API Asaas
- */
-const asaasFetch = async (endpoint, method = 'GET', body = null) => {
-    // Busca o segredo do ambiente carregado via runWith
-    const asaasKey = process.env.ASAAS_API_KEY;
-    
-    if (!asaasKey) {
-        console.error("[ERRO CRÍTICO] ASAAS_API_KEY não disponível no ambiente da função.");
-        throw new Error("Configuração do Asaas (ASAAS_API_KEY) ausente ou não vinculada à função.");
-    }
-
-    const options = {
-        method,
-        headers: {
-            'accept': 'application/json',
-            'content-type': 'application/json',
-            'access_token': asaasKey
-        }
-    };
-    if (body) options.body = JSON.stringify(body);
-    
-    const res = await fetch(`${ASAAS_URL}/${endpoint}`, options);
-    const data = await res.json();
-
-    if (!res.ok) {
-        const errorMsg = data.errors?.[0]?.description || "Erro na comunicação com Asaas";
-        throw new Error(errorMsg);
-    }
-
-    return data;
-};
-
-/**
  * Função de Diagnóstico de Segredos (Super Admin)
  */
 export const checkBackendStatus = functions
     .region("southamerica-east1")
-    .runWith({ secrets: ["API_KEY", "ASAAS_API_KEY"] })
+    .runWith({ secrets: ["API_KEY", "ASAAS_API_KEY"] }) // Habilita acesso aos segredos
     .https.onCall(async (data, context) => {
-        // Apenas para log de depuração do desenvolvedor (não retorna as chaves)
         return {
             geminiKeyConfigured: !!process.env.API_KEY,
             asaasKeyConfigured: !!process.env.ASAAS_API_KEY,
@@ -64,17 +30,18 @@ export const checkBackendStatus = functions
  */
 export const askGemini = functions
     .region("southamerica-east1")
-    .runWith({ secrets: ["API_KEY"] }) // ESSENCIAL para ler o segredo
+    .runWith({ secrets: ["API_KEY"] }) // Habilita acesso ao segredo
     .https.onCall(async (data, context) => {
         const { prompt } = data;
         if (!prompt) throw new functions.https.HttpsError('invalid-argument', 'O prompt é obrigatório.');
 
-        if (!process.env.API_KEY) {
-            throw new functions.https.HttpsError('failed-precondition', 'A chave de IA (API_KEY) não foi configurada ou vinculada.');
+        const apiKey = process.env.API_KEY;
+        if (!apiKey) {
+            throw new functions.https.HttpsError('failed-precondition', 'Chave API_KEY não vinculada à função.');
         }
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
                 model: 'gemini-3-flash-preview',
                 contents: prompt,
@@ -88,16 +55,37 @@ export const askGemini = functions
     });
 
 /**
- * Gera Cobrança Pix para Club VIP
+ * Gera Cobrança Pix para Club VIP (Asaas)
  */
 export const createVipAsaasPix = functions
     .region("southamerica-east1")
-    .runWith({ secrets: ["ASAAS_API_KEY"] }) // ESSENCIAL para ler o segredo
+    .runWith({ secrets: ["ASAAS_API_KEY"] }) // Habilita acesso ao segredo
     .https.onCall(async (data, context) => {
         const { vipEventId, vipEventName, promoterId, email, name, whatsapp, taxId, amount } = data;
         const membershipId = `${promoterId}_${vipEventId}`;
+        const asaasKey = process.env.ASAAS_API_KEY;
+
+        if (!asaasKey) {
+            throw new functions.https.HttpsError('failed-precondition', 'Chave ASAAS_API_KEY não vinculada.');
+        }
 
         try {
+            const asaasFetch = async (endpoint, method = 'GET', body = null) => {
+                const options = {
+                    method,
+                    headers: {
+                        'accept': 'application/json',
+                        'content-type': 'application/json',
+                        'access_token': asaasKey
+                    }
+                };
+                if (body) options.body = JSON.stringify(body);
+                const res = await fetch(`${ASAAS_URL}/${endpoint}`, options);
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.errors?.[0]?.description || "Erro Asaas");
+                return result;
+            };
+
             const customerRes = await asaasFetch('customers', 'POST', {
                 name: name.trim(),
                 email: email.toLowerCase().trim(),
@@ -203,6 +191,7 @@ export const asaasWebhook = functions
 
             return res.status(200).send('OK');
         } catch (err) {
+            console.error("Webhook Error:", err.message);
             return res.status(500).send(err.message);
         }
     });
