@@ -12,20 +12,19 @@ const sureFetch = async (endpoint, method, body, config) => {
         throw new Error("Configuração da API Sure incompleta no painel administrativo.");
     }
     
-    // Normalização da URL Base
+    // 1. Normalização da URL Base (Remove barra final)
     let baseUrl = config.apiUrl.trim().replace(/\/$/, '');
     
-    // Algumas versões da API usam /message (singular) e outras /messages (plural)
-    // Se o endpoint padrão falhar ou se quisermos garantir compatibilidade:
+    // 2. Normalização do Endpoint (Garante barra inicial e remove /api se a base já tiver)
     let cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     
-    // Lógica para evitar duplicidade de /api ou caminhos mal formados
-    // Se a baseUrl já termina com /api e o endpoint começa com /api, removemos do endpoint
+    // Se a baseUrl termina com /api e o endpoint começa com /api, remove do endpoint para não duplicar
     if (baseUrl.toLowerCase().endsWith('/api') && cleanEndpoint.toLowerCase().startsWith('/api/')) {
         cleanEndpoint = cleanEndpoint.substring(4); 
-    } else if (!baseUrl.toLowerCase().endsWith('/api') && !cleanEndpoint.toLowerCase().startsWith('/api/')) {
-        // Se nenhum tem /api, talvez precise adicionar (depende da config do usuário, mas tentamos manter o que ele digitou)
-        // cleanEndpoint = `/api${cleanEndpoint}`; // Removido para dar liberdade ao usuário
+    } 
+    // Se nenhum tem /api, adiciona ao endpoint (padrão Sure)
+    else if (!baseUrl.toLowerCase().endsWith('/api') && !cleanEndpoint.toLowerCase().startsWith('/api/')) {
+        cleanEndpoint = `/api${cleanEndpoint}`;
     }
     
     const url = `${baseUrl}${cleanEndpoint}`;
@@ -58,7 +57,7 @@ const sureFetch = async (endpoint, method, body, config) => {
             console.error(`[SureAPI] Erro ${res.status} na URL ${url}:`, responseText);
             
             if (res.status === 404) {
-                throw new Error(`Endpoint não encontrado (404). A URL gerada foi: ${url}. Verifique se o endereço da API no painel termina com /api ou se o bot/instância está correto.`);
+                throw new Error(`Endpoint não encontrado (404). A URL gerada foi: ${url}. A API Sure geralmente espera /api/message/sendText (no singular). Verifique se o endereço no painel está correto.`);
             }
             
             throw new Error(responseData.message || responseData.error || `Erro HTTP ${res.status}`);
@@ -78,8 +77,6 @@ export const sureWebhook = functions.region("southamerica-east1").https.onReques
         return res.status(200).send(botId);
     }
     if (req.method === 'POST') {
-        // Log para debug de mensagens recebidas se necessário
-        // console.log("[SureWebhook] Recebido:", JSON.stringify(req.body));
         return res.status(200).json({ success: true });
     }
     return res.status(405).send('Method Not Allowed');
@@ -139,8 +136,8 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
                 type: 'text'
             };
 
-            // Tenta o endpoint padrão. Se for 404, o erro será capturado e detalhado.
-            await sureFetch('/api/messages/sendText', 'POST', payload, config);
+            // CORREÇÃO: Usando /message/ (singular) em vez de /messages/ (plural)
+            await sureFetch('/api/message/sendText', 'POST', payload, config);
             successCount++;
         } catch (err) {
             console.error(`[Campaign] Falha no envio para ${pid}:`, err.message);
@@ -179,8 +176,7 @@ const assignCodeGeneric = async (membershipId, membershipCollection, eventsColle
 };
 
 export const createGreenlifeAsaasPix = functions.region("southamerica-east1").https.onCall(async (data) => {
-    const { email, name, whatsapp, taxId, amount, vipEventId, promoterId, vipEventName } = data;
-    // Lógica Asaas aqui...
+    // Implementação mock para brevidade
     return { success: true }; 
 });
 
@@ -215,18 +211,52 @@ export const testWhatsAppIntegration = functions.region("southamerica-east1").ht
     if (!config) throw new Error("Configuração não encontrada.");
     
     try {
-        // Tenta um endpoint de verificação simples se existir, ou tenta enviar para o próprio número de suporte
         const payload = {
             instanceId: config.instanceId,
-            to: "5585982280780", // Número de teste
+            to: "5585982280780", 
             message: "Teste de conexão do sistema Equipe Certa 🚀",
             platform: "whatsapp",
             type: 'text'
         };
         
-        const res = await sureFetch('/api/messages/sendText', 'POST', payload, config);
+        // CORREÇÃO: Usando /message/ (singular)
+        const res = await sureFetch('/api/message/sendText', 'POST', payload, config);
         return { success: true, message: "Conexão com a API Sure estabelecida com sucesso!", data: res };
     } catch (err) {
         return { success: false, message: err.message };
     }
+});
+
+// Função para cobrança inteligente de prints esquecidos
+export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
+    const { assignmentId, promoterId, organizationId } = data;
+    
+    const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
+    const config = configSnap.data();
+    
+    if (!config || !config.isActive) {
+        throw new Error("API de WhatsApp desativada.");
+    }
+
+    const pSnap = await db.collection('promoters').doc(promoterId).get();
+    const aSnap = await db.collection('postAssignments').doc(assignmentId).get();
+    
+    if (!pSnap.exists || !aSnap.exists) throw new Error("Dados não encontrados.");
+    
+    const p = pSnap.data();
+    const a = aSnap.data();
+    const destination = p.whatsapp.replace(/\D/g, '');
+    
+    const firstName = p.name.split(' ')[0];
+    const message = `Oi ${firstName}! Notei que você confirmou o post de "${a.post.campaignName}", mas ainda não enviou o print de comprovação no portal. 📸\n\nPode enviar agora para garantir sua presença? 👇\nhttps://divulgadoras.vercel.app/#/posts`;
+
+    const payload = {
+        instanceId: config.instanceId,
+        to: destination,
+        message: message,
+        platform: 'whatsapp',
+        type: 'text'
+    };
+
+    return await sureFetch('/api/message/sendText', 'POST', payload, config);
 });
