@@ -6,11 +6,12 @@ admin.initializeApp();
 const db = admin.firestore();
 
 /**
- * Helper de Conexão Oficial para BabySuri/Sure (Padrão Omni-channel)
+ * Helper de Conexão Oficial BabySuri/Sure
+ * Baseado no Manual de Integração: https://sejasuri.gitbook.io/manual-de-integracao/api
  */
 const sureFetch = async (endpoint, payload, config) => {
     if (!config || !config.apiUrl || !config.apiToken) {
-        throw new Error("Configuração da API incompleta.");
+        throw new Error("Configuração da API WhatsApp/Suri incompleta.");
     }
     
     const cleanToken = config.apiToken.trim();
@@ -21,7 +22,7 @@ const sureFetch = async (endpoint, payload, config) => {
     
     const url = `${baseUrl}/api/${endpoint.replace(/^\/+/, '')}`;
     
-    console.log(`[SureAPI] Request para: ${url}`);
+    console.log(`[SuriAPI] Enviando para: ${url} (Canal: ${payload.user?.channelType})`);
     
     try {
         const res = await fetch(url, {
@@ -35,10 +36,10 @@ const sureFetch = async (endpoint, payload, config) => {
         });
         
         const responseText = await res.text();
-        console.log(`[SureAPI] Resposta HTTP ${res.status}:`, responseText);
+        console.log(`[SuriAPI] Resposta (${res.status}):`, responseText);
 
         if (!res.ok) {
-            throw new Error(`Erro API BabySuri (${res.status}): ${responseText}`);
+            throw new Error(`Erro na API Suri (${res.status}): ${responseText}`);
         }
         
         try {
@@ -47,31 +48,36 @@ const sureFetch = async (endpoint, payload, config) => {
             return { raw: responseText };
         }
     } catch (err) {
-        console.error(`[SureAPI] Falha:`, err.message);
+        console.error(`[SuriAPI] Falha crítica no envio:`, err.message);
         throw err;
     }
 };
 
 /**
- * Constrói o objeto de mensagem respeitando se é Template ou Texto Puro
+ * Construtor Inteligente de Mensagens
+ * Suporta: Texto, Imagem, Vídeo e Templates Meta
  */
-const buildMessagePayload = (text, config, promoterName = "Divulgadora") => {
-    // Se houver um nome de template configurado, enviamos no formato oficial da Meta
+const buildSuriMessage = (text, config, mediaUrl = null, mediaType = 'text', promoterName = "") => {
+    // 1. Prioridade para Mídia Nativa (Se houver URL de mídia)
+    if (mediaUrl && (mediaType === 'image' || mediaType === 'video')) {
+        return {
+            "type": mediaType,
+            "url": mediaUrl,
+            "caption": text || ""
+        };
+    }
+
+    // 2. Fallback para Template Meta (Evita banimento em conversas ativas)
     if (config.templateName && config.templateName.trim() !== "") {
         return {
             "template": {
                 "name": config.templateName.trim(),
-                "language": {
-                    "code": "pt_BR"
-                },
+                "language": { "code": "pt_BR" },
                 "components": [
                     {
                         "type": "body",
                         "parameters": [
-                            {
-                                "type": "text",
-                                "text": promoterName.split(' ')[0]
-                            }
+                            { "type": "text", "text": promoterName.split(' ')[0] || "Divulgadora" }
                         ]
                     }
                 ]
@@ -79,22 +85,22 @@ const buildMessagePayload = (text, config, promoterName = "Divulgadora") => {
         };
     }
     
-    // Fallback para texto puro (APIs não-oficiais ou janelas abertas)
-    return {
-        "text": text
-    };
+    // 3. Texto Simples (Apenas para janelas de 24h abertas)
+    return { "text": text };
 };
 
-// --- DISPARO DE CAMPANHA ---
+// --- DISPARO DE CAMPANHA MASSIVA ---
 export const sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { messageTemplate, filters, platform = 'whatsapp' } = data;
+    const { messageTemplate, filters, platform = 'whatsapp', mediaUrl, mediaType = 'text' } = data;
     
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
-    if (!config || !config.isActive) throw new Error("Módulo WhatsApp desativado.");
+    if (!config || !config.isActive) throw new Error("Módulo de comunicação desativado.");
 
     const { promoterIds } = filters;
     const channelId = String(config.instanceId).trim();
+    
+    // Padrão do Manual: 1 = WhatsApp, 3 = Instagram, 4 = Messenger
     const channelType = platform === 'instagram' ? 3 : 1;
 
     let successCount = 0;
@@ -106,8 +112,12 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
             if (!pSnap.exists) continue;
             const p = pSnap.data();
 
-            const destination = (p.whatsapp || "").replace(/\D/g, '');
-            if (!destination && platform === 'whatsapp') { failureCount++; continue; }
+            // Determina o destino baseado na plataforma
+            const destination = platform === 'instagram' 
+                ? (p.instagram || "").replace('@', '') 
+                : (p.whatsapp || "").replace(/\D/g, '');
+
+            if (!destination) { failureCount++; continue; }
 
             const text = messageTemplate
                 .replace(/{{name}}/g, p.name.split(' ')[0])
@@ -120,17 +130,19 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
                 "channelId": channelId,
                 "user": {
                     "name": p.name,
-                    "phone": platform === 'whatsapp' ? destination : p.instagram,
+                    "phone": platform === 'instagram' ? null : destination,
+                    "username": platform === 'instagram' ? destination : null,
+                    "email": p.email || null,
                     "channelId": channelId, 
                     "channelType": channelType
                 },
-                "message": buildMessagePayload(text, config, p.name)
+                "message": buildSuriMessage(text, config, mediaUrl, mediaType, p.name)
             };
 
             await sureFetch('messages/send', payload, config);
             successCount++;
         } catch (err) {
-            console.error(`Erro no envio individual (${pid}):`, err.message);
+            console.error(`Falha individual (${pid}):`, err.message);
             failureCount++;
         }
     }
@@ -155,25 +167,25 @@ export const testWhatsAppIntegration = functions.region("southamerica-east1").ht
                 "channelId": channelId,
                 "channelType": 1
             },
-            "message": buildMessagePayload("Teste de Conexão Equipe Certa ✅", config, "Admin")
+            "message": buildSuriMessage("✅ Teste de Integração Equipe Certa: Tudo pronto!", config, null, 'text', "Admin")
         };
         const res = await sureFetch('messages/send', payload, config);
-        return { success: true, message: "Conectado!", data: res };
+        return { success: true, message: "Conexão OK!", data: res };
     } catch (err) {
         return { success: false, message: err.message };
     }
 });
 
-// --- LEMBRETE SMART ---
+// --- COBRANÇA SMART WHATSAPP ---
 export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { promoterId } = data;
+    const { promoterId, assignmentId } = data;
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
     const pSnap = await db.collection('promoters').doc(promoterId).get();
     const p = pSnap.data();
     const channelId = String(config.instanceId).trim();
     
-    const text = `Oi ${p.name.split(' ')[0]}! Notamos que seu print ainda não foi enviado. Acesse o portal para regularizar.`;
+    const text = `Oi ${p.name.split(' ')[0]}! Notamos que o seu print para o evento "${p.campaignName}" ainda não foi enviado no portal. 📸\n\nAcesse agora para regularizar: https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`;
 
     const payload = {
         "channelId": channelId,
@@ -183,7 +195,7 @@ export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").
             "channelId": channelId,
             "channelType": 1
         },
-        "message": buildMessagePayload(text, config, p.name)
+        "message": buildSuriMessage(text, config, null, 'text', p.name)
     };
     return await sureFetch('messages/send', payload, config);
 });
