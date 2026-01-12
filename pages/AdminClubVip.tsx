@@ -586,7 +586,13 @@ const AdminClubVip: React.FC = () => {
             )}
 
             {isCodesModalOpen && eventForCodes && (
-                <ManageCodesModal isOpen={isCodesModalOpen} onClose={() => setIsCodesModalOpen(false)} event={eventForCodes} onSaved={fetchData} />
+                <ManageCodesModal 
+                    isOpen={isCodesModalOpen} 
+                    onClose={() => setIsCodesModalOpen(false)} 
+                    event={eventForCodes} 
+                    onSaved={fetchData} 
+                    onDownloadStock={handleDownloadEventStock}
+                />
             )}
 
             {isTransferModalOpen && membershipToTransfer && (
