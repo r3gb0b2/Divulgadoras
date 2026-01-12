@@ -7,14 +7,12 @@ const db = admin.firestore();
 
 /**
  * Helper de Conexão Oficial para BabySuri/Sure (Padrão Omni-channel)
- * Ajustado para resolver erro "Channel not found" com redundância de ID.
  */
 const sureFetch = async (endpoint, payload, config) => {
     if (!config || !config.apiUrl || !config.apiToken) {
         throw new Error("Configuração da API incompleta.");
     }
     
-    // Limpeza de credenciais
     const cleanToken = config.apiToken.trim();
     let baseUrl = config.apiUrl.trim().replace(/\/+$/, '');
     if (baseUrl.endsWith('/api')) {
@@ -23,8 +21,7 @@ const sureFetch = async (endpoint, payload, config) => {
     
     const url = `${baseUrl}/api/${endpoint.replace(/^\/+/, '')}`;
     
-    console.log(`[SureAPI] Enviando para: ${url}`);
-    console.log(`[SureAPI] Payload Body:`, JSON.stringify(payload));
+    console.log(`[SureAPI] Request para: ${url}`);
     
     try {
         const res = await fetch(url, {
@@ -50,9 +47,42 @@ const sureFetch = async (endpoint, payload, config) => {
             return { raw: responseText };
         }
     } catch (err) {
-        console.error(`[SureAPI] Erro:`, err.message);
+        console.error(`[SureAPI] Falha:`, err.message);
         throw err;
     }
+};
+
+/**
+ * Monta o objeto de mensagem respeitando se é Template ou Texto Livre
+ */
+const buildMessageObject = (text, config, promoterName = "") => {
+    // Se existir um template configurado, enviamos como template (Padrão Meta Cloud API)
+    if (config.templateName && config.templateName.trim() !== "") {
+        return {
+            "template": {
+                "name": config.templateName.trim(),
+                "language": {
+                    "code": "pt_BR"
+                },
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {
+                                "type": "text",
+                                "text": promoterName || "Divulgadora"
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+    }
+    
+    // Caso contrário, enviamos texto livre
+    return {
+        "text": text
+    };
 };
 
 // --- DISPARO DE CAMPANHA ---
@@ -87,7 +117,7 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
                 .replace(/{{portalLink}}/g, `https://divulgadoras.vercel.app/#/status?email=${encodeURIComponent(p.email)}`);
 
             const payload = {
-                "channelId": channelId, // ID na raiz (Redundância para evitar Channel Not Found)
+                "channelId": channelId,
                 "user": {
                     "name": p.name,
                     "phone": destination,
@@ -95,9 +125,7 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
                     "channelId": channelId, 
                     "channelType": channelType
                 },
-                "message": {
-                    "text": text
-                }
+                "message": buildMessageObject(text, config, p.name.split(' ')[0])
             };
 
             await sureFetch('messages/send', payload, config);
@@ -126,9 +154,7 @@ export const testWhatsAppIntegration = functions.region("southamerica-east1").ht
                 "channelId": channelId,
                 "channelType": 1
             },
-            "message": {
-                "text": "Teste de Conexão: Padrão Omni-channel v2 ✅"
-            }
+            "message": buildMessageObject("Teste de Conexão: Padrão Omni-channel Meta ✅", config, "Teste")
         };
         const res = await sureFetch('messages/send', payload, config);
         return { success: true, message: "Conectado!", data: res };
@@ -154,9 +180,7 @@ export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").
             "channelId": channelId,
             "channelType": 1
         },
-        "message": {
-            "text": `Oi ${p.name.split(' ')[0]}! Passando para lembrar do seu print pendente no portal. 📸`
-        }
+        "message": buildMessageObject(`Oi ${p.name.split(' ')[0]}! Passando para lembrar do seu print pendente no portal. 📸`, config, p.name.split(' ')[0])
     };
     return await sureFetch('messages/send', payload, config);
 });

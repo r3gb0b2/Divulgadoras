@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { firestore } from '../firebase/config';
-import { ArrowLeftIcon, WhatsAppIcon, RefreshIcon, CheckCircleIcon, KeyIcon, LinkIcon, DocumentDuplicateIcon, AlertTriangleIcon } from '../components/Icons';
+import { ArrowLeftIcon, WhatsAppIcon, RefreshIcon, CheckCircleIcon, KeyIcon, LinkIcon, DocumentDuplicateIcon, AlertTriangleIcon, CogIcon } from '../components/Icons';
 
 const AdminWhatsAppSettings: React.FC = () => {
     const navigate = useNavigate();
@@ -12,11 +12,11 @@ const AdminWhatsAppSettings: React.FC = () => {
         apiUrl: '',
         apiToken: '',
         instanceId: '',
+        templateName: '', // Novo campo para o ID do Template Meta
         isActive: false
     });
     const [success, setSuccess] = useState(false);
 
-    // URL fixa do seu webhook no Firebase
     const webhookUrl = "https://southamerica-east1-stingressos-e0a5f.cloudfunctions.net/sureWebhook";
 
     useEffect(() => {
@@ -24,7 +24,14 @@ const AdminWhatsAppSettings: React.FC = () => {
             try {
                 const doc = await firestore.collection('systemConfig').doc('whatsapp').get();
                 if (doc.exists) {
-                    setConfig(doc.data() as any);
+                    const data = doc.data();
+                    setConfig({
+                        apiUrl: data?.apiUrl || '',
+                        apiToken: data?.apiToken || '',
+                        instanceId: data?.instanceId || '',
+                        templateName: data?.templateName || '',
+                        isActive: data?.isActive || false
+                    });
                 }
             } catch (e) {
                 console.error("Erro ao carregar config:", e);
@@ -68,7 +75,7 @@ const AdminWhatsAppSettings: React.FC = () => {
                     </div>
                     <div>
                         <h1 className="text-3xl font-black text-white uppercase tracking-tighter">API WhatsApp</h1>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Integração Sure / Babysuri</p>
+                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Integração Oficial Meta (via Sure)</p>
                     </div>
                 </div>
                 <button onClick={() => navigate(-1)} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
@@ -78,58 +85,41 @@ const AdminWhatsAppSettings: React.FC = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2 space-y-6">
-                    {/* WEBHOOK BOX */}
                     <div className="bg-primary/10 border border-primary/20 p-6 rounded-[2.5rem] space-y-4">
                         <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-                             📡 Configuração do Webhook
+                             📡 Webhook de Entrega
                         </h3>
-                        <p className="text-xs text-gray-400 leading-relaxed">
-                            Copie a URL abaixo e cole no campo <strong>Webhook</strong> do seu painel Sure. Isso permitirá que o sistema receba mensagens automaticamente.
-                        </p>
                         <div className="flex gap-2">
-                            <input 
-                                readOnly 
-                                value={webhookUrl}
-                                className="flex-grow bg-dark border border-white/10 p-4 rounded-2xl text-[10px] text-primary font-mono outline-none" 
-                            />
+                            <input readOnly value={webhookUrl} className="flex-grow bg-dark border border-white/10 p-4 rounded-2xl text-[10px] text-primary font-mono outline-none" />
                             <button onClick={handleCopyWebhook} className="p-4 bg-primary text-white rounded-2xl hover:bg-primary-dark transition-all">
                                 <DocumentDuplicateIcon className="w-6 h-6" />
                             </button>
                         </div>
-                        <div className="flex items-start gap-3 bg-dark/50 p-4 rounded-2xl border border-white/5">
-                            <AlertTriangleIcon className="w-5 h-5 text-amber-500 flex-shrink-0" />
-                            <p className="text-[10px] text-gray-400 leading-tight">
-                                <strong>Dica de Verificação:</strong> Ao clicar em verificar na Sure, o sistema enviará um teste GET. Nossa rota já está programada para responder com o ID do seu bot automaticamente.
-                            </p>
-                        </div>
                     </div>
 
-                    {/* API CONFIG FORM */}
                     <div className="bg-secondary p-8 rounded-[2.5rem] border border-white/5 shadow-2xl space-y-8">
                         <form onSubmit={handleSave} className="space-y-6">
                             <div className="space-y-2">
                                 <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-2">
-                                    <LinkIcon className="w-3 h-3" /> URL do Endpoint (Azure)
+                                    <LinkIcon className="w-3 h-3" /> URL do Endpoint
                                 </label>
                                 <input 
                                     type="url" 
-                                    placeholder="https://exemplo.azurewebsites.net/api"
+                                    placeholder="https://sua-url.azurewebsites.net"
                                     value={config.apiUrl}
                                     onChange={e => setConfig({...config, apiUrl: e.target.value})}
                                     className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-primary transition-all shadow-inner"
                                     required
                                 />
-                                <p className="text-[9px] text-gray-500 uppercase font-black ml-1">Dica: Se receber erro 404, certifique-se que a URL termina com <b>/api</b></p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-2">
-                                        <KeyIcon className="w-3 h-3" /> Token de Acesso
+                                        <KeyIcon className="w-3 h-3" /> API Token (Bearer)
                                     </label>
                                     <input 
                                         type="password" 
-                                        placeholder="Seu Bearer Token"
                                         value={config.apiToken}
                                         onChange={e => setConfig({...config, apiToken: e.target.value})}
                                         className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-primary transition-all"
@@ -137,15 +127,30 @@ const AdminWhatsAppSettings: React.FC = () => {
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">ID da Instância / Bot</label>
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">ID do Canal (Instância)</label>
                                     <input 
                                         type="text" 
-                                        placeholder="Ex: 123456"
+                                        placeholder="Ex: cb123456"
                                         value={config.instanceId}
                                         onChange={e => setConfig({...config, instanceId: e.target.value})}
                                         className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-primary transition-all"
                                     />
                                 </div>
+                            </div>
+
+                            {/* NOVO CAMPO PARA TEMPLATE */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-primary uppercase ml-1 flex items-center gap-2">
+                                    <CogIcon className="w-3 h-3" /> Nome do Template Meta (Opcional)
+                                </label>
+                                <input 
+                                    type="text" 
+                                    placeholder="Ex: bem_vinda_divulgadora"
+                                    value={config.templateName}
+                                    onChange={e => setConfig({...config, templateName: e.target.value})}
+                                    className="w-full bg-dark border border-primary/30 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:ring-2 focus:ring-primary transition-all shadow-inner"
+                                />
+                                <p className="text-[9px] text-gray-500 uppercase font-black ml-1">Para API Oficial, preencha o nome do template aprovado no Gerenciador de Negócios da Meta.</p>
                             </div>
 
                             <div className="pt-4 border-t border-white/5">
@@ -158,7 +163,6 @@ const AdminWhatsAppSettings: React.FC = () => {
                                     />
                                     <div className="flex flex-col">
                                         <span className="text-xs font-black text-white uppercase tracking-tight group-hover:text-primary transition-colors">Ativar Automações</span>
-                                        <span className="text-[9px] text-gray-500 font-bold uppercase">Habilita disparos via WhatsApp e Instagram Direct.</span>
                                     </div>
                                 </label>
                             </div>
@@ -177,25 +181,19 @@ const AdminWhatsAppSettings: React.FC = () => {
 
                 <div className="lg:col-span-1 space-y-6">
                     <div className="bg-dark/40 p-6 rounded-[2rem] border border-white/5 shadow-xl">
-                        <h3 className="text-xs font-black text-primary uppercase tracking-widest mb-4">Apoio Técnico</h3>
+                        <h3 className="text-xs font-black text-primary uppercase tracking-widest mb-4">Ajuda Técnica</h3>
                         <div className="space-y-4">
                             <div className="p-4 bg-gray-800/50 rounded-2xl border border-white/5">
                                 <p className="text-[10px] text-gray-400 leading-relaxed">
-                                    O erro 404 em disparos de <b>Instagram</b> geralmente significa que a URL base da API não reconheceu o caminho das mensagens.
-                                </p>
-                            </div>
-                            <div className="p-4 bg-gray-800/50 rounded-2xl border border-white/5">
-                                <p className="text-[9px] font-black text-white uppercase mb-1">Verificação:</p>
-                                <p className="text-[10px] text-gray-400 leading-relaxed italic">
-                                    Ao salvar, tente fazer um disparo de teste. Se o erro 404 persistir, tente remover ou adicionar o <b>/api</b> no final da URL base.
+                                    Se você usa a <strong>API Oficial Cloud</strong>, lembre-se que você só pode enviar mensagens de texto livre se a usuária tiver falado com você nas últimas 24h. Caso contrário, use o campo <b>Template</b>.
                                 </p>
                             </div>
                         </div>
                     </div>
 
                     {success && (
-                        <div className="bg-green-600 text-white p-4 rounded-2xl font-black text-[10px] uppercase text-center shadow-lg shadow-green-900/40 animate-fadeIn">
-                            Configurações salvas com sucesso!
+                        <div className="bg-green-600 text-white p-4 rounded-2xl font-black text-[10px] uppercase text-center shadow-lg animate-fadeIn">
+                            Configurações salvas!
                         </div>
                     )}
                 </div>
