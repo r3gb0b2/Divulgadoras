@@ -6,34 +6,25 @@ import { ASAAS_CONFIG } from "./credentials.js";
 admin.initializeApp();
 const db = admin.firestore();
 
-// Helper inteligente para chamadas à API Sure/Babysuri
+// Helper para chamadas à API Sure/Babysuri (Versão 26.1.6)
 const sureFetch = async (endpoint, method, body, config) => {
     if (!config || !config.apiUrl || !config.apiToken) {
         throw new Error("Configuração da API Sure incompleta no painel administrativo.");
     }
     
-    // 1. Normalização da URL Base (Remove barra final e espaços)
+    // 1. Limpeza da URL Base
+    // Se o usuário digitou "https://.../api/", removemos a barra final
     let baseUrl = config.apiUrl.trim().replace(/\/$/, '');
-    const instanceId = config.instanceId ? config.instanceId.trim() : '';
     
-    // 2. Construção do Caminho
-    // Servidores Babysuri/Azure geralmente esperam: {base}/api/{instancia}/message/sendText
-    // Se a base já termina com /api, não repetimos.
+    // 2. Limpeza do Endpoint
+    // Se o endpoint vier como "/message/sendText", garantimos que não tenha barra dupla
+    let cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
     
-    let path = "";
-    const cleanEndpoint = endpoint.replace(/^\//, ''); // Remove barra inicial do endpoint para controlar manualmente
+    // 3. URL Final
+    // Simples: Base + Caminho. Ex: https://...azurewebsites.net/api/message/sendText
+    const url = `${baseUrl}${cleanEndpoint}`;
     
-    if (baseUrl.toLowerCase().endsWith('/api')) {
-        // Se a URL já tem /api, adicionamos a instância e o comando
-        path = instanceId ? `/${instanceId}/${cleanEndpoint}` : `/${cleanEndpoint}`;
-    } else {
-        // Se não tem /api, adicionamos
-        path = instanceId ? `/api/${instanceId}/${cleanEndpoint}` : `/api/${cleanEndpoint}`;
-    }
-    
-    const url = `${baseUrl}${path}`;
-    
-    console.log(`[SureAPI] Tentando: ${method} ${url}`);
+    console.log(`[SureAPI] Chamando: ${method} ${url}`);
     
     try {
         const res = await fetch(url, {
@@ -58,10 +49,10 @@ const sureFetch = async (endpoint, method, body, config) => {
         }
         
         if (!res.ok) {
-            console.error(`[SureAPI] Erro ${res.status} na URL ${url}:`, responseText);
+            console.error(`[SureAPI] Erro ${res.status} em ${url}:`, responseText);
             
             if (res.status === 404) {
-                throw new Error(`Endpoint não encontrado (404). A URL tentada foi: ${url}. Verifique se o ID da Instância (${instanceId}) está correto no painel de Ajustes.`);
+                throw new Error(`Endpoint não encontrado (404). A URL gerada foi: ${url}. Verifique se a URL no painel termina com /api. Caso o erro persista, tente alterar de /api para /api/v1.`);
             }
             
             throw new Error(responseData.message || responseData.error || `Erro HTTP ${res.status}`);
@@ -69,7 +60,7 @@ const sureFetch = async (endpoint, method, body, config) => {
         
         return responseData;
     } catch (err) {
-        console.error(`[SureAPI] Erro crítico:`, err.message);
+        console.error(`[SureAPI] Falha crítica:`, err.message);
         throw err;
     }
 };
@@ -86,7 +77,7 @@ export const sureWebhook = functions.region("southamerica-east1").https.onReques
     return res.status(405).send('Method Not Allowed');
 });
 
-// --- OMNI CHANNEL CAMPAIGN (WhatsApp & Instagram) ---
+// --- CAMANHA WHATSAPP ---
 export const sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const { messageTemplate, filters, organizationId, platform = 'whatsapp' } = data;
     
@@ -94,7 +85,7 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
     const config = configSnap.data();
     
     if (!config || !config.isActive) {
-        throw new Error("O módulo de mensagens externas está desativado nas configurações.");
+        throw new Error("O módulo de mensagens está desativado.");
     }
 
     const { promoterIds } = filters;
@@ -110,12 +101,7 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
 
             let destination = "";
             if (platform === 'instagram') {
-                destination = (p.instagram || "")
-                    .replace(/https?:\/\/(www\.)?instagram\.com\//i, '')
-                    .replace(/@/g, '')
-                    .split('/')[0]
-                    .split('?')[0]
-                    .trim();
+                destination = (p.instagram || "").replace(/@/g, '').trim();
             } else {
                 destination = (p.whatsapp || "").replace(/\D/g, '');
             }
@@ -140,11 +126,11 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
                 type: 'text'
             };
 
-            // O sureFetch agora cuida da montagem correta da URL incluindo a instância
+            // Usando SINGULAR conforme versão 26.1.6
             await sureFetch('message/sendText', 'POST', payload, config);
             successCount++;
         } catch (err) {
-            console.error(`[Campaign] Falha no envio para ${pid}:`, err.message);
+            console.error(`[Campaign] Falha em ${pid}:`, err.message);
             lastError = err.message;
             failureCount++;
         }
@@ -155,8 +141,8 @@ export const sendWhatsAppCampaign = functions.region("southamerica-east1").https
         count: successCount, 
         failures: failureCount, 
         message: successCount > 0 
-            ? `Campanha finalizada. Sucessos: ${successCount}, Falhas: ${failureCount}.` 
-            : `Falha total no envio. Último erro: ${lastError}` 
+            ? `Envio finalizado. Sucesso: ${successCount}, Falha: ${failureCount}.` 
+            : `Erro: ${lastError}` 
     };
 });
 
@@ -206,7 +192,7 @@ export const asaasWebhook = functions.region("southamerica-east1").https.onReque
     res.status(200).send('OK');
 });
 
-// Função para teste de conexão manual via Super Admin
+// Teste de conexão manual
 export const testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async (data, context) => {
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
@@ -217,40 +203,34 @@ export const testWhatsAppIntegration = functions.region("southamerica-east1").ht
         const payload = {
             instanceId: config.instanceId,
             to: "5585982280780", 
-            message: "Teste de conexão do sistema Equipe Certa 🚀",
+            message: "Teste de conexão - Versão 26.1.6 🚀",
             platform: "whatsapp",
             type: 'text'
         };
         
         const res = await sureFetch('message/sendText', 'POST', payload, config);
-        return { success: true, message: "Conexão estabelecida!", data: res };
+        return { success: true, message: "Conectado!", data: res };
     } catch (err) {
         return { success: false, message: err.message };
     }
 });
 
-// Função para cobrança inteligente de prints esquecidos
+// Cobrança Inteligente
 export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async (data, context) => {
-    const { assignmentId, promoterId, organizationId } = data;
+    const { assignmentId, promoterId } = data;
     
     const configSnap = await db.collection('systemConfig').doc('whatsapp').get();
     const config = configSnap.data();
-    
-    if (!config || !config.isActive) {
-        throw new Error("API de WhatsApp desativada.");
-    }
+    if (!config || !config.isActive) throw new Error("API desativada.");
 
     const pSnap = await db.collection('promoters').doc(promoterId).get();
     const aSnap = await db.collection('postAssignments').doc(assignmentId).get();
-    
-    if (!pSnap.exists || !aSnap.exists) throw new Error("Dados não encontrados.");
     
     const p = pSnap.data();
     const a = aSnap.data();
     const destination = p.whatsapp.replace(/\D/g, '');
     
-    const firstName = p.name.split(' ')[0];
-    const message = `Oi ${firstName}! Notei que você confirmou o post de "${a.post.campaignName}", mas ainda não enviou o print de comprovação no portal. 📸\n\nPode enviar agora para garantir sua presença? 👇\nhttps://divulgadoras.vercel.app/#/posts`;
+    const message = `Oi ${p.name.split(' ')[0]}! Notei que você confirmou o post de "${a.post.campaignName}", mas ainda não enviou o print no portal. 📸\n\nPode enviar agora? 👇\nhttps://divulgadoras.vercel.app/#/posts`;
 
     const payload = {
         instanceId: config.instanceId,
