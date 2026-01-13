@@ -1,8 +1,22 @@
 
-
 import firebase from 'firebase/compat/app';
-import { firestore, functions } from '../firebase/config';
+import { firestore, functions, auth } from '../firebase/config';
 import { AdminUserData, AdminApplication } from '../types';
+
+/**
+ * Envia um e-mail de redefinição de senha oficial do Firebase.
+ */
+export const sendAdminPasswordResetEmail = async (email: string): Promise<void> => {
+  try {
+    await auth.sendPasswordResetEmail(email.toLowerCase().trim());
+  } catch (error: any) {
+    console.error('Error sending password reset:', error);
+    if (error.code === 'auth/user-not-found') {
+        throw new Error('Não encontramos nenhum administrador com este e-mail.');
+    }
+    throw new Error('Falha ao enviar e-mail de recuperação. Tente novamente mais tarde.');
+  }
+};
 
 /**
  * Calls a cloud function to create a user and an admin application request.
@@ -66,7 +80,6 @@ export const setAdminUserData = async (uid: string, data: Partial<Omit<AdminUser
  */
 export const getAllAdmins = async (organizationId?: string): Promise<AdminUserData[]> => {
   try {
-    // FIX: Add firebase namespace for Query type
     let q: firebase.firestore.Query = firestore.collection('admins');
     if (organizationId) {
       q = q.where('organizationIds', 'array-contains', organizationId);
@@ -84,9 +97,6 @@ export const getAllAdmins = async (organizationId?: string): Promise<AdminUserDa
  * @param uid - The UID of the admin to delete.
  */
 export const deleteAdminUser = async (uid: string): Promise<void> => {
-    // This only removes their admin permissions by deleting the document.
-    // Deleting the actual Firebase Auth user requires admin privileges on the backend.
-    // A cloud function would be needed for a full deletion.
   try {
     const docRef = firestore.collection('admins').doc(uid);
     await docRef.delete();
@@ -127,7 +137,6 @@ export const deleteAdminApplication = async (id: string): Promise<void> => {
 
 /**
  * Approves an admin application. This creates an admin record and deletes the application.
- * This should ideally be a single transaction in a cloud function.
  * @param app - The application to approve.
  * @param orgId - The organization ID to assign the new admin to.
  */
