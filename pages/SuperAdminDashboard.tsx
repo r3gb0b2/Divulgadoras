@@ -19,7 +19,8 @@ import {
     TicketIcon,
     ChartBarIcon,
     CogIcon,
-    ShieldCheckIcon
+    ShieldCheckIcon,
+    UserPlusIcon
 } from '../components/Icons';
 
 const SuperAdminDashboard: React.FC = () => {
@@ -138,6 +139,16 @@ const SuperAdminDashboard: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <Link to="/admin/applications" className="group p-6 bg-secondary/60 backdrop-blur border border-white/5 rounded-[2rem] hover:bg-orange-600 transition-all">
+                    <div className="flex items-center">
+                        <div className="p-3 rounded-2xl bg-orange-500/20 text-orange-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                            <UserPlusIcon className="w-8 h-8" />
+                        </div>
+                        <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Solicitações</h2>
+                    </div>
+                    <p className="mt-4 text-gray-400 text-sm group-hover:text-orange-100">Aprovar ou recusar pedidos de acesso ao painel admin.</p>
+                </Link>
+
                 <Link to="/admin/organizations" className="group p-6 bg-secondary/60 backdrop-blur border border-white/5 rounded-[2rem] hover:bg-primary transition-all">
                     <div className="flex items-center">
                         <div className="p-3 rounded-2xl bg-primary/20 text-primary group-hover:bg-white/20 group-hover:text-white transition-colors">
