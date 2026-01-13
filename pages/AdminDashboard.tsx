@@ -34,14 +34,16 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    // Garantindo que a role seja tratada de forma robusta
     const userRole = adminData?.role || '';
     const isSuperAdmin = userRole === 'superadmin';
+    const isVipAdmin = userRole === 'vip_admin';
 
     return (
-        <div className="pb-20">
+        <div className="pb-40">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-white uppercase tracking-tighter">Painel de Controle</h1>
+                <h1 className="text-3xl font-bold text-white uppercase tracking-tighter">
+                    {isVipAdmin ? 'Gestão Club VIP' : 'Painel de Controle'}
+                </h1>
                 <button onClick={handleLogout} className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 flex items-center gap-2 font-bold text-sm transition-all shadow-lg shadow-red-900/20">
                     <LogoutIcon className="w-5 h-5" />
                     <span>Sair</span>
@@ -51,88 +53,24 @@ const AdminDashboard: React.FC = () => {
             <div className="bg-secondary/40 backdrop-blur-xl shadow-3xl rounded-[2.5rem] p-6 md:p-10 border border-white/5">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                     <p className="text-gray-400 font-medium">
-                        Olá, <span className="text-white font-bold">{adminData?.email}</span>. Gerencie sua operação abaixo.
+                        Olá, <span className="text-white font-bold">{adminData?.email}</span>. 
+                        {isVipAdmin ? ' Gerencie os ingressos e benefícios globais.' : ' Gerencie sua operação abaixo.'}
                     </p>
                     {isSuperAdmin && (
                         <div className="px-3 py-1 bg-primary/20 border border-primary/30 rounded-full">
                             <p className="text-[10px] font-black text-primary uppercase tracking-widest">Acesso SuperAdmin Ativado</p>
                         </div>
                     )}
+                    {isVipAdmin && (
+                        <div className="px-3 py-1 bg-amber-500/20 border border-amber-500/30 rounded-full">
+                            <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest">Gestor VIP Global</p>
+                        </div>
+                    )}
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {/* CARDS EXCLUSIVOS SUPERADMIN NO DASHBOARD PRINCIPAL */}
-                    {isSuperAdmin && (
-                        <>
-                            <Link to="/admin/super" className="group block p-6 bg-indigo-600/20 rounded-3xl hover:bg-indigo-600 transition-all duration-300 border border-indigo-500/30 hover:border-transparent shadow-xl ring-1 ring-indigo-500/20">
-                                <div className="flex items-center">
-                                    <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                        <ShieldCheckIcon className="w-8 h-8" />
-                                    </div>
-                                    <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Super Painel</h2>
-                                </div>
-                                <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Gestão global do sistema, organizações e configurações de rede.</p>
-                                <div className="text-xs text-indigo-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Acesso Restrito &rarr;</div>
-                            </Link>
-
-                            <Link to="/admin/greenlife" className="group block p-6 bg-green-900/20 rounded-3xl hover:bg-green-600 transition-all duration-300 border border-green-500/30 hover:border-transparent shadow-xl ring-1 ring-green-500/20">
-                                <div className="flex items-center">
-                                    <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                        <TicketIcon className="w-8 h-8" />
-                                    </div>
-                                    <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Alunos Greenlife</h2>
-                                </div>
-                                <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Gestão de cupons, estoque e ingressos exclusivos para parceiros Greenlife.</p>
-                                <div className="text-xs text-green-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Gerenciar Agora &rarr;</div>
-                            </Link>
-
-                            <Link to="/admin/whatsapp-campaign" className="group block p-6 bg-green-600/10 rounded-3xl hover:bg-green-600 transition-all duration-300 border border-green-500/20 hover:border-transparent shadow-xl">
-                                <div className="flex items-center">
-                                    <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                        <WhatsAppIcon className="w-8 h-8" />
-                                    </div>
-                                    <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Campanhas WhatsApp</h2>
-                                </div>
-                                <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Envios em massa para toda a base global com auxílio de IA.</p>
-                                <div className="text-xs text-green-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Disparar Agora &rarr;</div>
-                            </Link>
-                        </>
-                    )}
-
-                    <Link to="/admin/whatsapp-reminders" className="group block p-6 bg-orange-600/10 rounded-3xl hover:bg-orange-600 transition-all duration-300 border border-orange-500/20 hover:border-transparent shadow-xl">
-                        <div className="flex items-center">
-                            <div className="p-3 rounded-2xl bg-orange-500/20 text-orange-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                <AlertTriangleIcon className="w-8 h-8" />
-                            </div>
-                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Smart Cobrança</h2>
-                        </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-orange-100 line-clamp-2">Detecte atrasos e cobre prints esquecidos via WhatsApp.</p>
-                        <div className="text-xs text-orange-400 group-hover:text-white mt-4 font-black uppercase tracking-widest">Sincronizar Atrasos &rarr;</div>
-                    </Link>
-
-                    <Link to="/admin/promoters" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-primary transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
-                        <div className="flex items-center">
-                            <div className="p-3 rounded-2xl bg-primary/20 text-primary group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                <UsersIcon className="w-8 h-8" />
-                            </div>
-                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Equipe</h2>
-                        </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-purple-100 line-clamp-2">Aprovar cadastros, gerenciar histórico e perfis individuais.</p>
-                        <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
-                    </Link>
-
-                    <Link to="/admin/recovery-leads" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-green-600 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
-                        <div className="flex items-center">
-                            <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                <WhatsAppIcon className="w-8 h-8" />
-                            </div>
-                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Recuperação Equipe</h2>
-                        </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-green-100 line-clamp-2">Contatar candidatas pendentes e oferecer suporte rápido.</p>
-                        <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
-                    </Link>
-
-                    <Link to="/admin/club-vip" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-amber-600 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
+                    {/* SEÇÃO CLUB VIP - Única seção visível para vip_admin e também para outros */}
+                    <Link to="/admin/club-vip" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-amber-600 transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl ring-2 ring-amber-500/10">
                         <div className="flex items-center">
                             <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
                                 <TicketIcon className="w-8 h-8" />
@@ -140,41 +78,57 @@ const AdminDashboard: React.FC = () => {
                             <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Club VIP</h2>
                         </div>
                         <p className="mt-4 text-gray-400 text-sm group-hover:text-amber-100 line-clamp-2">Gestão de adesões, cupons promocionais e recuperação de e-mail.</p>
-                        <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
+                        <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Gerenciar Agora &rarr;</div>
                     </Link>
 
-                    <Link to="/admin/recovery" className="group block p-6 bg-indigo-600/10 rounded-3xl hover:bg-indigo-600 transition-all duration-300 border border-indigo-500/20 hover:border-transparent shadow-xl">
-                        <div className="flex items-center">
-                            <div className="p-3 rounded-2xl bg-green-500/20 text-green-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                <WhatsAppIcon className="w-8 h-8" />
-                            </div>
-                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Recuperação VIP</h2>
-                        </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Recupere leads que abandonaram o carrinho do Clube VIP.</p>
-                        <div className="text-xs text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
-                    </Link>
+                    {/* DEMAIS CARDS OCULTOS PARA vip_admin */}
+                    {!isVipAdmin && (
+                        <>
+                            {isSuperAdmin && (
+                                <>
+                                    <Link to="/admin/super" className="group block p-6 bg-indigo-600/20 rounded-3xl hover:bg-indigo-600 transition-all duration-300 border border-indigo-500/30 hover:border-transparent shadow-xl">
+                                        <div className="flex items-center">
+                                            <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                                <ShieldCheckIcon className="w-8 h-8" />
+                                            </div>
+                                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Super Painel</h2>
+                                        </div>
+                                        <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Gestão global do sistema e organizações.</p>
+                                    </Link>
+                                </>
+                            )}
 
-                    <Link to="/admin/posts" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-primary transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
-                        <div className="flex items-center">
-                            <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                <MegaphoneIcon className="w-8 h-8" />
-                            </div>
-                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Postagens</h2>
-                        </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Criar tarefas, agendar posts e validar prints de comprovação.</p>
-                        <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
-                    </Link>
+                            <Link to="/admin/promoters" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-primary transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
+                                <div className="flex items-center">
+                                    <div className="p-3 rounded-2xl bg-primary/20 text-primary group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                        <UsersIcon className="w-8 h-8" />
+                                    </div>
+                                    <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Equipe</h2>
+                                </div>
+                                <p className="mt-4 text-gray-400 text-sm group-hover:text-purple-100 line-clamp-2">Aprovar cadastros e gerenciar perfis.</p>
+                            </Link>
 
-                    <Link to="/admin/settings" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-gray-700 transition-all duration-300 border border-white/5 hover:border-primary shadow-xl">
-                        <div className="flex items-center">
-                            <div className="p-3 rounded-2xl bg-gray-600/20 text-gray-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
-                                <CogIcon className="w-8 h-8" />
-                            </div>
-                            <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Ajustes</h2>
-                        </div>
-                        <p className="mt-4 text-gray-400 text-sm group-hover:text-white line-clamp-2">Configurações globais, regras de sistema e manutenção.</p>
-                        <div className="text-xs text-primary group-hover:text-white mt-4 font-black uppercase tracking-widest">Acessar &rarr;</div>
-                    </Link>
+                            <Link to="/admin/posts" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-primary transition-all duration-300 border border-white/5 hover:border-transparent shadow-xl">
+                                <div className="flex items-center">
+                                    <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                        <MegaphoneIcon className="w-8 h-8" />
+                                    </div>
+                                    <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Postagens</h2>
+                                </div>
+                                <p className="mt-4 text-gray-400 text-sm group-hover:text-indigo-100 line-clamp-2">Criar tarefas e validar prints.</p>
+                            </Link>
+
+                            <Link to="/admin/settings" className="group block p-6 bg-gray-800/40 rounded-3xl hover:bg-gray-700 transition-all duration-300 border border-white/5 hover:border-primary shadow-xl">
+                                <div className="flex items-center">
+                                    <div className="p-3 rounded-2xl bg-gray-600/20 text-gray-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                                        <CogIcon className="w-8 h-8" />
+                                    </div>
+                                    <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Ajustes</h2>
+                                </div>
+                                <p className="mt-4 text-gray-400 text-sm group-hover:text-white line-clamp-2">Configurações globais e manutenção.</p>
+                            </Link>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

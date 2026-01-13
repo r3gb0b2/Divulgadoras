@@ -7,7 +7,7 @@ export type FieldValue = firebase.firestore.FieldValue;
 
 export type PromoterStatus = 'pending' | 'approved' | 'rejected' | 'rejected_editable' | 'removed';
 export type CampaignStatus = 'active' | 'inactive' | 'hidden';
-export type AdminRole = 'superadmin' | 'admin' | 'approver' | 'viewer' | 'poster' | 'recovery';
+export type AdminRole = 'superadmin' | 'admin' | 'approver' | 'viewer' | 'poster' | 'recovery' | 'vip_admin';
 export type OrganizationStatus = 'active' | 'trial' | 'deactivated' | 'hidden';
 export type PlanId = 'basic' | 'professional';
 

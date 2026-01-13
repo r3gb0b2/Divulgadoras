@@ -7,7 +7,6 @@ import { getAllCampaigns } from '../services/settingsService';
 import { getOrganizations } from '../services/organizationService';
 import { states, stateMap } from '../constants/states';
 import { auth } from '../firebase/config';
-// FIX: Removed modular createUserWithEmailAndPassword import to use compat syntax.
 import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { ArrowLeftIcon } from '../components/Icons';
 
@@ -149,7 +148,9 @@ const ManageUsersPage: React.FC = () => {
         if (!email) return setError("O campo de e-mail é obrigatório.");
         if (!editingTarget && !password) return setError("É obrigatório definir uma senha para adicionar um novo usuário.");
         
-        if (isSuperAdmin && role !== 'superadmin' && !selectedOrg) {
+        const isGlobalRole = role === 'superadmin' || role === 'vip_admin';
+
+        if (isSuperAdmin && !isGlobalRole && !selectedOrg) {
             return setError("Por favor, selecione uma organização para este usuário.");
         }
         if (!isSuperAdmin && !selectedOrgId) return setError("Nenhuma organização selecionada.");
@@ -161,33 +162,29 @@ const ManageUsersPage: React.FC = () => {
             if (editingTarget) {
                 targetUid = editingTarget.uid;
             } else {
-                // FIX: Use compat createUserWithEmailAndPassword method.
                 const { user } = await auth.createUserWithEmailAndPassword(email, password);
                 targetUid = user.uid;
-                alert(`Usuário ${email} criado com sucesso. Lembre-se de compartilhar a senha com ele.`);
+                alert(`Usuário ${email} criado com sucesso.`);
             }
 
             if (!targetUid) throw new Error("Não foi possível encontrar o UID do usuário.");
 
             let orgIds: string[] = editingTarget?.organizationIds || [];
             if (isSuperAdmin) {
-                orgIds = role === 'superadmin' ? [] : (selectedOrg ? [selectedOrg] : []);
-            } else if (!editingTarget) { // Regular admin creating a user
+                orgIds = isGlobalRole ? [] : (selectedOrg ? [selectedOrg] : []);
+            } else if (!editingTarget) {
                 orgIds = selectedOrgId ? [selectedOrgId] : [];
             }
-            // Note: This page only handles single-org assignment for simplicity. 
-            // Multi-org assignment is done on the Manage Organization page.
 
             const dataToSave: Omit<AdminUserData, 'uid'> = { 
                 email, 
                 role, 
-                assignedStates, 
-                assignedCampaigns,
+                assignedStates: isGlobalRole ? [] : assignedStates, 
+                assignedCampaigns: isGlobalRole ? {} : assignedCampaigns,
                 organizationIds: orgIds,
             };
             
             await setAdminUserData(targetUid, dataToSave);
-            
             resetForm();
             await fetchData();
         } catch (err: any) {
@@ -214,6 +211,7 @@ const ManageUsersPage: React.FC = () => {
     };
     
     const getCampaignSummary = (admin: AdminUserData) => {
+        if (admin.role === 'superadmin' || admin.role === 'vip_admin') return 'Global (Acesso total)';
         if (!admin.assignedStates || admin.assignedStates.length === 0) return 'Nenhum estado atribuído';
         return admin.assignedStates.map(state => {
             const campaigns = admin.assignedCampaigns?.[state];
@@ -228,11 +226,14 @@ const ManageUsersPage: React.FC = () => {
         approver: 'Aprovador', 
         viewer: 'Visualizador', 
         poster: 'Criador de Posts',
-        recovery: 'Recuperador'
+        recovery: 'Recuperador',
+        vip_admin: 'Gestor VIP (Global)'
     };
 
+    const isGlobalRole = role === 'superadmin' || role === 'vip_admin';
+
     return (
-        <div>
+        <div className="pb-40">
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-3xl font-bold">{isSuperAdmin ? 'Gerenciar Todos os Usuários' : 'Gerenciar Usuários da Organização'}</h1>
                 <button onClick={() => navigate(-1)} className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-500 text-sm">
@@ -243,7 +244,6 @@ const ManageUsersPage: React.FC = () => {
             
             <div className="bg-secondary shadow-lg rounded-lg p-6">
                 <div className="flex flex-col md:flex-row gap-6">
-                    {/* Form Section */}
                     <form onSubmit={handleSubmit} className="w-full md:w-1/3 border border-gray-700 p-4 rounded-lg flex flex-col space-y-4">
                         <h3 className="text-xl font-semibold">{editingTarget ? 'Editar Usuário' : 'Adicionar Usuário'}</h3>
                         
@@ -267,11 +267,16 @@ const ManageUsersPage: React.FC = () => {
                                 <option value="poster">Criador de Posts</option>
                                 <option value="recovery">Recuperador</option>
                                 <option value="admin">Admin</option>
-                                {isSuperAdmin && <option value="superadmin">Super Admin</option>}
+                                {isSuperAdmin && (
+                                    <>
+                                        <option value="vip_admin">Gestor VIP (Global)</option>
+                                        <option value="superadmin">Super Admin</option>
+                                    </>
+                                )}
                             </select>
                         </div>
                         
-                        {isSuperAdmin && role !== 'superadmin' && (
+                        {isSuperAdmin && !isGlobalRole && (
                             <div>
                                 <label className="block text-sm font-medium text-gray-300">Organização</label>
                                 <select value={selectedOrg} onChange={e => setSelectedOrg(e.target.value)} required className="mt-1 w-full px-3 py-2 border border-gray-600 rounded-md bg-gray-700 text-gray-200">
@@ -283,56 +288,62 @@ const ManageUsersPage: React.FC = () => {
                             </div>
                         )}
 
-
-                        <div className="flex-grow flex flex-col min-h-0 space-y-4">
-                            <div className="flex flex-col">
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Estados Atribuídos</label>
-                                <div className="p-2 border border-gray-600 rounded-md overflow-y-auto max-h-40 space-y-1">
-                                    {states.map(s => (
-                                        <label key={s.abbr} className="flex items-center space-x-2 cursor-pointer p-1 rounded hover:bg-gray-700/50">
-                                            <input type="checkbox" checked={assignedStates.includes(s.abbr)} onChange={() => handleStateToggle(s.abbr)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" disabled={role === 'superadmin'} />
-                                            <span>{s.name} ({s.abbr})</span>
-                                        </label>
-                                    ))}
+                        {!isGlobalRole && (
+                            <div className="flex-grow flex flex-col min-h-0 space-y-4">
+                                <div className="flex flex-col">
+                                    <label className="block text-sm font-medium text-gray-300 mb-1">Estados Atribuídos</label>
+                                    <div className="p-2 border border-gray-600 rounded-md overflow-y-auto max-h-40 space-y-1">
+                                        {states.map(s => (
+                                            <label key={s.abbr} className="flex items-center space-x-2 cursor-pointer p-1 rounded hover:bg-gray-700/50">
+                                                <input type="checkbox" checked={assignedStates.includes(s.abbr)} onChange={() => handleStateToggle(s.abbr)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded" />
+                                                <span>{s.name} ({s.abbr})</span>
+                                            </label>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                            
-                            <div className="flex flex-col flex-grow min-h-0">
-                                <label className="block text-sm font-medium text-gray-300 mb-1">Eventos Atribuídos</label>
-                                <div className="p-2 border border-gray-600 rounded-md overflow-y-auto flex-grow space-y-3">
-                                    {role === 'superadmin' ? <p className="text-sm text-gray-400">Super Admin tem acesso a tudo.</p> :
-                                    assignedStates.length === 0 ? <p className="text-sm text-gray-400">Selecione um estado para ver os eventos.</p> :
-                                    assignedStates.map(stateAbbr => (
-                                        <div key={stateAbbr}>
-                                            <h4 className="font-semibold text-primary">{stateMap[stateAbbr]}</h4>
-                                            <div className="pl-2 border-l-2 border-gray-600">
-                                                <label className="flex items-center space-x-2 cursor-pointer p-1 text-sm">
-                                                    <input type="checkbox" checked={!assignedCampaigns[stateAbbr] || assignedCampaigns[stateAbbr]?.length === 0} onChange={(e) => handleSelectAllCampaigns(stateAbbr, e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/>
-                                                    <span>Todos os Eventos</span>
-                                                </label>
-                                                {(!assignedCampaigns[stateAbbr] && campaignsByState[stateAbbr]?.length > 0) ? null : campaignsByState[stateAbbr]?.map(c => (
-                                                    <label key={c.id} className="flex items-center space-x-2 cursor-pointer p-1 text-sm">
-                                                        <input type="checkbox" checked={assignedCampaigns[stateAbbr]?.includes(c.name)} onChange={() => handleCampaignToggle(stateAbbr, c.name)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/>
-                                                        <span>{c.name}</span>
+                                
+                                <div className="flex flex-col flex-grow min-h-0">
+                                    <label className="block text-sm font-medium text-gray-300 mb-1">Eventos Atribuídos</label>
+                                    <div className="p-2 border border-gray-600 rounded-md overflow-y-auto flex-grow space-y-3">
+                                        {assignedStates.length === 0 ? <p className="text-sm text-gray-400">Selecione um estado para ver os eventos.</p> :
+                                        assignedStates.map(stateAbbr => (
+                                            <div key={stateAbbr}>
+                                                <h4 className="font-semibold text-primary">{stateMap[stateAbbr]}</h4>
+                                                <div className="pl-2 border-l-2 border-gray-600">
+                                                    <label className="flex items-center space-x-2 cursor-pointer p-1 text-sm">
+                                                        <input type="checkbox" checked={!assignedCampaigns[stateAbbr] || assignedCampaigns[stateAbbr]?.length === 0} onChange={(e) => handleSelectAllCampaigns(stateAbbr, e.target.checked)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/>
+                                                        <span>Todos os Eventos</span>
                                                     </label>
-                                                ))}
+                                                    {(!assignedCampaigns[stateAbbr] && campaignsByState[stateAbbr]?.length > 0) ? null : campaignsByState[stateAbbr]?.map(c => (
+                                                        <label key={c.id} className="flex items-center space-x-2 cursor-pointer p-1 text-sm">
+                                                            <input type="checkbox" checked={assignedCampaigns[stateAbbr]?.includes(c.name)} onChange={() => handleCampaignToggle(stateAbbr, c.name)} className="h-4 w-4 text-primary bg-gray-700 border-gray-500 rounded"/>
+                                                            <span>{c.name}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
+
+                        {isGlobalRole && (
+                            <div className="p-4 bg-dark rounded-xl border border-primary/20">
+                                <p className="text-xs text-primary font-bold uppercase">Acesso Global Ativado</p>
+                                <p className="text-[10px] text-gray-400 mt-1">Este usuário tem acesso a todas as organizações e eventos do sistema para a finalidade de gestão {role === 'vip_admin' ? 'VIP' : 'Total'}.</p>
+                            </div>
+                        )}
 
                         {error && <p className="text-red-400 text-sm">{error}</p>}
                         <div className="flex gap-2 pt-2">
-                            <button type="submit" disabled={isLoading} className="flex-1 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50">
-                                {isLoading ? 'Salvando...' : (editingTarget ? 'Salvar Alterações' : 'Adicionar Usuário')}
+                            <button type="submit" disabled={isLoading} className="flex-1 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark disabled:opacity-50 font-black uppercase text-[10px]">
+                                {isLoading ? 'Salvando...' : (editingTarget ? 'Salvar' : 'Adicionar')}
                             </button>
                             {editingTarget && <button type="button" onClick={resetForm} className="px-4 py-2 bg-gray-600 rounded-md">Cancelar</button>}
                         </div>
                     </form>
 
-                    {/* Users List Section */}
                     <div className="w-full md:w-2/3 flex-grow overflow-y-auto border border-gray-700 p-4 rounded-lg space-y-6">
                          <div>
                              <h3 className="text-xl font-semibold mb-4">Usuários Existentes</h3>
@@ -348,7 +359,7 @@ const ManageUsersPage: React.FC = () => {
                                             <div key={admin.uid} className="block md:flex md:items-center md:justify-between p-3 bg-gray-700/50 rounded-md">
                                                 <div className="min-w-0 md:flex-1">
                                                     <p className="font-semibold break-words">{admin.email}</p>
-                                                    {isSuperAdmin && <p className="text-sm text-gray-300">Organização(ões): <span className="font-medium">{orgNames}</span></p>}
+                                                    {isSuperAdmin && <p className="text-sm text-gray-300">Org: <span className="font-medium">{orgNames}</span></p>}
                                                     <p className="text-sm text-gray-400 break-words">
                                                         <span className="font-bold">{roleNames[admin.role]}</span> - {getCampaignSummary(admin)}
                                                     </p>
