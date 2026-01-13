@@ -69,7 +69,7 @@ const SuperAdminDashboard: React.FC = () => {
 
     return (
         <div className="space-y-6 pb-20">
-            <div className="flex justify-between items-center">
+            <div className="flex justify-between items-center px-4 md:px-0">
                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter">Super Administração</h1>
                 <div className="flex gap-4">
                     <div className="flex items-center gap-2 bg-dark border border-white/5 px-4 py-2 rounded-2xl">
@@ -146,6 +146,16 @@ const SuperAdminDashboard: React.FC = () => {
                         <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Organizações</h2>
                     </div>
                     <p className="mt-4 text-gray-400 text-sm group-hover:text-purple-100">Gerencie produtoras, planos e assinaturas ativas.</p>
+                </Link>
+
+                <Link to="/admin/users" className="group p-6 bg-secondary/60 backdrop-blur border border-white/5 rounded-[2rem] hover:bg-amber-600 transition-all">
+                    <div className="flex items-center">
+                        <div className="p-3 rounded-2xl bg-amber-500/20 text-amber-400 group-hover:bg-white/20 group-hover:text-white transition-colors">
+                            <UsersIcon className="w-8 h-8" />
+                        </div>
+                        <h2 className="ml-4 text-xl font-black text-white uppercase tracking-tight">Usuários</h2>
+                    </div>
+                    <p className="mt-4 text-gray-400 text-sm group-hover:text-amber-50">Gerencie todos os administradores e operadores do sistema.</p>
                 </Link>
 
                 <Link to="/admin/greenlife" className="group p-6 bg-secondary/60 backdrop-blur border border-white/5 rounded-[2rem] hover:bg-green-700 transition-all">
