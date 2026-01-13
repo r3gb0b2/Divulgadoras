@@ -5,7 +5,8 @@ import { useAdminAuth } from '../contexts/AdminAuthContext';
 import { 
     getAllGreenlifeMemberships, getAllGreenlifeEvents, createGreenlifeEvent, 
     updateGreenlifeEvent, deleteGreenlifeEvent, refundGreenlifeMembership,
-    addGreenlifeCodes, getGreenlifeCodeStats, getGreenlifeEventCodes
+    addGreenlifeCodes, getGreenlifeCodeStats, getGreenlifeEventCodes,
+    updateGreenlifeMembership
 } from '../services/greenlifeService';
 import { VipMembership, VipEvent } from '../types';
 import { firestore, functions } from '../firebase/config';
@@ -101,7 +102,7 @@ const AdminGreenlife: React.FC = () => {
     const [eventStats, setEventStats] = useState<Record<string, number>>({});
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
-    const [isProcessing, setIsProcessing] = useState<string | null>(null);
+    const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Partial<VipEvent> | null>(null);
@@ -131,23 +132,44 @@ const AdminGreenlife: React.FC = () => {
     useEffect(() => { fetchData(); }, [fetchData]);
 
     const filteredMembers = useMemo(() => {
+        const query = searchQuery.toLowerCase().trim();
         return memberships.filter(m => 
-            m.promoterName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-            m.promoterEmail.toLowerCase().includes(searchQuery.toLowerCase())
+            (m.promoterName || '').toLowerCase().includes(query) || 
+            (m.promoterEmail || '').toLowerCase().includes(query)
         );
     }, [memberships, searchQuery]);
 
-    const handleManualActivate = async (m: VipMembership) => {
-        if(!confirm("Deseja ativar esta adesão manualmente pegando um código do estoque Greenlife?")) return;
-        setIsProcessing(m.id);
+    const handleCopyTicketLink = (m: VipMembership) => {
+        const url = `${window.location.origin}/#/alunosgreenlife/status?email=${encodeURIComponent(m.promoterEmail)}`;
+        navigator.clipboard.writeText(url);
+        alert("Link do ingresso copiado!");
+    };
+
+    const handleManualActivateOrSwap = async (m: VipMembership, forceNew: boolean = false) => {
+        const confirmMsg = forceNew 
+            ? "Deseja INVALIDAR o código atual e pegar um NOVO do estoque Greenlife?" 
+            : "Deseja ativar esta adesão pegando um código do estoque Greenlife disponível?";
+
+        if(!confirm(confirmMsg)) return;
+
+        setIsProcessingId(m.id);
         try {
             const activate = httpsCallable(functions, 'activateGreenlifeMembership');
-            const res: any = await activate({ membershipId: m.id });
+            const res: any = await activate({ membershipId: m.id, forceNew });
             if (res.data.success) {
-                alert(`Aluno ativado! Código: ${res.data.code}`);
+                alert(`Sucesso! Código atribuído: ${res.data.code}`);
                 fetchData();
             }
-        } catch (e: any) { alert("Falha na ativação: " + e.message); } finally { setIsProcessing(null); }
+        } catch (e: any) { alert("Erro ao processar: " + (e.message || "Estoque possivelmente vazio.")); } finally { setIsProcessingId(null); }
+    };
+
+    const handleRefundAction = async (m: VipMembership) => {
+        if (!confirm(`ESTORNAR ALUNO: Tem certeza? O código '${m.benefitCode || 'N/A'}' será removido e o acesso invalidado.`)) return;
+        setIsProcessingId(m.id);
+        try {
+            await refundGreenlifeMembership(m.id);
+            fetchData();
+        } catch (e: any) { alert("Erro ao estornar: " + e.message); } finally { setIsProcessingId(null); }
     };
 
     const handleSaveEvent = async (e: React.FormEvent) => {
@@ -159,7 +181,7 @@ const AdminGreenlife: React.FC = () => {
                 price: Number(editingEvent.price),
                 eventTime: editingEvent.eventTime || '',
                 eventLocation: editingEvent.eventLocation || '',
-                attractions: editingEvent.attractions || '', // Salva atrações
+                attractions: editingEvent.attractions || '',
                 isActive: editingEvent.isActive ?? true,
                 benefits: editingEvent.benefits || []
             };
@@ -197,12 +219,15 @@ const AdminGreenlife: React.FC = () => {
 
     return (
         <div className="pb-40">
-            <div className="flex justify-between items-center mb-8">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
                 <h1 className="text-3xl font-black text-white uppercase tracking-tighter flex items-center gap-3">
                     <TicketIcon className="w-8 h-8 text-green-500" /> Admin Greenlife
                 </h1>
                 <div className="flex gap-2">
                     <button onClick={() => { setEditingEvent({ isActive: true, benefits: [] }); setIsModalOpen(true); }} className="px-6 py-3 bg-green-600 text-white font-black rounded-2xl text-[10px] uppercase shadow-xl">Novo Evento</button>
+                    <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
+                        <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
+                    </button>
                     <button onClick={() => navigate('/admin')} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white"><ArrowLeftIcon className="w-5 h-5"/></button>
                 </div>
             </div>
@@ -217,38 +242,53 @@ const AdminGreenlife: React.FC = () => {
                     <div className="space-y-4">
                         <div className="relative">
                             <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                            <input type="text" placeholder="BUSCAR ALUNO..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-green-500" />
+                            <input type="text" placeholder="BUSCAR POR NOME OU E-MAIL..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full pl-11 pr-4 py-3 bg-dark border border-gray-700 rounded-2xl text-white text-[10px] font-black uppercase outline-none focus:border-green-500" />
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
                                 <thead className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
-                                    <tr><th className="px-6 py-5">Aluno / Evento</th><th className="px-6 py-5 text-center">Status</th><th className="px-6 py-4 text-right">Gestão</th></tr>
+                                    <tr>
+                                        <th className="px-6 py-5">Aluno / Evento</th>
+                                        <th className="px-6 py-5 text-center">Status</th>
+                                        <th className="px-6 py-4 text-right">Ações</th>
+                                    </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {filteredMembers.map(m => (
-                                        <tr key={m.id} className="hover:bg-white/[0.02] transition-colors">
+                                        <tr key={m.id} className="hover:bg-white/[0.02] transition-colors group">
                                             <td className="px-6 py-5">
-                                                <p className="text-sm font-black text-white uppercase">{m.promoterName}</p>
-                                                <p className="text-[9px] text-green-500 font-black mt-1">{m.vipEventName} • {m.benefitCode || '---'}</p>
+                                                <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
+                                                <p className="text-[10px] text-gray-500 font-mono truncate">{m.promoterEmail}</p>
+                                                <p className="text-[9px] text-green-500 font-black mt-1 uppercase">{m.vipEventName}</p>
+                                                <p className="text-[11px] text-green-500 font-mono font-black mt-1">{m.benefitCode || '---'}</p>
                                             </td>
                                             <td className="px-6 py-5 text-center">
-                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>{m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}</span>
+                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${
+                                                    m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 
+                                                    m.status === 'refunded' ? 'bg-red-900/40 text-red-400 border-red-800' :
+                                                    'bg-orange-900/40 text-orange-400 border-orange-800'
+                                                }`}>
+                                                    {m.status === 'confirmed' ? 'PAGO' : m.status === 'refunded' ? 'ESTORNADO' : 'PENDENTE'}
+                                                </span>
                                             </td>
                                             <td className="px-6 py-5 text-right">
-                                                {m.status === 'pending' ? (
-                                                    <button 
-                                                        onClick={() => handleManualActivate(m)} 
-                                                        disabled={isProcessing === m.id}
-                                                        className="px-4 py-2 bg-green-600 text-white rounded-xl text-[9px] font-black uppercase disabled:opacity-50"
-                                                    >
-                                                        {isProcessing === m.id ? '...' : 'ATIVAR'}
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => handleCopyTicketLink(m)} className="p-2 bg-indigo-900/30 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all border border-indigo-800/30" title="Copiar Link do Ingresso">
+                                                        <LinkIcon className="w-4 h-4" />
                                                     </button>
-                                                ) : (
-                                                    <div className="flex justify-end gap-2">
-                                                        <button onClick={() => { if(confirm("Deseja invalidar e pegar novo código?")) handleManualActivate(m); }} className="p-2 bg-indigo-900/20 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all"><RefreshIcon className="w-4 h-4"/></button>
-                                                        <button onClick={() => { if(confirm("Estornar?")) refundGreenlifeMembership(m.id).then(fetchData); }} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all"><TrashIcon className="w-4 h-4"/></button>
-                                                    </div>
-                                                )}
+                                                    {m.status === 'pending' ? (
+                                                        <button onClick={() => handleManualActivateOrSwap(m)} disabled={isProcessingId === m.id} className="px-4 py-2 bg-green-600 text-white rounded-xl text-[9px] font-black uppercase hover:bg-green-500">ATIVAR</button>
+                                                    ) : m.status !== 'refunded' && (
+                                                        <button onClick={() => handleManualActivateOrSwap(m, true)} disabled={isProcessingId === m.id} className="p-2 bg-blue-900/30 text-blue-400 rounded-xl border border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all" title="Trocar / Renovar Código">
+                                                            <RefreshIcon className={`w-4 h-4 ${isProcessingId === m.id ? 'animate-spin' : ''}`} />
+                                                        </button>
+                                                    )}
+                                                    {m.status !== 'refunded' && (
+                                                        <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30" title="Estornar e Invalidar">
+                                                            <UndoIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -278,7 +318,7 @@ const AdminGreenlife: React.FC = () => {
                                     </button>
                                     <button onClick={() => handleDownloadStock(ev)} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all" title="Baixar Estoque"><DownloadIcon className="w-4 h-4" /></button>
                                     <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
-                                    <button onClick={() => { if(confirm("Excluir?")) deleteGreenlifeEvent(ev.id).then(fetchData); }} className="p-3 bg-red-900/20 text-red-500 rounded-xl"><TrashIcon className="w-4 h-4"/></button>
+                                    <button onClick={() => { if(confirm("Excluir?")) deleteGreenlifeEvent(ev.id).then(fetchData); }} className="p-3 bg-red-900/30 text-red-400 rounded-xl"><TrashIcon className="w-4 h-4"/></button>
                                 </div>
                             </div>
                         ))}

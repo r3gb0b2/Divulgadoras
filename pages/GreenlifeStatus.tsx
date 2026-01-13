@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getGreenlifeMembershipsByEmail, getAllGreenlifeEvents } from '../services/greenlifeService';
 import { VipMembership } from '../types';
-import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, TicketIcon, DownloadIcon, RefreshIcon } from '../components/Icons';
+import { ArrowLeftIcon, SearchIcon, CheckCircleIcon, TicketIcon, XIcon, RefreshIcon, ClockIcon } from '../components/Icons';
 import GreenlifeTicket from '../components/GreenlifeTicket';
 
 const GreenlifeStatus: React.FC = () => {
@@ -24,17 +24,15 @@ const GreenlifeStatus: React.FC = () => {
         setError(null);
         setSearched(true);
         try {
-            // Busca apenas as adesões do e-mail específico (muito mais eficiente)
             const userMemb = await getGreenlifeMembershipsByEmail(targetEmail);
-            const confirmedMemb = userMemb.filter(m => m.status === 'confirmed');
+            const validMemb = userMemb.filter(m => m.status === 'confirmed' || m.status === 'refunded');
             
-            if (confirmedMemb.length === 0) {
-                setError("Nenhuma adesão ativa encontrada para este e-mail.");
+            if (validMemb.length === 0) {
+                setError("Nenhuma adesão encontrada para este e-mail.");
                 setMemberships([]);
             } else {
                 const allEvents = await getAllGreenlifeEvents();
-                // Enriquecer a adesão com os dados atuais de horário e local do evento
-                const enrichedMemb = confirmedMemb.map(m => {
+                const enrichedMemb = validMemb.map(m => {
                     const event = allEvents.find(e => e.id === m.vipEventId);
                     return {
                         ...m,
@@ -46,14 +44,7 @@ const GreenlifeStatus: React.FC = () => {
                 localStorage.setItem('saved_promoter_email', targetEmail);
             }
         } catch (err: any) { 
-            console.error("Erro técnico na busca Greenlife:", err);
-            if (err.message?.includes("index")) {
-                setError("O banco de dados está sendo configurado. Tente novamente em alguns minutos.");
-            } else if (err.message?.includes("permission")) {
-                setError("Erro de permissão ao acessar os dados. Contate o suporte.");
-            } else {
-                setError("Falha ao sincronizar dados. Verifique sua conexão.");
-            }
+            setError("Falha ao sincronizar dados. Verifique sua conexão.");
         } finally { 
             setIsLoading(false); 
         }
@@ -99,25 +90,30 @@ const GreenlifeStatus: React.FC = () => {
                     {error && (
                         <div className="bg-red-900/20 border border-red-500/50 p-6 rounded-3xl text-center">
                             <p className="text-white font-bold text-sm mb-4">{error}</p>
-                            <button 
-                                onClick={() => performSearch(email)} 
-                                className="px-6 py-2 bg-red-600 text-white text-[10px] font-black uppercase rounded-xl hover:bg-red-500 transition-all"
-                            >
-                                Tentar Novamente
-                            </button>
+                            <button onClick={() => performSearch(email)} className="px-6 py-2 bg-red-600 text-white text-[10px] font-black uppercase rounded-xl">Tentar Novamente</button>
                         </div>
                     )}
 
                     {memberships.map(m => (
-                        <div key={m.id} className="bg-secondary/60 p-8 rounded-[2.5rem] border border-white/5 shadow-2xl">
+                        <div key={m.id} className={`bg-secondary/60 p-8 rounded-[2.5rem] border ${m.status === 'refunded' ? 'border-red-500/30 grayscale' : 'border-white/5'} shadow-2xl`}>
                             <h2 className="text-xl font-black text-white uppercase tracking-tight mb-4">{m.vipEventName}</h2>
-                            <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-2xl mb-6 text-center">
-                                <p className="text-green-500 font-black uppercase text-xs">ACESSO ATIVO ✅</p>
-                                <p className="text-[11px] text-green-600 font-black mt-1">CÓDIGO: {m.benefitCode}</p>
-                            </div>
-                            <button onClick={() => setShowTicketFor(m)} className="w-full py-4 bg-gray-800 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest hover:bg-gray-700 flex items-center justify-center gap-2">
-                                <TicketIcon className="w-4 h-4" /> VER INGRESSO DIGITAL
-                            </button>
+                            
+                            {m.status === 'refunded' ? (
+                                <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-2xl mb-6 text-center">
+                                    <p className="text-red-500 font-black uppercase text-xs">ACESSO CANCELADO ❌</p>
+                                    <p className="text-[10px] text-red-400 mt-1 uppercase">Esta adesão foi estornada.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-2xl mb-6 text-center">
+                                        <p className="text-green-500 font-black uppercase text-xs">ACESSO ATIVO ✅</p>
+                                        <p className="text-[11px] text-green-600 font-black mt-1">CÓDIGO: {m.benefitCode}</p>
+                                    </div>
+                                    <button onClick={() => setShowTicketFor(m)} className="w-full py-4 bg-gray-800 text-white font-black rounded-2xl uppercase text-[10px] tracking-widest hover:bg-gray-700 flex items-center justify-center gap-2">
+                                        <TicketIcon className="w-4 h-4" /> VER INGRESSO DIGITAL
+                                    </button>
+                                </>
+                            )}
                         </div>
                     ))}
                     <button onClick={() => {setSearched(false); setEmail(''); setError(null);}} className="w-full py-4 text-gray-500 text-xs font-black uppercase hover:text-white">Trocar conta</button>

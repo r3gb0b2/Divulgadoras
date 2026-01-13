@@ -136,6 +136,45 @@ export const createGreenlifeAsaasPix = functions
     });
 
 /**
+ * Ativação Manual de Adesão Greenlife
+ */
+export const activateGreenlifeMembership = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        const { membershipId, forceNew } = data;
+        const docRef = db.collection('greenlifeMemberships').doc(membershipId);
+        const snap = await docRef.get();
+
+        if (!snap.exists) throw new functions.https.HttpsError('not-found', 'Adesão não encontrada.');
+        const membership = snap.data();
+
+        // Se forceNew, o código atual não é invalidado na origem (é apenas sobreposto), 
+        // mas idealmente marcamos o novo como usado.
+        const codesRef = db.collection('greenlifeEvents').doc(membership.vipEventId).collection('availableCodes');
+        const codeSnap = await codesRef.where('used', '==', false).limit(1).get();
+
+        if (codeSnap.empty) throw new functions.https.HttpsError('failed-precondition', 'Estoque de códigos vazio.');
+
+        const codeDoc = codeSnap.docs[0];
+        const newCode = codeDoc.data().code;
+
+        await codeDoc.ref.update({
+            used: true,
+            usedBy: membership.promoterEmail,
+            usedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        await docRef.update({
+            status: 'confirmed',
+            benefitCode: newCode,
+            isBenefitActive: true,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return { success: true, code: newCode };
+    });
+
+/**
  * Webhook Unificado para Pagamentos Asaas
  */
 export const asaasWebhook = functions
