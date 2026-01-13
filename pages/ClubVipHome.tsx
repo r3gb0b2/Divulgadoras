@@ -91,19 +91,28 @@ const ClubVipHome: React.FC = () => {
 
     const handleProceedToAsaas = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name.trim() || !whatsapp.trim() || !instagram.trim() || !taxId.trim() || !selectedEvent) return;
-        
-        setIsLoading(true);
         setError(null);
+
+        const sanitizedWhatsapp = whatsapp.replace(/\D/g, '');
+        const sanitizedTaxId = taxId.replace(/\D/g, '');
+        const sanitizedInstagram = instagram.replace('@', '').trim();
+
+        // Validações Obrigatórias
+        if (!selectedEvent) { setError("Selecione um evento para continuar."); return; }
+        if (!name.trim()) { setError("Por favor, informe seu nome completo."); return; }
+        if (!sanitizedWhatsapp || sanitizedWhatsapp.length < 10) { 
+            setError("O WhatsApp é obrigatório para emissão do seu acesso."); 
+            return; 
+        }
+        if (!instagram.trim()) { setError("Informe seu usuário do Instagram."); return; }
+        if (!sanitizedTaxId || (sanitizedTaxId.length !== 11 && sanitizedTaxId.length !== 14)) {
+            setError("Um CPF ou CNPJ válido é obrigatório para gerar o Pix.");
+            return;
+        }
+
+        setIsLoading(true);
         try {
             let pId = promoter?.id;
-            const sanitizedWhatsapp = whatsapp.replace(/\D/g, '');
-            const sanitizedInstagram = instagram.replace('@', '').trim();
-            const sanitizedTaxId = taxId.replace(/\D/g, '');
-
-            if (sanitizedTaxId.length !== 11 && sanitizedTaxId.length !== 14) {
-                throw new Error("CPF ou CNPJ inválido.");
-            }
 
             if (!pId) {
                 pId = await createVipPromoter({ name, email, whatsapp: sanitizedWhatsapp });
@@ -236,7 +245,17 @@ const ClubVipHome: React.FC = () => {
                             <div className="relative"><UserIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" /><input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Nome Completo" /></div>
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="relative"><PhoneIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" /><input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="WhatsApp" /></div>
+                                <div className="relative">
+                                    <PhoneIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" />
+                                    <input 
+                                        type="tel" 
+                                        required 
+                                        value={whatsapp} 
+                                        onChange={e => setWhatsapp(e.target.value)} 
+                                        className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" 
+                                        placeholder="WhatsApp (Obrigatório)" 
+                                    />
+                                </div>
                                 <div className="relative"><InstagramIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" /><input type="text" required value={instagram} onChange={e => setInstagram(e.target.value)} className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Instagram" /></div>
                             </div>
 
