@@ -1,7 +1,6 @@
 
 import admin from "firebase-admin";
 import functions from "firebase-functions";
-import { GoogleGenAI } from "@google/genai";
 import { ASAAS_CONFIG } from './credentials.js';
 
 admin.initializeApp();
@@ -34,6 +33,133 @@ const asaasFetch = async (endpoint, method = 'GET', body = null, apiKey) => {
     }
     return result;
 };
+
+/**
+ * SOLICITAÇÃO DE ACESSO ADMIN
+ * Cria o usuário no Auth e salva o pedido para aprovação do Super Admin
+ */
+export const createAdminRequest = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        const { name, email, phone, password } = data;
+
+        if (!name || !email || !password) {
+            throw new functions.https.HttpsError('invalid-argument', 'Dados incompletos.');
+        }
+
+        try {
+            // 1. Tenta criar o usuário no Auth
+            const userRecord = await admin.auth().createUser({
+                email: email.toLowerCase().trim(),
+                password: password,
+                displayName: name
+            });
+
+            // 2. Salva a solicitação no Firestore
+            await db.collection('adminApplications').doc(userRecord.uid).set({
+                id: userRecord.uid,
+                name: name.trim(),
+                email: email.toLowerCase().trim(),
+                phone: phone || '',
+                status: 'pending',
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            return { success: true, uid: userRecord.uid };
+        } catch (error) {
+            console.error("Erro ao criar solicitação de admin:", error);
+            // Se o usuário já existir no Auth, mas não tiver pedido, tratamos aqui
+            if (error.code === 'auth/email-already-in-use') {
+                throw new functions.https.HttpsError('already-exists', 'Este e-mail já possui um cadastro ou solicitação ativa.');
+            }
+            throw new functions.https.HttpsError('internal', error.message);
+        }
+    });
+
+/**
+ * CRIAR ORGANIZAÇÃO E USUÁRIO (FLUXO DE ASSINATURA)
+ */
+export const createOrganizationAndUser = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        const { orgName, ownerName, phone, taxId, email, password, planId } = data;
+
+        try {
+            // 1. Cria usuário no Auth
+            const userRecord = await admin.auth().createUser({
+                email: email.toLowerCase().trim(),
+                password: password,
+                displayName: ownerName
+            });
+
+            // 2. Cria a Organização
+            const orgRef = db.collection('organizations').doc();
+            const trialDays = 3;
+            const expiresAt = new Date();
+            expiresAt.setDate(expiresAt.getDate() + trialDays);
+
+            await orgRef.set({
+                id: orgRef.id,
+                name: orgName.trim(),
+                ownerUid: userRecord.uid,
+                ownerEmail: email.toLowerCase().trim(),
+                ownerName: ownerName.trim(),
+                ownerPhone: phone || '',
+                ownerTaxId: taxId || '',
+                status: 'trial',
+                planId: planId || 'basic',
+                planExpiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                emailRemindersEnabled: true,
+                oneTimePostEnabled: true,
+                guestListManagementEnabled: true,
+                guestListCheckinEnabled: true
+            });
+
+            // 3. Cria o registro de Admin vinculado à Org
+            await db.collection('admins').doc(userRecord.uid).set({
+                uid: userRecord.uid,
+                email: email.toLowerCase().trim(),
+                role: 'admin',
+                organizationIds: [orgRef.id],
+                assignedStates: [],
+                assignedCampaigns: {}
+            });
+
+            return { success: true, orgId: orgRef.id };
+        } catch (error) {
+            console.error("Erro no fluxo de assinatura:", error);
+            throw new functions.https.HttpsError('internal', error.message);
+        }
+    });
+
+/**
+ * SALVAR TOKEN PUSH (FCM)
+ */
+export const savePromoterToken = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        const { promoterId, token, metadata } = data;
+        
+        if (!promoterId || !token) {
+            throw new functions.https.HttpsError('invalid-argument', 'IDs ausentes.');
+        }
+
+        try {
+            await db.collection('promoters').doc(promoterId).update({
+                fcmToken: token,
+                pushDiagnostics: {
+                    ...metadata,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                },
+                lastTokenUpdate: admin.firestore.FieldValue.serverTimestamp()
+            });
+            return { success: true };
+        } catch (error) {
+            console.error("Erro ao salvar token FCM:", error);
+            throw new functions.https.HttpsError('internal', error.message);
+        }
+    });
 
 /**
  * Geração de Pix para Clube VIP
@@ -148,8 +274,6 @@ export const activateGreenlifeMembership = functions
         if (!snap.exists) throw new functions.https.HttpsError('not-found', 'Adesão não encontrada.');
         const membership = snap.data();
 
-        // Se forceNew, o código atual não é invalidado na origem (é apenas sobreposto), 
-        // mas idealmente marcamos o novo como usado.
         const codesRef = db.collection('greenlifeEvents').doc(membership.vipEventId).collection('availableCodes');
         const codeSnap = await codesRef.where('used', '==', false).limit(1).get();
 
@@ -191,7 +315,6 @@ export const asaasWebhook = functions
         if (!membershipId) return res.status(200).send('No reference');
 
         try {
-            // Tenta localizar em VIP ou Greenlife
             let collection = 'vipMemberships';
             let eventCollection = 'vipEvents';
             let docRef = db.collection(collection).doc(membershipId);
@@ -208,7 +331,6 @@ export const asaasWebhook = functions
             const data = snap.data();
             if (data.status === 'confirmed') return res.status(200).send('Already done');
 
-            // Atribuição de Código
             const codesRef = db.collection(eventCollection).doc(data.vipEventId).collection('availableCodes');
             const codeSnap = await codesRef.where('used', '==', false).limit(1).get();
 
@@ -240,9 +362,21 @@ export const asaasWebhook = functions
         }
     });
 
-// Stubs
+/**
+ * Status de verificação do backend
+ */
+export const checkBackendStatus = functions
+    .region("southamerica-east1")
+    .runWith({ secrets: ["ASAAS_API_KEY"] })
+    .https.onCall(async (data, context) => {
+        return { 
+            asaasKeyPresent: !!process.env.ASAAS_API_KEY,
+            timestamp: new Date().toISOString()
+        };
+    });
+
+// Stubs para evitar erros de referência no front
 export const askGemini = functions.region("southamerica-east1").https.onCall(async () => ({ text: "Gemini is paused." }));
-export const checkBackendStatus = functions.region("southamerica-east1").runWith({ secrets: ["ASAAS_API_KEY"] }).https.onCall(async () => ({ asaasKeyPresent: !!process.env.ASAAS_API_KEY }));
 export const sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const sendSmartWhatsAppReminder = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
