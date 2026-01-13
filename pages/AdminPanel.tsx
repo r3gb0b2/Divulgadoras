@@ -591,6 +591,11 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                                 <td className="px-6 py-5">
                                                     <p className="text-white font-black text-[10px] uppercase tracking-tighter">{p.campaignName || 'Geral'}</p>
                                                     <div>{statusBadge(p.status)}</div>
+                                                    {p.actionTakenByEmail && (
+                                                        <p className="text-[7px] text-gray-500 mt-1 uppercase font-black tracking-widest">
+                                                            Por: {p.actionTakenByEmail.split('@')[0]}
+                                                        </p>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
@@ -627,9 +632,14 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
                                             <div className="overflow-hidden flex-grow">
                                                 <p className="text-white font-black uppercase text-sm leading-tight truncate">{p.name || 'Sem Nome'}</p>
                                                 <p className="text-primary text-[9px] font-black uppercase tracking-widest mt-0.5">{p.campaignName || 'Geral'}</p>
-                                                <div className="flex items-center gap-2 mt-2">
+                                                <div className="flex flex-wrap items-center gap-2 mt-2">
                                                     {statusBadge(p.status)}
                                                     <span className="text-[10px] text-gray-500 font-bold uppercase">{calculateAge(p.dateOfBirth)}a</span>
+                                                    {p.actionTakenByEmail && (
+                                                        <span className="text-[7px] text-gray-600 uppercase font-black tracking-widest bg-dark px-1.5 py-0.5 rounded border border-white/5">
+                                                            Por: {p.actionTakenByEmail.split('@')[0]}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -674,3 +684,5 @@ export const AdminPanel: React.FC<{ adminData: AdminUserData }> = ({ adminData }
         </div>
     );
 };
+
+export default AdminPanel;
