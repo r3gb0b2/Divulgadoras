@@ -7,7 +7,7 @@ import { getRecoveryTemplates, saveRecoveryTemplate, deleteRecoveryTemplate } fr
 import { VipMembership, RecoveryStatus, VipEvent, RecoveryTemplate } from '../types';
 import { 
     ArrowLeftIcon, SearchIcon, WhatsAppIcon, RefreshIcon, FilterIcon, ClockIcon, CheckCircleIcon, XIcon, UserIcon, 
-    PencilIcon, TrashIcon, PlusIcon, DocumentDuplicateIcon, TicketIcon
+    PencilIcon, TrashIcon, PlusIcon, DocumentDuplicateIcon, TicketIcon, DownloadIcon
 } from '../components/Icons';
 import firebase from 'firebase/compat/app';
 
@@ -137,6 +137,44 @@ const RecoveryDashboard: React.FC = () => {
         fetchData();
     };
 
+    const handleDownloadExcel = () => {
+        if (filteredLeads.length === 0) return alert("Nenhum dado para exportar.");
+
+        const exportData = filteredLeads.map(l => ({
+            'Nome': l.promoterName,
+            'E-mail': l.promoterEmail,
+            'WhatsApp': l.promoterWhatsapp || '',
+            'Evento VIP': l.vipEventName,
+            'Data Abandono': toDateSafe(l.submittedAt)?.toLocaleString('pt-BR') || '',
+            'Status Recuperação': (l as any).recoveryStatus === 'contacted' ? 'Abordado' : 'Novo',
+            'Último Contato': toDateSafe((l as any).recoveryUpdatedAt)?.toLocaleString('pt-BR') || '-',
+            'Admin Responsável': (l as any).recoveryAdminEmail || '-'
+        }));
+
+        // @ts-ignore
+        const ws = window.XLSX.utils.json_to_sheet(exportData);
+        // @ts-ignore
+        const wb = window.XLSX.utils.book_new();
+        // @ts-ignore
+        window.XLSX.utils.book_append_sheet(wb, ws, "Recuperação VIP");
+        
+        // Ajustar largura das colunas
+        const wscols = [
+            {wch: 30}, // Nome
+            {wch: 30}, // Email
+            {wch: 15}, // WhatsApp
+            {wch: 25}, // Evento
+            {wch: 20}, // Data Abandono
+            {wch: 18}, // Status
+            {wch: 20}, // Ult Contato
+            {wch: 25}, // Admin
+        ];
+        ws['!cols'] = wscols;
+
+        // @ts-ignore
+        window.XLSX.writeFile(wb, `recuperacao_vip_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
+
     const getTimeAgo = (ts: any) => {
         const date = toDateSafe(ts);
         if (!date) return null;
@@ -157,6 +195,13 @@ const RecoveryDashboard: React.FC = () => {
                     <p className="text-gray-500 text-xs font-black uppercase tracking-widest mt-1">Abordagem individual via WhatsApp</p>
                 </div>
                 <div className="flex gap-2">
+                    <button 
+                        onClick={handleDownloadExcel}
+                        disabled={filteredLeads.length === 0}
+                        className="px-4 py-2 bg-green-600/20 text-green-500 border border-green-600/30 rounded-xl text-[10px] font-black uppercase hover:bg-green-600 hover:text-white transition-all flex items-center gap-2 disabled:opacity-30"
+                    >
+                        <DownloadIcon className="w-4 h-4" /> Exportar Planilha
+                    </button>
                     <button onClick={() => setIsManageTemplatesOpen(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-indigo-500 transition-all flex items-center gap-2">
                         <DocumentDuplicateIcon className="w-4 h-4" /> Modelos
                     </button>
@@ -258,7 +303,6 @@ const RecoveryDashboard: React.FC = () => {
                 </div>
             </div>
 
-            {/* Modais omitidos para brevidade (mantêm a lógica anterior) */}
             {isManageTemplatesOpen && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[150] flex items-center justify-center p-6" onClick={() => setIsManageTemplatesOpen(false)}>
                     <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
