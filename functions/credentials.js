@@ -1,11 +1,14 @@
 
 /**
  * Configurações de Integração do Backend.
- * As chaves devem ser configuradas via Firebase CLI:
- * firebase functions:secrets:set ASAAS_API_KEY
  */
 export const ASAAS_CONFIG = {
-    // Busca a chave primária no segredo do Firebase, ou no objeto estático se definido (não recomendado)
     key: process.env.ASAAS_API_KEY, 
     env: 'production' 
+};
+
+export const PAGARME_CONFIG = {
+    key: process.env.PAGARME_SECRET_KEY,
+    // Note: No Pagar.me V5, usamos orders. 
+    // Certifique-se de configurar a Secret Key no Firebase Secrets
 };

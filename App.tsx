@@ -27,6 +27,7 @@ import AppleInstallTutorial from './pages/AppleInstallTutorial';
 import RegisterF1 from './pages/RegisterF1';
 import GlobalGuestListCheck from './pages/GlobalGuestListCheck';
 import ClubVipHome from './pages/ClubVipHome';
+import ClubVipTestHome from './pages/ClubVipTestHome'; // Novo componente de teste
 import ClubVipHowItWorks from './pages/ClubVipHowItWorks';
 import ClubVipStatus from './pages/ClubVipStatus';
 import GreenlifeHome from './pages/GreenlifeHome';
@@ -72,7 +73,7 @@ const Header: React.FC = () => {
       }
   };
 
-  const isVipContext = location.pathname.startsWith('/clubvip');
+  const isVipContext = location.pathname.startsWith('/clubvip') || location.pathname.startsWith('/test/clubvip');
   const isGreenlifeContext = location.pathname.startsWith('/alunosgreenlife');
   
   let homePath = '/';
@@ -80,12 +81,12 @@ const Header: React.FC = () => {
   let statusPath = '/status';
 
   if (isVipContext) {
-      homePath = '/clubvip';
+      homePath = location.pathname.startsWith('/test') ? '/test/clubvip' : '/clubvip';
       howItWorksPath = '/clubvip/como-funciona';
       statusPath = '/clubvip/status';
   } else if (isGreenlifeContext) {
       homePath = '/alunosgreenlife';
-      howItWorksPath = '/alunosgreenlife/como-funciona'; // Placeholder se quiser criar
+      howItWorksPath = '/alunosgreenlife/como-funciona';
       statusPath = '/alunosgreenlife/status';
   }
 
@@ -94,51 +95,27 @@ const Header: React.FC = () => {
           <nav className="container mx-auto px-6 py-4 flex justify-between items-center">
               <Link to={homePath} className="flex items-center" onClick={() => setIsMenuOpen(false)}>
                   <LogoIcon className="h-10 md:h-12 w-auto text-white" />
-                  {isVipContext && <span className="ml-3 px-2 py-0.5 bg-primary text-[10px] font-black text-white rounded uppercase tracking-widest hidden sm:block">VIP</span>}
-                  {isGreenlifeContext && <span className="ml-3 px-2 py-0.5 bg-green-600 text-[10px] font-black text-white rounded uppercase tracking-widest hidden sm:block">GREENLIFE</span>}
+                  {isVipContext && <span className={`ml-3 px-2 py-0.5 ${location.pathname.startsWith('/test') ? 'bg-orange-600' : 'bg-primary'} text-[10px] font-black text-white rounded uppercase tracking-widest hidden sm:block`}>
+                    {location.pathname.startsWith('/test') ? 'TESTE PAGAR.ME' : 'VIP'}
+                  </span>}
               </Link>
               
               <div className='hidden md:flex items-center space-x-4'>
                   <OrganizationSwitcher />
                   <Link to={homePath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Início</Link>
-                  {!isGreenlifeContext && <Link to={howItWorksPath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Como Funciona</Link>}
                   <Link to={statusPath} className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Status</Link>
                   <Link to="/admin" className="text-gray-300 hover:text-primary px-3 py-2 rounded-md text-sm font-medium">Admin</Link>
-                  {adminData && (
-                      <button onClick={handleLogout} className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors">
-                          <LogoutIcon className="h-5 w-5" />
-                          <span>Sair</span>
-                      </button>
-                  )}
               </div>
 
               <div className="md:hidden flex items-center">
-                  <button
-                    onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-white"
-                  >
-                      <span className="sr-only">Abrir menu</span>
+                  <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 text-gray-400 hover:text-white">
                       {isMenuOpen ? <XIcon className="h-6 w-6" /> : <MenuIcon className="h-6 w-6" />}
                   </button>
               </div>
           </nav>
-
-          {isMenuOpen && (
-              <div className="md:hidden bg-secondary border-b border-gray-700" id="mobile-menu">
-                  <div className="px-2 pt-2 pb-4 space-y-2 sm:px-3">
-                      <div className="px-2 pb-3 mb-2 border-b border-gray-700">
-                          <OrganizationSwitcher />
-                      </div>
-                      <Link to={homePath} onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Início</Link>
-                      <Link to={statusPath} onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Status</Link>
-                      <Link to="/admin" onClick={() => setIsMenuOpen(false)} className="block text-gray-300 hover:text-primary px-3 py-2 rounded-md text-base font-medium">Admin</Link>
-                  </div>
-              </div>
-          )}
       </header>
   );
 };
-
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -153,52 +130,28 @@ const App: React.FC = () => {
           <main className="container mx-auto p-4 md:p-8 flex-grow">
             <ErrorBoundary>
               <Routes>
-                {/* Rotas de Admin */}
                 <Route path="/admin/*" element={<AdminAuth />} />
-
-                {/* Rotas Públicas */}
                 <Route path="/" element={<PublicHome />} />
-                <Route path="/como-funciona" element={<HowToUsePage />} />
                 <Route path="/status" element={<StatusCheck />} />
-                <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
-                <Route path="/suporte" element={<SupportPage />} />
-                <Route path="/planos" element={<PricingPage />} />
-                <Route path="/apple-test" element={<AppleTestRegistration />} />
-                <Route path="/apple-test/tutorial" element={<AppleInstallTutorial />} />
-                <Route path="/registrar-f1" element={<RegisterF1 />} />
-                <Route path="/subscribe/:planId" element={<SubscriptionFlowPage />} />
                 
-                {/* Clube VIP */}
+                {/* Clube VIP Oficial (Asaas) */}
                 <Route path="/clubvip" element={<ClubVipHome />} />
                 <Route path="/clubvip/como-funciona" element={<ClubVipHowItWorks />} />
                 <Route path="/clubvip/status" element={<ClubVipStatus />} />
 
-                {/* Alunos Greenlife */}
+                {/* AMBIENTE DE TESTE CLUB VIP (Pagar.me) */}
+                <Route path="/test/clubvip" element={<ClubVipTestHome />} />
+
                 <Route path="/alunosgreenlife" element={<GreenlifeHome />} />
                 <Route path="/alunosgreenlife/status" element={<GreenlifeStatus />} />
-                
-                {/* Divulgadoras */}
                 <Route path="/posts" element={<PostCheck />} />
-                <Route path="/connect/:loopId?" element={<FollowLoopPage />} />
-                <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
-                <Route path="/listas/:campaignId" element={<GuestListCheck />} />
-                <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
-                <Route path="/leave-group" element={<LeaveGroupPage />} />
-                <Route path="/global-list/:listId" element={<GlobalGuestListCheck />} />
-
-                {/* FLUXO DE CADASTRO EM PASSOS */}
                 <Route path="/:organizationId" element={<StateSelection />} />
                 <Route path="/:organizationId/:state" element={<CampaignSelection />} />
                 <Route path="/:organizationId/:state/:campaignName/register" element={<RegistrationForm />} />
-
-                {/* Fallback */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </ErrorBoundary>
           </main>
-          <footer className="text-center py-6 text-gray-400 text-sm mt-auto">
-              <p>&copy; {new Date().getFullYear()} Equipe Certa. Todos os direitos reservados. </p>
-          </footer>
         </div>
       </Router>
     </AdminAuthProvider>
