@@ -35,6 +35,7 @@ const ClubVipHome: React.FC = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [pixData, setPixData] = useState<any>(null);
+    const [currentCheckoutId, setCurrentCheckoutId] = useState<string | null>(null);
 
     useEffect(() => {
         getActiveVipEvents().then(data => {
@@ -46,10 +47,10 @@ const ClubVipHome: React.FC = () => {
         });
     }, []);
 
+    // Monitora o Checkout único gerado
     useEffect(() => {
-        if (step === 'payment' && promoter && selectedEvent) {
-            const membershipId = `${promoter.id}_${selectedEvent.id}_0`; // Monitora o primeiro ingresso
-            const unsubscribe = firestore.collection('vipMemberships').doc(membershipId)
+        if (step === 'payment' && currentCheckoutId) {
+            const unsubscribe = firestore.collection('checkouts').doc(currentCheckoutId)
                 .onSnapshot((doc) => {
                     const data = doc.data();
                     if (data?.status === 'confirmed') {
@@ -59,7 +60,7 @@ const ClubVipHome: React.FC = () => {
                 });
             return () => unsubscribe();
         }
-    }, [step, promoter, selectedEvent]);
+    }, [step, currentCheckoutId]);
 
     const validateEmailFormat = (email: string) => {
         const trimmed = email.trim().toLowerCase();
@@ -96,7 +97,6 @@ const ClubVipHome: React.FC = () => {
         setError(null);
         try {
             const profiles = await findPromotersByEmail(trimmedEmail);
-            
             if (profiles.length > 0) {
                 const p = profiles[0];
                 setPromoter(p);
@@ -104,7 +104,6 @@ const ClubVipHome: React.FC = () => {
                 setWhatsapp(p.whatsapp);
                 setInstagram(p.instagram);
             }
-            
             setStep('confirm_data');
             setIsLoading(false);
         } catch (err: any) {
@@ -153,6 +152,7 @@ const ClubVipHome: React.FC = () => {
             });
             
             setPixData(res.data);
+            setCurrentCheckoutId(res.data.checkoutId);
             setStep('payment');
             setIsLoading(false);
 

@@ -25,6 +25,7 @@ const GreenlifeHome: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [pixData, setPixData] = useState<any>(null);
     const [promoter, setPromoter] = useState<any>(null);
+    const [currentCheckoutId, setCurrentCheckoutId] = useState<string | null>(null);
 
     useEffect(() => {
         getActiveGreenlifeEvents().then(data => {
@@ -34,15 +35,14 @@ const GreenlifeHome: React.FC = () => {
     }, []);
 
     useEffect(() => {
-        if (step === 'payment' && promoter && selectedEvent) {
-            const membershipId = `${promoter.id}_${selectedEvent.id}`;
-            const unsubscribe = firestore.collection('greenlifeMemberships').doc(membershipId)
+        if (step === 'payment' && currentCheckoutId) {
+            const unsubscribe = firestore.collection('checkouts').doc(currentCheckoutId)
                 .onSnapshot((doc) => {
                     if (doc.data()?.status === 'confirmed') setStep('success');
                 });
             return () => unsubscribe();
         }
-    }, [step, promoter, selectedEvent]);
+    }, [step, currentCheckoutId]);
 
     const handleCheckEmail = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -85,6 +85,7 @@ const GreenlifeHome: React.FC = () => {
             });
             
             setPixData(res.data);
+            setCurrentCheckoutId(res.data.checkoutId);
             setStep('payment');
         } catch (err: any) { 
             console.error(err);
