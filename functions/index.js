@@ -23,7 +23,6 @@ const sendVipTicketEmail = async (toEmail, toName, eventName, ticketCode, apiKey
     sendSmtpEmail.sender = { "name": "Equipe Certa VIP", "email": "contato@equipecerta.com.br" };
     sendSmtpEmail.to = [{ "email": toEmail, "name": toName }];
     
-    // Layout do E-mail de Ingresso
     sendSmtpEmail.htmlContent = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: #000; color: #fff; padding: 40px; border-radius: 30px;">
             <div style="text-align: center; margin-bottom: 30px;">
@@ -168,7 +167,6 @@ export const asaasWebhook = functions
             batch.update(checkoutRef, { status: 'confirmed', paidAt: admin.firestore.FieldValue.serverTimestamp() });
             await batch.commit();
 
-            // Disparo de E-mails após commit bem sucedido
             if (process.env.BREVO_API_KEY) {
                 for (const m of membershipsToEmail) {
                     try {
@@ -227,7 +225,105 @@ export const pagarmeWebhook = functions
         } catch (e) { return res.status(500).send(e.message); }
     });
 
-// Stubs obrigatórios mantidos para não quebrar o deploy
+/**
+ * Cria Pix no Pagar.me (Ambiente de Teste)
+ * Corrigido para reportar erros da API e não dar 500 genérico.
+ */
+export const createVipPagarMePix = functions
+    .region("southamerica-east1")
+    .runWith({ secrets: ["PAGARME_SECRET_KEY"] })
+    .https.onCall(async (data) => {
+        const { vipEventId, vipEventName, email, name, whatsapp, taxId, amount, quantity } = data;
+        
+        try {
+            if (!process.env.PAGARME_SECRET_KEY) {
+                throw new functions.https.HttpsError('failed-precondition', 'PAGARME_SECRET_KEY não configurada no servidor.');
+            }
+
+            const cleanWhatsapp = whatsapp.replace(/\D/g, '');
+            if (cleanWhatsapp.length < 10) {
+                throw new functions.https.HttpsError('invalid-argument', 'Número de WhatsApp inválido.');
+            }
+
+            const checkoutRef = db.collection('checkouts_test').doc();
+            const checkoutId = checkoutRef.id;
+
+            const auth = `Basic ${Buffer.from(`${process.env.PAGARME_SECRET_KEY}:`).toString('base64')}`;
+            
+            const payload = {
+                items: [{
+                    amount: Math.round(amount * 100),
+                    description: vipEventName.substring(0, 60),
+                    quantity: 1
+                }],
+                customer: {
+                    name: name.trim(),
+                    email: email.toLowerCase().trim(),
+                    type: 'individual',
+                    document: taxId.replace(/\D/g, ''),
+                    phones: {
+                        mobile_phone: {
+                            country_code: '55',
+                            area_code: cleanWhatsapp.substring(0, 2),
+                            number: cleanWhatsapp.substring(2)
+                        }
+                    }
+                },
+                payments: [{
+                    payment_method: 'pix',
+                    pix: { expires_in: 3600 }
+                }],
+                closed: true,
+                metadata: { checkoutId }
+            };
+
+            const response = await fetch('https://api.pagar.me/core/v5/orders', {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'Authorization': auth
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                console.error("[PAGAR.ME API ERROR]:", JSON.stringify(result));
+                throw new Error(result.message || "Erro na API do Pagar.me");
+            }
+
+            const pixInfo = result.charges?.[0]?.last_transaction;
+            if (!pixInfo) throw new Error("A resposta do Pagar.me não conteve dados do Pix.");
+
+            await checkoutRef.set({
+                id: checkoutId,
+                vipEventId,
+                vipEventName,
+                promoterName: name,
+                promoterEmail: email,
+                status: 'pending',
+                amount,
+                quantity,
+                gateway: 'pagarme',
+                orderId: result.id,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            return { 
+                success: true, 
+                checkoutId, 
+                qrCode: pixInfo.qr_code, 
+                qrCodeUrl: pixInfo.qr_code_url 
+            };
+
+        } catch (err) {
+            console.error("[createVipPagarMePix FATAL]:", err.message);
+            throw new functions.https.HttpsError('internal', err.message);
+        }
+    });
+
+// Demais stubs permanecem...
 export const createVipAsaasPix = functions.region("southamerica-east1").runWith({ secrets: ["ASAAS_API_KEY"] }).https.onCall(async (data) => {
     const { vipEventId, vipEventName, email, name, whatsapp, taxId, amount, quantity } = data;
     const checkoutRef = db.collection('checkouts').doc();
@@ -238,17 +334,6 @@ export const createVipAsaasPix = functions.region("southamerica-east1").runWith(
     const qrCodeRes = await asaasFetch(`payments/${paymentRes.id}/pixQrCode`, 'GET', null, asaasKey);
     await checkoutRef.set({ id: checkoutId, type: 'club_vip', vipEventId, vipEventName, promoterName: name, promoterEmail: email, status: 'pending', amount, quantity, paymentId: paymentRes.id, createdAt: admin.firestore.FieldValue.serverTimestamp() });
     return { success: true, checkoutId, payload: qrCodeRes.payload, encodedImage: qrCodeRes.encodedImage };
-});
-export const createVipPagarMePix = functions.region("southamerica-east1").runWith({ secrets: ["PAGARME_SECRET_KEY"] }).https.onCall(async (data) => {
-    const { vipEventId, vipEventName, email, name, whatsapp, taxId, amount, quantity } = data;
-    const checkoutRef = db.collection('checkouts_test').doc();
-    const checkoutId = checkoutRef.id;
-    const auth = `Basic ${Buffer.from(`${process.env.PAGARME_SECRET_KEY}:`).toString('base64')}`;
-    const response = await fetch('https://api.pagar.me/core/v5/orders', { method: 'POST', headers: { 'content-type': 'application/json', 'Authorization': auth }, body: JSON.stringify({ items: [{ amount: Math.round(amount * 100), description: vipEventName, quantity: 1 }], customer: { name, email, type: 'individual', document: taxId, phones: { mobile_phone: { country_code: '55', area_code: whatsapp.substring(0,2), number: whatsapp.substring(2) } } }, payments: [{ payment_method: 'pix', pix: { expires_in: 3600 } }], closed: true, metadata: { checkoutId } }) });
-    const order = await response.json();
-    const pixInfo = order.charges[0].last_transaction;
-    await checkoutRef.set({ id: checkoutId, vipEventName, promoterName: name, promoterEmail: email, status: 'pending', amount, quantity, gateway: 'pagarme', createdAt: admin.firestore.FieldValue.serverTimestamp() });
-    return { success: true, checkoutId, qrCode: pixInfo.qr_code, qrCodeUrl: pixInfo.qr_code_url };
 });
 export const createGreenlifeAsaasPix = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const createAdminRequest = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
@@ -268,7 +353,7 @@ export const sendNewsletter = functions.region("southamerica-east1").runWith({ s
     const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
     sendSmtpEmail.subject = data.subject;
     sendSmtpEmail.sender = { "name": "Equipe Certa", "email": "contato@equipecerta.com.br" };
-    sendSmtpEmail.to = [{ "email": "test@test.com" }]; // Implementação real requer loop na audiência
+    sendSmtpEmail.to = [{ "email": "test@test.com" }];
     sendSmtpEmail.htmlContent = data.body;
     await apiInstance.sendTransacEmail(sendSmtpEmail);
     return { success: true, message: "Enviado!" };
