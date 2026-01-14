@@ -1,6 +1,7 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { ClipboardDocumentListIcon, CogIcon, CheckCircleIcon, MegaphoneIcon, UsersIcon, SparklesIcon } from '../components/Icons';
+import { ClipboardDocumentListIcon, CogIcon, CheckCircleIcon, MegaphoneIcon, UsersIcon, SparklesIcon, TicketIcon } from '../components/Icons';
 
 
 const CheckIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -22,95 +23,99 @@ export interface Plan {
 export const plans: Plan[] = [
     {
         id: 'basic',
-        name: 'Básico',
-        price: 49,
-        priceFormatted: 'R$ 49',
-        description: 'Ideal para quem está começando e precisa de uma solução profissional.',
+        name: 'Business',
+        price: 247,
+        priceFormatted: 'R$ 247',
+        description: 'Ideal para produtores independentes e agências em crescimento.',
         features: [
-            'Até 5 eventos/gêneros ativos',
-            'Cadastro de até 500 divulgadoras',
-            'Painel de gerenciamento individual',
-            'Página de status para candidatas',
+            'Até 3 eventos simultâneos',
+            'Gestão de até 1.000 divulgadoras',
+            'Listas VIP e Aniversariantes',
+            'Check-in por Foto e QR Code',
+            'Suporte via E-mail'
         ],
         isPopular: false,
     },
     {
         id: 'professional',
-        name: 'Profissional',
-        price: 99,
-        priceFormatted: 'R$ 99',
-        description: 'Recursos avançados para agências e grandes eventos que buscam escala.',
+        name: 'Enterprise',
+        price: 497,
+        priceFormatted: 'R$ 497',
+        description: 'A solução completa para grandes produtoras e labels nacionais.',
         features: [
-            'Eventos/gêneros ilimitados',
-            'Divulgadoras ilimitadas',
-            'Adicione múltiplos administradores',
-            'URL personalizada (opcional)',
-            'Suporte prioritário via WhatsApp',
+            'Eventos e Divulgadoras ILIMITADOS',
+            'Módulo de Vendas Clube VIP',
+            'Assistente de IA (Gemini API)',
+            'Recuperação de Carrinhos via Zap',
+            'Campanhas Push e Direct',
+            'Suporte Prioritário 24/7'
         ],
         isPopular: true,
     }
 ];
 
 const FeatureCard: React.FC<{ icon: React.ElementType, title: string, description: string }> = ({ icon: Icon, title, description }) => (
-    <div className="bg-secondary p-6 rounded-lg border border-gray-700 flex flex-col items-start text-left">
-        <div className="flex items-center justify-center h-12 w-12 rounded-full bg-primary/20 mb-4">
-            <Icon className="h-6 w-6 text-primary" />
+    <div className="bg-secondary/50 backdrop-blur-sm p-8 rounded-[2rem] border border-white/5 flex flex-col items-start text-left hover:border-primary/50 transition-all group">
+        <div className="flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10 mb-6 group-hover:scale-110 transition-transform">
+            <Icon className="h-7 w-7 text-primary" />
         </div>
-        <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
-        <p className="text-gray-400">{description}</p>
+        <h3 className="text-xl font-black text-white uppercase tracking-tight mb-3">{title}</h3>
+        <p className="text-gray-400 text-sm leading-relaxed">{description}</p>
     </div>
 );
 
 
 const PricingPage: React.FC = () => {
     return (
-        <div className="max-w-5xl mx-auto">
-            <div className="text-center mb-12">
-                <h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4">
-                    Planos flexíveis para o seu sucesso
+        <div className="max-w-6xl mx-auto px-4 py-12">
+            <div className="text-center mb-16 space-y-4">
+                <h1 className="text-5xl md:text-6xl font-black text-white uppercase tracking-tighter">
+                    Planos <span className="text-primary">Profissionais</span>
                 </h1>
-                <p className="text-lg text-gray-400 max-w-2xl mx-auto">
-                    Escolha o plano que melhor se adapta ao tamanho do seu evento e comece a gerenciar suas divulgadoras de forma inteligente.
+                <p className="text-xl text-gray-400 max-w-3xl mx-auto font-medium">
+                    A tecnologia que as maiores labels de eventos do país utilizam para escalar suas equipes de divulgação.
                 </p>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch mb-24">
                 {plans.map((plan) => (
                     <div 
                         key={plan.id} 
-                        className={`relative flex flex-col p-8 bg-secondary rounded-xl shadow-2xl border ${plan.isPopular ? 'border-2 border-primary' : 'border-gray-700'}`}
+                        className={`relative flex flex-col p-10 bg-secondary/40 backdrop-blur-xl rounded-[3rem] shadow-2xl border ${plan.isPopular ? 'border-primary ring-4 ring-primary/10' : 'border-white/5'}`}
                     >
                         {plan.isPopular && (
-                            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                                <span className="bg-primary px-4 py-1.5 text-sm font-semibold tracking-wide text-white rounded-full uppercase shadow-md">
-                                    Mais Popular
+                            <div className="absolute -top-5 left-1/2 -translate-x-1/2">
+                                <span className="bg-primary px-6 py-2 text-xs font-black tracking-widest text-white rounded-full uppercase shadow-xl">
+                                    RECOMENDADO
                                 </span>
                             </div>
                         )}
                         <div className="flex-grow">
-                            <h2 className="text-3xl font-bold text-white">{plan.name}</h2>
-                            <p className="mt-4 text-gray-400 h-16">{plan.description}</p>
+                            <h2 className="text-3xl font-black text-white uppercase tracking-tight">{plan.name}</h2>
+                            <p className="mt-4 text-gray-400 font-medium leading-relaxed">{plan.description}</p>
                             
-                            <div className="mt-8">
-                                <span className="text-5xl font-extrabold text-white">{plan.priceFormatted}</span>
-                                <span className="text-xl font-medium text-gray-400">/mês</span>
+                            <div className="mt-10 flex items-baseline gap-1">
+                                <span className="text-5xl font-black text-white">{plan.priceFormatted}</span>
+                                <span className="text-lg font-bold text-gray-500 uppercase tracking-widest">/mês</span>
                             </div>
 
-                            <ul className="mt-8 space-y-4">
+                            <ul className="mt-10 space-y-5">
                                 {plan.features.map((feature, index) => (
                                     <li key={index} className="flex items-start">
-                                        <CheckIcon className="w-6 h-6 text-green-400 flex-shrink-0 mr-3 mt-1" />
-                                        <span className="text-gray-300">{feature}</span>
+                                        <div className="bg-green-500/20 p-1 rounded-md mr-4 mt-0.5">
+                                            <CheckIcon className="w-4 h-4 text-green-500" />
+                                        </div>
+                                        <span className="text-gray-300 font-medium">{feature}</span>
                                     </li>
                                 ))}
                             </ul>
                         </div>
-                        <div className="mt-10">
+                        <div className="mt-12">
                             <Link 
-                                to={`/subscribe/${plan.id}`}
-                                className={`block w-full py-4 px-6 text-center rounded-lg text-lg font-semibold transition-transform duration-300 transform hover:scale-105 ${plan.isPopular ? 'bg-primary text-white shadow-lg hover:bg-primary-dark' : 'bg-gray-600 text-gray-100 hover:bg-gray-500'}`}
+                                to={`/admin/register?plan=${plan.id}`}
+                                className={`block w-full py-5 text-center rounded-2xl text-sm font-black uppercase tracking-[0.2em] transition-all transform hover:scale-[1.02] active:scale-95 ${plan.isPopular ? 'bg-primary text-white shadow-2xl shadow-primary/40' : 'bg-gray-800 text-white border border-white/5 hover:bg-gray-700'}`}
                             >
-                                Iniciar Teste Gratuito
+                                Iniciar Teste Grátis
                             </Link>
                         </div>
                     </div>
@@ -118,55 +123,55 @@ const PricingPage: React.FC = () => {
             </div>
 
             {/* Features Section */}
-            <div className="mt-24 text-center">
-                <h2 className="text-3xl md:text-4xl font-extrabold text-white mb-4">
-                    Tudo o que você precisa para gerenciar sua equipe
-                </h2>
-                <p className="text-lg text-gray-400 max-w-3xl mx-auto">
-                    Nossa plataforma foi construída para otimizar cada etapa do seu processo de divulgação, desde a captação até o engajamento.
-                </p>
+            <div className="text-center space-y-16">
+                <div className="space-y-4">
+                    <h2 className="text-3xl md:text-4xl font-black text-white uppercase tracking-tight">
+                        Por que migrar para a <span className="text-primary">Equipe Certa</span>?
+                    </h2>
+                    <p className="text-gray-400 max-w-2xl mx-auto">Tecnologia de ponta para eliminar o trabalho manual e focar na experiência do seu evento.</p>
+                </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mt-12">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     <FeatureCard
                         icon={ClipboardDocumentListIcon}
-                        title="Cadastro Simplificado"
-                        description="Formulários personalizados por evento e estado. As divulgadoras podem pré-preencher dados de cadastros anteriores, agilizando o processo."
+                        title="Gestão de Staff"
+                        description="Formulários inteligentes com validação de perfil e aprovação em um clique. Chega de gerenciar equipe por conversa de WhatsApp."
                     />
                     <FeatureCard
-                        icon={CogIcon}
-                        title="Painel de Controle Centralizado"
-                        description="Aprove, rejeite e gerencie todas as candidatas em um só lugar. Visualize fotos, perfis e estatísticas de forma rápida e intuitiva."
-                    />
-                    <FeatureCard
-                        icon={CheckCircleIcon}
-                        title="Consulta de Status Automatizada"
-                        description="Reduza sua carga de trabalho. As divulgadoras podem verificar o status de suas inscrições a qualquer momento, sem precisar entrar em contato."
+                        icon={TicketIcon}
+                        title="Clube VIP (Vendas)"
+                        description="Venda adesões e ingressos promocionais diretamente para sua base de contatos. Faturamento real e imediato via Pix."
                     />
                     <FeatureCard
                         icon={MegaphoneIcon}
-                        title="Gestão de Tarefas e Posts"
-                        description="Crie posts (imagem ou texto), atribua para divulgadoras específicas e acompanhe quem já confirmou. Elas podem enviar o print de comprovação diretamente pela plataforma."
+                        title="Engajamento Blindado"
+                        description="Sistema que monitora se as divulgadoras realmente postaram e se mantiveram o post. Gere autoridade real para sua marca."
                     />
                     <FeatureCard
                         icon={UsersIcon}
-                        title="Gerenciamento de Listas"
-                        description="Permita que suas divulgadoras enviem nomes para listas de convidados, aniversariantes e mais. Exporte tudo em Excel (CSV) para o check-in no evento."
+                        title="Check-in Facial"
+                        description="Segurança total na entrada. Identifique divulgadoras e convidados pelas fotos de cadastro, evitando fraudes e listas falsas."
                     />
                     <FeatureCard
                         icon={SparklesIcon}
-                        title="Assistente com IA (Gemini)"
-                        description="Falta criatividade? Use a inteligência artificial do Google para gerar textos para posts, regras de eventos, e ideias para suas redes sociais."
+                        title="Inteligência Artificial"
+                        description="Assistente Gemini integrado para criar legendas, scripts de venda e estratégias de marketing para seus eventos."
+                    />
+                    <FeatureCard
+                        icon={CogIcon}
+                        title="Automação Zap"
+                        description="Lembretes automáticos para quem esqueceu de enviar o print e recuperação de vendas para quem não finalizou o Pix."
                     />
                 </div>
             </div>
             
-            <div className="mt-16 text-center">
-                <p className="text-gray-400">
-                    Todos os planos incluem um teste gratuito de 3 dias. Sem compromisso, cancele quando quiser.
+            <div className="mt-24 p-10 bg-primary/5 rounded-[3rem] border border-primary/20 text-center space-y-6">
+                <p className="text-gray-400 font-medium">
+                    Precisa de uma solução personalizada ou volume muito alto de eventos?
                 </p>
-                <p className="text-gray-400 mt-2">
-                    Dúvidas? <a href="#" className="font-semibold text-primary hover:underline">Entre em contato com nosso suporte</a>.
-                </p>
+                <a href="https://wa.me/5585982280780" target="_blank" className="inline-block px-10 py-4 bg-white text-dark font-black rounded-2xl uppercase text-xs tracking-widest hover:bg-gray-200 transition-all">
+                    Falar com Consultor &rarr;
+                </a>
             </div>
         </div>
     );
