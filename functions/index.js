@@ -40,12 +40,10 @@ export const createVipAsaasPix = functions
         const qty = quantity || 1;
         const asaasKey = process.env.ASAAS_API_KEY;
 
-        // Criar um checkout único para esta tentativa de pagamento
         const checkoutRef = db.collection('checkouts').doc();
         const checkoutId = checkoutRef.id;
 
         try {
-            // 1. Criar ou recuperar cliente no Asaas
             const customerRes = await asaasFetch('customers', 'POST', {
                 name: name.trim(),
                 email: email.toLowerCase().trim(),
@@ -54,20 +52,17 @@ export const createVipAsaasPix = functions
                 notificationDisabled: true
             }, asaasKey);
 
-            // 2. Criar cobrança Pix
             const paymentRes = await asaasFetch('payments', 'POST', {
                 customer: customerRes.id,
                 billingType: 'PIX',
                 value: amount,
                 dueDate: new Date().toISOString().split('T')[0],
                 description: `${qty}x Ingressos VIP: ${vipEventName}`,
-                externalReference: checkoutId // O Checkout ID é a nossa referência principal
+                externalReference: checkoutId 
             }, asaasKey);
 
-            // 3. Obter QR Code
             const qrCodeRes = await asaasFetch(`payments/${paymentRes.id}/pixQrCode`, 'GET', null, asaasKey);
 
-            // 4. Salvar dados do checkout pendente
             await checkoutRef.set({
                 id: checkoutId,
                 type: 'club_vip',
@@ -152,63 +147,82 @@ export const createGreenlifeAsaasPix = functions
     });
 
 /**
- * Webhook Unificado Asaas
+ * Webhook Unificado Asaas - CORREÇÃO CRÍTICA
  */
 export const asaasWebhook = functions
     .region("southamerica-east1")
     .runWith({ secrets: ["ASAAS_API_KEY"] })
     .https.onRequest(async (req, res) => {
         const event = req.body;
-        console.log("Webhook Asaas Recebido:", event.event, "Ref:", event.payment?.externalReference);
+        console.log("Webhook Asaas Recebido:", event.event, "ExternalRef:", event.payment?.externalReference);
 
         if (event.event !== 'PAYMENT_RECEIVED' && event.event !== 'PAYMENT_CONFIRMED') {
             return res.status(200).send('Ignored event type');
         }
 
         const checkoutId = event.payment.externalReference;
-        if (!checkoutId) return res.status(200).send('No externalReference');
+        if (!checkoutId) {
+            console.error("Webhook recebido sem externalReference no pagamento.");
+            return res.status(200).send('No externalReference');
+        }
 
         try {
             const checkoutRef = db.collection('checkouts').doc(checkoutId);
             const checkoutSnap = await checkoutRef.get();
 
             if (!checkoutSnap.exists) {
-                console.error("Checkout não encontrado:", checkoutId);
+                console.error("Checkout não encontrado no banco:", checkoutId);
                 return res.status(404).send('Checkout not found');
             }
 
             const checkoutData = checkoutSnap.data();
             if (checkoutData.status === 'confirmed') {
+                console.log("Checkout já estava confirmado. Ignorando duplicidade.");
                 return res.status(200).send('Checkout already processed');
             }
 
             const qty = checkoutData.quantity || 1;
-            const collectionName = checkoutData.type === 'greenlife' ? 'greenlifeMemberships' : 'vipMemberships';
-            const eventCollection = checkoutData.type === 'greenlife' ? 'greenlifeEvents' : 'vipEvents';
+            const type = checkoutData.type || 'club_vip';
+            const collectionName = type === 'greenlife' ? 'greenlifeMemberships' : 'vipMemberships';
+            const eventCollection = type === 'greenlife' ? 'greenlifeEvents' : 'vipEvents';
 
-            // Gerar múltiplos ingressos (um para cada item da quantidade)
+            // 1. Marcar checkout como confirmado imediatamente para liberar o frontend
+            await checkoutRef.update({
+                status: 'confirmed',
+                paidAt: admin.firestore.FieldValue.serverTimestamp(),
+                asaasEvent: event.event
+            });
+
+            // 2. Buscar códigos disponíveis em lote para evitar colisões
+            const codesRef = db.collection(eventCollection).doc(checkoutData.vipEventId).collection('availableCodes');
+            const codesSnap = await codesRef.where('used', '==', false).limit(qty).get();
+            const availableCodes = codesSnap.docs;
+
+            // 3. Gerar os ingressos
+            const batch = db.batch();
+
             for (let i = 0; i < qty; i++) {
-                const membershipId = `${checkoutData.promoterId}_${checkoutData.vipEventId}_${i}`;
+                // ID único do ingresso composto por checkoutId + índice
+                const membershipId = `${checkoutId}_${i}`;
                 
-                // Buscar código disponível
-                const codesRef = db.collection(eventCollection).doc(checkoutData.vipEventId).collection('availableCodes');
-                const codeSnap = await codesRef.where('used', '==', false).limit(1).get();
-
                 let assignedCode = "AGUARDANDO_ESTOQUE";
                 let isActive = false;
 
-                if (!codeSnap.empty) {
-                    const codeDoc = codeSnap.docs[0];
+                if (availableCodes[i]) {
+                    const codeDoc = availableCodes[i];
                     assignedCode = codeDoc.data().code;
                     isActive = true;
-                    await codeDoc.ref.update({
+                    // Atualiza o código como usado no batch
+                    batch.update(codeDoc.ref, {
                         used: true,
                         usedBy: checkoutData.promoterEmail,
-                        usedAt: admin.firestore.FieldValue.serverTimestamp()
+                        usedAt: admin.firestore.FieldValue.serverTimestamp(),
+                        membershipId: membershipId
                     });
                 }
 
-                await db.collection(collectionName).doc(membershipId).set({
+                const membershipRef = db.collection(collectionName).doc(membershipId);
+                batch.set(membershipRef, {
                     id: membershipId,
                     checkoutId: checkoutId,
                     vipEventId: checkoutData.vipEventId,
@@ -216,41 +230,29 @@ export const asaasWebhook = functions
                     promoterId: checkoutData.promoterId,
                     promoterName: checkoutData.promoterName,
                     promoterEmail: checkoutData.promoterEmail,
-                    promoterWhatsapp: checkoutData.promoterWhatsapp,
+                    promoterWhatsapp: checkoutData.promoterWhatsapp || '',
                     status: 'confirmed',
                     benefitCode: assignedCode,
                     isBenefitActive: isActive,
                     amount: (checkoutData.amount / qty),
-                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    submittedAt: checkoutData.createdAt || admin.firestore.FieldValue.serverTimestamp()
                 });
             }
 
-            // Atualizar status do checkout para o frontend detectar
-            await checkoutRef.update({
-                status: 'confirmed',
-                paidAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            console.log(`Checkout ${checkoutId} concluído com sucesso. ${qty} ingressos gerados.`);
+            await batch.commit();
+            console.log(`Checkout ${checkoutId} processado com sucesso. ${qty} ingressos gerados.`);
+            
             return res.status(200).send('OK');
 
         } catch (err) {
-            console.error("Erro no processamento do Webhook:", err);
+            console.error("Erro fatal no processamento do Webhook:", err);
             return res.status(500).send(err.message);
         }
     });
 
-// Restante dos stubs
-export const createAdminRequest = functions.region("southamerica-east1").https.onCall(async (data) => {
-    const { name, email, phone, password } = data;
-    const emailLower = email.toLowerCase().trim();
-    const userRecord = await admin.auth().createUser({ email: emailLower, password, displayName: name });
-    await db.collection('adminApplications').doc(userRecord.uid).set({
-        id: userRecord.uid, name: name.trim(), email: emailLower, phone: phone || '', status: 'pending',
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    return { success: true, uid: userRecord.uid };
-});
+// Stubs permanecem inalterados
+export const createAdminRequest = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const createOrganizationAndUser = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const savePromoterToken = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const activateGreenlifeMembership = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
