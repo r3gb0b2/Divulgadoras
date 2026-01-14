@@ -40,29 +40,12 @@ export const createVipAsaasPix = functions
         const qty = quantity || 1;
         const asaasKey = process.env.ASAAS_API_KEY;
 
+        // CRÍTICO: Criar a referência ANTES da chamada da API
         const checkoutRef = db.collection('checkouts').doc();
         const checkoutId = checkoutRef.id;
 
         try {
-            const customerRes = await asaasFetch('customers', 'POST', {
-                name: name.trim(),
-                email: email.toLowerCase().trim(),
-                mobilePhone: whatsapp.replace(/\D/g, ''),
-                cpfCnpj: taxId.replace(/\D/g, ''),
-                notificationDisabled: true
-            }, asaasKey);
-
-            const paymentRes = await asaasFetch('payments', 'POST', {
-                customer: customerRes.id,
-                billingType: 'PIX',
-                value: amount,
-                dueDate: new Date().toISOString().split('T')[0],
-                description: `${qty}x Ingressos VIP: ${vipEventName}`,
-                externalReference: checkoutId 
-            }, asaasKey);
-
-            const qrCodeRes = await asaasFetch(`payments/${paymentRes.id}/pixQrCode`, 'GET', null, asaasKey);
-
+            // 1. Salvar no banco PRIMEIRO para evitar 404 no Webhook (Race Condition)
             await checkoutRef.set({
                 id: checkoutId,
                 type: 'club_vip',
@@ -73,10 +56,36 @@ export const createVipAsaasPix = functions
                 promoterEmail: email.toLowerCase().trim(),
                 promoterWhatsapp: whatsapp,
                 status: 'pending',
-                paymentId: paymentRes.id,
                 amount,
                 quantity: qty,
                 createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            // 2. Criar ou recuperar cliente no Asaas
+            const customerRes = await asaasFetch('customers', 'POST', {
+                name: name.trim(),
+                email: email.toLowerCase().trim(),
+                mobilePhone: whatsapp.replace(/\D/g, ''),
+                cpfCnpj: taxId.replace(/\D/g, ''),
+                notificationDisabled: true
+            }, asaasKey);
+
+            // 3. Criar cobrança Pix
+            const paymentRes = await asaasFetch('payments', 'POST', {
+                customer: customerRes.id,
+                billingType: 'PIX',
+                value: amount,
+                dueDate: new Date().toISOString().split('T')[0],
+                description: `${qty}x Ingressos VIP: ${vipEventName}`,
+                externalReference: checkoutId 
+            }, asaasKey);
+
+            // 4. Obter QR Code
+            const qrCodeRes = await asaasFetch(`payments/${paymentRes.id}/pixQrCode`, 'GET', null, asaasKey);
+
+            // 5. Atualizar o checkout com o ID do pagamento do Asaas
+            await checkoutRef.update({
+                paymentId: paymentRes.id
             });
 
             return { 
@@ -100,10 +109,27 @@ export const createGreenlifeAsaasPix = functions
     .https.onCall(async (data, context) => {
         const { vipEventId, vipEventName, promoterId, email, name, whatsapp, taxId, amount } = data;
         const asaasKey = process.env.ASAAS_API_KEY;
+        
         const checkoutRef = db.collection('checkouts').doc();
         const checkoutId = checkoutRef.id;
 
         try {
+            // 1. Salvar no banco PRIMEIRO
+            await checkoutRef.set({
+                id: checkoutId,
+                type: 'greenlife',
+                vipEventId,
+                vipEventName,
+                promoterId,
+                promoterName: name,
+                promoterEmail: email.toLowerCase().trim(),
+                promoterWhatsapp: whatsapp,
+                status: 'pending',
+                amount,
+                quantity: 1,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
             const customerRes = await asaasFetch('customers', 'POST', {
                 name: name.trim(), email: email.toLowerCase().trim(),
                 mobilePhone: whatsapp.replace(/\D/g, ''), cpfCnpj: taxId.replace(/\D/g, ''), notificationDisabled: true
@@ -118,20 +144,8 @@ export const createGreenlifeAsaasPix = functions
 
             const qrCodeRes = await asaasFetch(`payments/${paymentRes.id}/pixQrCode`, 'GET', null, asaasKey);
 
-            await checkoutRef.set({
-                id: checkoutId,
-                type: 'greenlife',
-                vipEventId,
-                vipEventName,
-                promoterId,
-                promoterName: name,
-                promoterEmail: email.toLowerCase().trim(),
-                promoterWhatsapp: whatsapp,
-                status: 'pending',
-                paymentId: paymentRes.id,
-                amount,
-                quantity: 1,
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            await checkoutRef.update({
+                paymentId: paymentRes.id
             });
 
             return { 
@@ -147,22 +161,26 @@ export const createGreenlifeAsaasPix = functions
     });
 
 /**
- * Webhook Unificado Asaas - CORREÇÃO CRÍTICA
+ * Webhook Unificado Asaas
  */
 export const asaasWebhook = functions
     .region("southamerica-east1")
     .runWith({ secrets: ["ASAAS_API_KEY"] })
     .https.onRequest(async (req, res) => {
         const event = req.body;
-        console.log("Webhook Asaas Recebido:", event.event, "ExternalRef:", event.payment?.externalReference);
+        
+        // Log para depuração (visível no painel do Firebase)
+        console.log("--- WEBHOOK RECEBIDO ---");
+        console.log("Evento:", event.event);
+        console.log("ExternalReference:", event.payment?.externalReference);
 
         if (event.event !== 'PAYMENT_RECEIVED' && event.event !== 'PAYMENT_CONFIRMED') {
             return res.status(200).send('Ignored event type');
         }
 
-        const checkoutId = event.payment.externalReference;
+        const checkoutId = event.payment?.externalReference;
         if (!checkoutId) {
-            console.error("Webhook recebido sem externalReference no pagamento.");
+            console.error("Webhook ignorado: externalReference ausente.");
             return res.status(200).send('No externalReference');
         }
 
@@ -171,14 +189,15 @@ export const asaasWebhook = functions
             const checkoutSnap = await checkoutRef.get();
 
             if (!checkoutSnap.exists) {
-                console.error("Checkout não encontrado no banco:", checkoutId);
-                return res.status(404).send('Checkout not found');
+                console.error(`ERRO: Checkout ${checkoutId} não encontrado no banco de dados.`);
+                // Retornamos 200 aqui para o Asaas não ficar reenviando se for um erro de ID inválido,
+                // mas logamos o erro para nós.
+                return res.status(200).send('Checkout not found locally');
             }
 
             const checkoutData = checkoutSnap.data();
             if (checkoutData.status === 'confirmed') {
-                console.log("Checkout já estava confirmado. Ignorando duplicidade.");
-                return res.status(200).send('Checkout already processed');
+                return res.status(200).send('Already processed');
             }
 
             const qty = checkoutData.quantity || 1;
@@ -186,23 +205,23 @@ export const asaasWebhook = functions
             const collectionName = type === 'greenlife' ? 'greenlifeMemberships' : 'vipMemberships';
             const eventCollection = type === 'greenlife' ? 'greenlifeEvents' : 'vipEvents';
 
-            // 1. Marcar checkout como confirmado imediatamente para liberar o frontend
-            await checkoutRef.update({
+            // 1. Iniciar o lote de escrita
+            const batch = db.batch();
+
+            // 2. Marcar checkout como confirmado
+            batch.update(checkoutRef, {
                 status: 'confirmed',
                 paidAt: admin.firestore.FieldValue.serverTimestamp(),
                 asaasEvent: event.event
             });
 
-            // 2. Buscar códigos disponíveis em lote para evitar colisões
+            // 3. Buscar códigos disponíveis
             const codesRef = db.collection(eventCollection).doc(checkoutData.vipEventId).collection('availableCodes');
             const codesSnap = await codesRef.where('used', '==', false).limit(qty).get();
             const availableCodes = codesSnap.docs;
 
-            // 3. Gerar os ingressos
-            const batch = db.batch();
-
+            // 4. Gerar os ingressos
             for (let i = 0; i < qty; i++) {
-                // ID único do ingresso composto por checkoutId + índice
                 const membershipId = `${checkoutId}_${i}`;
                 
                 let assignedCode = "AGUARDANDO_ESTOQUE";
@@ -212,7 +231,6 @@ export const asaasWebhook = functions
                     const codeDoc = availableCodes[i];
                     assignedCode = codeDoc.data().code;
                     isActive = true;
-                    // Atualiza o código como usado no batch
                     batch.update(codeDoc.ref, {
                         used: true,
                         usedBy: checkoutData.promoterEmail,
@@ -241,12 +259,12 @@ export const asaasWebhook = functions
             }
 
             await batch.commit();
-            console.log(`Checkout ${checkoutId} processado com sucesso. ${qty} ingressos gerados.`);
+            console.log(`SUCESSO: Checkout ${checkoutId} processado. ${qty} ingresso(s) gerado(s).`);
             
             return res.status(200).send('OK');
 
         } catch (err) {
-            console.error("Erro fatal no processamento do Webhook:", err);
+            console.error("ERRO FATAL Webhook:", err);
             return res.status(500).send(err.message);
         }
     });
