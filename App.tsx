@@ -27,7 +27,7 @@ import AppleInstallTutorial from './pages/AppleInstallTutorial';
 import RegisterF1 from './pages/RegisterF1';
 import GlobalGuestListCheck from './pages/GlobalGuestListCheck';
 import ClubVipHome from './pages/ClubVipHome';
-import ClubVipTestHome from './pages/ClubVipTestHome'; // Novo componente de teste
+import ClubVipTestHome from './pages/ClubVipTestHome';
 import ClubVipHowItWorks from './pages/ClubVipHowItWorks';
 import ClubVipStatus from './pages/ClubVipStatus';
 import GreenlifeHome from './pages/GreenlifeHome';
@@ -133,21 +133,41 @@ const App: React.FC = () => {
                 <Route path="/admin/*" element={<AdminAuth />} />
                 <Route path="/" element={<PublicHome />} />
                 <Route path="/status" element={<StatusCheck />} />
+                <Route path="/como-funciona" element={<HowToUsePage />} />
+                <Route path="/planos" element={<PricingPage />} />
+                <Route path="/suporte" element={<SupportPage />} />
+                <Route path="/politica-de-privacidade" element={<PrivacyPolicyPage />} />
                 
-                {/* Clube VIP Oficial (Asaas) */}
+                {/* Comprovação e Posts */}
+                <Route path="/posts" element={<PostCheck />} />
+                <Route path="/proof/:assignmentId" element={<ProofUploadPage />} />
+                <Route path="/post-unico/:postId" element={<OneTimePostPage />} />
+                <Route path="/sair-do-grupo" element={<LeaveGroupPage />} />
+                <Route path="/connect/:loopId" element={<FollowLoopPage />} />
+                
+                {/* Listas e Inscrições Especiais */}
+                <Route path="/listas/:campaignId" element={<GuestListCheck />} />
+                <Route path="/global-list/:listId" element={<GlobalGuestListCheck />} />
+                <Route path="/f1/register" element={<RegisterF1 />} />
+                <Route path="/apple-test" element={<AppleTestRegistration />} />
+                <Route path="/apple-test/tutorial" element={<AppleInstallTutorial />} />
+
+                {/* Clube VIP */}
                 <Route path="/clubvip" element={<ClubVipHome />} />
                 <Route path="/clubvip/como-funciona" element={<ClubVipHowItWorks />} />
                 <Route path="/clubvip/status" element={<ClubVipStatus />} />
-
-                {/* AMBIENTE DE TESTE CLUB VIP (Pagar.me) */}
                 <Route path="/test/clubvip" element={<ClubVipTestHome />} />
 
+                {/* Greenlife */}
                 <Route path="/alunosgreenlife" element={<GreenlifeHome />} />
                 <Route path="/alunosgreenlife/status" element={<GreenlifeStatus />} />
-                <Route path="/posts" element={<PostCheck />} />
+
+                {/* Inscrição Dinâmica */}
+                <Route path="/admin/register" element={<SubscriptionFlowPage />} />
                 <Route path="/:organizationId" element={<StateSelection />} />
                 <Route path="/:organizationId/:state" element={<CampaignSelection />} />
                 <Route path="/:organizationId/:state/:campaignName/register" element={<RegistrationForm />} />
+                
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </ErrorBoundary>
