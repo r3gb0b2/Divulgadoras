@@ -12,7 +12,7 @@ const ASAAS_URL = ASAAS_CONFIG.env === 'production'
     : 'https://sandbox.asaas.com/api/v3';
 
 /**
- * Envio de E-mail via Brevo (Transacional)
+ * Envio de E-mail via Brevo (Confirmado: Remetente equipecerta.app)
  */
 const sendVipTicketEmail = async (toEmail, toName, eventName, ticketCode, apiKey) => {
     if (!apiKey) {
@@ -25,34 +25,37 @@ const sendVipTicketEmail = async (toEmail, toName, eventName, ticketCode, apiKey
         apiInstance.setApiKey(SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey, apiKey);
 
         const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
-        sendSmtpEmail.subject = `Seu ingresso VIP está aqui! 🎫 - ${eventName}`;
-        sendSmtpEmail.sender = { "name": "Equipe Certa VIP", "email": "contato@equipecerta.com.br" };
+        sendSmtpEmail.subject = `Seu Ingresso VIP Confirmado! 🎫 - ${eventName}`;
+        // ALTERADO: Domínio corrigido para .app conforme solicitado
+        sendSmtpEmail.sender = { "name": "Equipe Certa VIP", "email": "contato@equipecerta.app" };
         sendSmtpEmail.to = [{ "email": toEmail, "name": toName }];
         
         sendSmtpEmail.htmlContent = `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: #000; color: #fff; padding: 40px; border-radius: 30px;">
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; background: #000; color: #fff; padding: 40px; border-radius: 30px; border: 1px solid #333;">
                 <div style="text-align: center; margin-bottom: 30px;">
-                    <h1 style="color: #7e39d5; margin: 0; font-size: 28px; text-transform: uppercase;">Acesso Confirmado!</h1>
-                    <p style="color: #666; font-size: 12px; margin-top: 5px;">EQUIPE CERTA • CLUB VIP</p>
+                    <div style="background: #7e39d5; width: 60px; height: 60px; border-radius: 20px; display: inline-block; line-height: 60px; font-size: 30px; margin-bottom: 15px;">🎫</div>
+                    <h1 style="color: #fff; margin: 0; font-size: 26px; text-transform: uppercase; letter-spacing: -1px;">Pagamento Confirmado!</h1>
+                    <p style="color: #7e39d5; font-size: 11px; margin-top: 5px; font-weight: bold; text-transform: uppercase; letter-spacing: 2px;">Equipe Certa • Club VIP</p>
                 </div>
                 
-                <div style="background: #111; padding: 30px; border: 1px solid #333; border-radius: 20px; text-align: center;">
-                    <p style="font-size: 14px; color: #aaa; margin-bottom: 10px;">EVENTO</p>
-                    <h2 style="margin: 0; font-size: 24px; color: #fff;">${eventName}</h2>
+                <div style="background: #111; padding: 30px; border: 1px solid #222; border-radius: 25px; text-align: center; margin-bottom: 30px;">
+                    <p style="font-size: 13px; color: #888; margin-bottom: 5px; text-transform: uppercase;">Evento Garantido</p>
+                    <h2 style="margin: 0; font-size: 22px; color: #fff;">${eventName}</h2>
                     
-                    <div style="margin: 30px 0; padding: 20px; background: #7e39d5; border-radius: 15px;">
-                        <p style="font-size: 12px; color: #eee; margin: 0 0 10px 0; font-weight: bold;">SEU CÓDIGO DE ACESSO</p>
-                        <h3 style="font-family: monospace; font-size: 32px; margin: 0; letter-spacing: 5px; color: #fff;">${ticketCode}</h3>
+                    <div style="margin: 30px 0; padding: 25px; background: #7e39d5; border-radius: 20px; box-shadow: 0 10px 20px rgba(126, 57, 213, 0.2);">
+                        <p style="font-size: 11px; color: #eee; margin: 0 0 10px 0; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">Seu Código de Acesso Único</p>
+                        <h3 style="font-family: 'Courier New', monospace; font-size: 34px; margin: 0; letter-spacing: 8px; color: #fff; font-weight: 900;">${ticketCode}</h3>
                     </div>
 
-                    <p style="font-size: 13px; color: #888;">Apresente este código ou o QR Code no seu portal na entrada do evento.</p>
+                    <p style="font-size: 12px; color: #666; line-height: 1.6;">Este código é pessoal e intransferível. Apresente-o junto com seu documento oficial na entrada exclusiva VIP.</p>
                 </div>
 
-                <div style="margin-top: 30px; text-align: center;">
+                <div style="text-align: center;">
                     <a href="https://divulgadoras.vercel.app/#/clubvip/status?email=${encodeURIComponent(toEmail)}" 
-                       style="display: inline-block; background: #fff; color: #000; padding: 15px 30px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 14px;">
-                        ABRIR MEU PORTAL VIP
+                       style="display: inline-block; background: #fff; color: #000; padding: 18px 40px; border-radius: 15px; text-decoration: none; font-weight: 900; font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">
+                        ABRIR MEU INGRESSO DIGITAL
                     </a>
+                    <p style="color: #444; font-size: 10px; margin-top: 25px;">Equipe Certa © ${new Date().getFullYear()} - Sistema de Gestão de Eventos</p>
                 </div>
             </div>
         `;
@@ -81,7 +84,6 @@ export const pagarmeWebhook = functions
         if (!checkoutId) return res.status(200).send('No ID');
 
         try {
-            // Busca na coleção principal agora
             const checkoutRef = db.collection('checkouts').doc(checkoutId);
             const snap = await checkoutRef.get();
             
@@ -91,7 +93,6 @@ export const pagarmeWebhook = functions
             const qty = checkoutData.quantity || 1;
             const batch = db.batch();
 
-            // Lógica de atribuição de códigos (Estoque VIP)
             const codesRef = db.collection('vipEvents').doc(checkoutData.vipEventId).collection('availableCodes');
             const codesSnap = await codesRef.where('used', '==', false).limit(qty).get();
             
@@ -122,8 +123,15 @@ export const pagarmeWebhook = functions
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
 
+                // ENVIO AUTOMÁTICO DE E-MAIL AO FINALIZAR
                 if (codeDoc && process.env.BREVO_API_KEY) {
-                    await sendVipTicketEmail(checkoutData.promoterEmail, checkoutData.promoterName, checkoutData.vipEventName, assignedCode, process.env.BREVO_API_KEY);
+                    await sendVipTicketEmail(
+                        checkoutData.promoterEmail, 
+                        checkoutData.promoterName, 
+                        checkoutData.vipEventName, 
+                        assignedCode, 
+                        process.env.BREVO_API_KEY
+                    );
                 }
             }
 
@@ -147,7 +155,6 @@ export const createVipPagarMePix = functions
         try {
             const { vipEventId, vipEventName, email, name, whatsapp, taxId, amount, quantity } = data;
             
-            // Salva na coleção oficial 'checkouts'
             const checkoutRef = db.collection('checkouts').doc();
             const checkoutId = checkoutRef.id;
 
@@ -217,7 +224,7 @@ export const createVipPagarMePix = functions
         }
     });
 
-// Stubs mantidos para compatibilidade
+// Stubs mantidos para compatibilidade...
 export const createVipAsaasPix = functions.region("southamerica-east1").runWith({ secrets: ["ASAAS_API_KEY"] }).https.onCall(async () => ({ success: true }));
 export const asaasWebhook = functions.region("southamerica-east1").runWith({ secrets: ["ASAAS_API_KEY", "BREVO_API_KEY"] }).https.onRequest(async (req, res) => res.status(200).send('OK'));
 export const checkBackendStatus = functions.region("southamerica-east1").https.onCall(async () => ({ asaasKeyConfigured: !!process.env.ASAAS_API_KEY, pagarmeKeyConfigured: !!process.env.PAGARME_SECRET_KEY, brevoKeyConfigured: !!process.env.BREVO_API_KEY }));
