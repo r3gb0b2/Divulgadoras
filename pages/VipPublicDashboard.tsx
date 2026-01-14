@@ -49,35 +49,37 @@ const VipPublicDashboard: React.FC = () => {
             ? memberships 
             : memberships.filter(m => m.vipEventId === selectedEventId);
 
-        // Somente confirmados que NÃO foram estornados entram nos cálculos
         const confirmed = filteredMemberships.filter(m => m.status === 'confirmed');
         const pending = filteredMemberships.filter(m => m.status === 'pending');
         const refunded = filteredMemberships.filter(m => m.status === 'refunded');
         
-        // Valor da taxa fixa por transação (Ajustado para 4.00 conforme solicitado)
         const FIXED_FEE = 4.00;
 
-        // Faturamento Bruto (Valor real que entrou)
         const totalRevenueGross = confirmed.reduce((acc, curr) => {
             const event = events.find(e => e.id === curr.vipEventId);
             return acc + (event?.price || 0);
         }, 0);
 
-        // Total de Taxas (4.00 por venda ativa)
         const totalFees = confirmed.length * FIXED_FEE;
-
-        // Faturamento Líquido (O que sobra após a taxa do PagSeguro/MercadoPago)
         const totalRevenueNet = totalRevenueGross - totalFees;
 
-        // Vendas por dia (últimos 7 dias)
-        const dailySales: Record<string, number> = {};
-        confirmed.forEach(m => {
-            const date = toDateSafe(m.updatedAt || m.submittedAt);
-            if (date) {
-                const dateKey = date.toLocaleDateString('pt-BR');
-                dailySales[dateKey] = (dailySales[dateKey] || 0) + 1;
-            }
-        });
+        // Gerar os últimos 10 dias de forma sequencial e ordenada
+        const last10Days: [string, number][] = [];
+        const now = new Date();
+        
+        for (let i = 0; i < 10; i++) {
+            const d = new Date();
+            d.setDate(now.getDate() - i);
+            const dateKey = d.toLocaleDateString('pt-BR');
+            
+            // Conta as vendas para este dia específico
+            const count = confirmed.filter(m => {
+                const pDate = toDateSafe(m.updatedAt || m.submittedAt);
+                return pDate && pDate.toLocaleDateString('pt-BR') === dateKey;
+            }).length;
+            
+            last10Days.push([dateKey, count]);
+        }
 
         const conversionRate = filteredMemberships.length > 0 
             ? ((confirmed.length / filteredMemberships.length) * 100).toFixed(1) 
@@ -93,7 +95,7 @@ const VipPublicDashboard: React.FC = () => {
             totalRevenueNet,
             conversionRate,
             activatedBenefits: confirmed.filter(m => m.isBenefitActive).length,
-            dailySales: Object.entries(dailySales).slice(-7).reverse()
+            dailySales: last10Days // Já está ordenado do mais recente para o mais antigo
         };
     }, [memberships, events, selectedEventId]);
 
