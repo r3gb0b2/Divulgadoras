@@ -104,6 +104,13 @@ const RegistrationForm: React.FC = () => {
 
   const handleEmailBlur = async () => {
     const email = formData.email.trim().toLowerCase();
+    
+    // Validação anti-erro de digitação
+    if (email.endsWith('.con') || email.endsWith('.co')) {
+        setError("O e-mail parece estar errado (termina em .con ou .co). Por favor corrija para .com ou o final correto.");
+        return;
+    }
+
     // Só tenta preencher se o e-mail parecer válido e não estivermos no modo edição
     if (!email || !email.includes('@') || editId) return;
 
@@ -142,6 +149,12 @@ const RegistrationForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    const emailLower = formData.email.toLowerCase().trim();
+    if (emailLower.endsWith('.con') || emailLower.endsWith('.co')) {
+        setError("O e-mail digitado possui erro de terminação (.con ou .co). Corrija antes de enviar.");
+        return;
+    }
+
     if (!organizationId || isValidOrg === false) {
       setError("Link de cadastro inválido.");
       return;

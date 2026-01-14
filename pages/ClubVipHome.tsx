@@ -10,7 +10,7 @@ import {
   ArrowLeftIcon, CheckCircleIcon, SparklesIcon,
   UserIcon, PhoneIcon, InstagramIcon,
   AlertTriangleIcon, SearchIcon, ClockIcon, CreditCardIcon,
-  RefreshIcon, DocumentDuplicateIcon
+  RefreshIcon, DocumentDuplicateIcon, XIcon, MailIcon
 } from '../components/Icons';
 
 type CampaignStep = 'select_event' | 'benefits' | 'identify' | 'confirm_data' | 'payment' | 'success';
@@ -22,6 +22,10 @@ const ClubVipHome: React.FC = () => {
     const [selectedEvent, setSelectedEvent] = useState<VipEvent | null>(null);
     
     const [email, setEmail] = useState('');
+    const [confirmEmail, setConfirmEmail] = useState('');
+    const [isEmailConfirmModalOpen, setIsEmailConfirmModalOpen] = useState(false);
+    const [quantity, setQuantity] = useState(1);
+    
     const [name, setName] = useState('');
     const [whatsapp, setWhatsapp] = useState('');
     const [instagram, setInstagram] = useState('');
@@ -57,16 +61,41 @@ const ClubVipHome: React.FC = () => {
         }
     }, [step, promoter, selectedEvent]);
 
-    const handleCheckEmail = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const trimmedEmail = email.trim().toLowerCase();
-        if (!trimmedEmail || !selectedEvent) return;
+    const validateEmail = (email: string) => {
+        const trimmed = email.trim().toLowerCase();
+        if (trimmed.endsWith('.con') || trimmed.endsWith('.co')) {
+            return "O e-mail parece estar errado (termina em .con ou .co). Corrija para .com ou o final correto.";
+        }
+        return null;
+    };
 
+    const handleIdentifyNext = (e: React.FormEvent) => {
+        e.preventDefault();
+        const emailError = validateEmail(email);
+        if (emailError) {
+            setError(emailError);
+            return;
+        }
+        setError(null);
+        setIsEmailConfirmModalOpen(true);
+    };
+
+    const handleConfirmEmailMatch = async () => {
+        if (email.trim().toLowerCase() !== confirmEmail.trim().toLowerCase()) {
+            alert("Os e-mails digitados não são iguais. Verifique cuidadosamente.");
+            return;
+        }
+        setIsEmailConfirmModalOpen(false);
+        await proceedWithIdentification();
+    };
+
+    const proceedWithIdentification = async () => {
+        const trimmedEmail = email.trim().toLowerCase();
         setIsLoading(true);
         setError(null);
         try {
             const profiles = await findPromotersByEmail(trimmedEmail);
-            const membership = await checkVipMembership(trimmedEmail, selectedEvent.id);
+            const membership = await checkVipMembership(trimmedEmail, selectedEvent!.id);
             
             if (membership?.status === 'confirmed') {
                 navigate('/clubvip/status');
@@ -97,7 +126,6 @@ const ClubVipHome: React.FC = () => {
         const sanitizedTaxId = taxId.replace(/\D/g, '');
         const sanitizedInstagram = instagram.replace('@', '').trim();
 
-        // Validações Obrigatórias
         if (!selectedEvent) { setError("Selecione um evento para continuar."); return; }
         if (!name.trim()) { setError("Por favor, informe seu nome completo."); return; }
         if (!sanitizedWhatsapp || sanitizedWhatsapp.length < 10) { 
@@ -113,7 +141,6 @@ const ClubVipHome: React.FC = () => {
         setIsLoading(true);
         try {
             let pId = promoter?.id;
-
             if (!pId) {
                 pId = await createVipPromoter({ name, email, whatsapp: sanitizedWhatsapp });
             }
@@ -125,6 +152,8 @@ const ClubVipHome: React.FC = () => {
 
             setPromoter({ id: pId, name, email, whatsapp: sanitizedWhatsapp, instagram: sanitizedInstagram } as any);
 
+            const finalAmount = selectedEvent.price * quantity;
+
             const createAsaasPix = httpsCallable(functions, 'createVipAsaasPix');
             const res: any = await createAsaasPix({
                 vipEventId: selectedEvent.id,
@@ -134,7 +163,8 @@ const ClubVipHome: React.FC = () => {
                 name: name.trim(),
                 whatsapp: sanitizedWhatsapp,
                 taxId: sanitizedTaxId,
-                amount: selectedEvent.price
+                amount: finalAmount,
+                quantity: quantity // Passando a quantidade para o registro
             });
             
             setPixData(res.data);
@@ -207,15 +237,41 @@ const ClubVipHome: React.FC = () => {
                     )}
 
                     {step === 'benefits' && (
-                        <div className="space-y-8">
+                        <div className="space-y-8 animate-fadeIn">
                             <div className="text-center">
                                 <h2 className="text-3xl font-black text-white uppercase tracking-tight">{selectedEvent?.name}</h2>
-                                <p className="text-primary font-black text-sm mt-1 uppercase">Seus benefícios</p>
+                                <p className="text-primary font-black text-sm mt-1 uppercase">Escolha a quantidade de acessos</p>
                             </div>
+
+                            {/* QUANTITY SELECTOR - 4 QUADRADOS */}
+                            <div className="space-y-4">
+                                <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Quantidade de Ingressos (Máx. 4)</label>
+                                <div className="grid grid-cols-4 gap-3">
+                                    {[1, 2, 3, 4].map(num => (
+                                        <button
+                                            key={num}
+                                            type="button"
+                                            onClick={() => setQuantity(num)}
+                                            className={`aspect-square rounded-2xl font-black text-xl flex flex-col items-center justify-center transition-all border-2 ${quantity === num ? 'bg-primary border-primary text-white shadow-xl scale-105' : 'bg-dark/40 border-white/5 text-gray-500 hover:border-white/20'}`}
+                                        >
+                                            {num}
+                                            <span className="text-[8px] mt-1 opacity-60 uppercase">unid</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
                             <div className="bg-dark/40 p-8 rounded-[2.5rem] border border-white/5 space-y-6">
+                                <div className="flex justify-between items-center border-b border-white/5 pb-4 mb-4">
+                                    <p className="text-gray-400 font-bold uppercase text-xs">Total a Pagar:</p>
+                                    <div className="text-right">
+                                        <p className="text-3xl font-black text-primary leading-none">R$ {(selectedEvent!.price * quantity).toFixed(2).replace('.', ',')}</p>
+                                        <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">({quantity}x R$ {selectedEvent!.price.toFixed(2)})</p>
+                                    </div>
+                                </div>
                                 {selectedEvent?.benefits.map((b, i) => (
-                                    <div key={i} className="flex gap-5 text-gray-200 text-lg">
-                                        <CheckCircleIcon className="w-6 h-6 text-primary flex-shrink-0" /> 
+                                    <div key={i} className="flex gap-5 text-gray-200 text-sm">
+                                        <CheckCircleIcon className="w-4 h-4 text-primary flex-shrink-0" /> 
                                         <span className="font-bold tracking-tight">{b}</span>
                                     </div>
                                 ))}
@@ -225,7 +281,7 @@ const ClubVipHome: React.FC = () => {
                     )}
 
                     {step === 'identify' && (
-                        <form onSubmit={handleCheckEmail} className="space-y-6 text-center animate-fadeIn">
+                        <form onSubmit={handleIdentifyNext} className="space-y-6 text-center animate-fadeIn">
                             <h2 className="text-2xl font-black text-white uppercase">Quem é você?</h2>
                             <p className="text-gray-400 text-sm mb-6 font-medium">Informe seu e-mail de cadastro.</p>
                             <input 
@@ -263,6 +319,11 @@ const ClubVipHome: React.FC = () => {
                                 <CreditCardIcon className="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500" />
                                 <input type="tel" required value={taxId} onChange={e => setTaxId(e.target.value)} className="w-full p-6 pl-16 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="CPF ou CNPJ do Titular" />
                                 <p className="text-[10px] text-gray-500 font-bold uppercase mt-2 ml-4">Exigência do Banco Central para emissão do Pix</p>
+                            </div>
+
+                            <div className="bg-dark/40 p-4 rounded-2xl border border-white/5 flex justify-between items-center">
+                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Total da Adesão ({quantity}x):</p>
+                                <p className="text-xl font-black text-primary">R$ {(selectedEvent!.price * quantity).toFixed(2).replace('.', ',')}</p>
                             </div>
 
                             <button type="submit" disabled={isLoading} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] shadow-2xl shadow-green-900/30 uppercase text-sm tracking-widest mt-4">
@@ -309,6 +370,39 @@ const ClubVipHome: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            {/* MODAL DE CONFIRMAÇÃO DE E-MAIL */}
+            {isEmailConfirmModalOpen && (
+                <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[200] flex items-center justify-center p-6 animate-fadeIn">
+                    <div className="bg-secondary w-full max-w-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl text-center space-y-6">
+                        <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto text-primary">
+                            <MailIcon className="w-8 h-8" />
+                        </div>
+                        <h2 className="text-2xl font-black text-white uppercase tracking-tighter leading-tight">Confirmar E-mail</h2>
+                        <p className="text-gray-400 text-sm">Para evitar erros de entrega do seu ingresso, digite seu e-mail novamente abaixo:</p>
+                        
+                        <div className="space-y-4">
+                            <div className="p-4 bg-dark rounded-2xl border border-white/5">
+                                <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Você digitou anteriormente:</p>
+                                <p className="text-white font-bold">{email}</p>
+                            </div>
+
+                            <input 
+                                type="email" 
+                                value={confirmEmail}
+                                onChange={e => setConfirmEmail(e.target.value)}
+                                className="w-full p-5 bg-dark border border-primary/30 rounded-2xl text-white outline-none focus:border-primary font-bold text-center"
+                                placeholder="Confirme seu e-mail"
+                            />
+                        </div>
+
+                        <div className="flex gap-3 pt-4">
+                            <button onClick={() => setIsEmailConfirmModalOpen(false)} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-xl uppercase text-xs">Voltar</button>
+                            <button onClick={handleConfirmEmailMatch} className="flex-[2] py-4 bg-primary text-white font-black rounded-xl uppercase text-xs shadow-lg shadow-primary/20">Confirmar</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -23,8 +23,23 @@ const AdminLoginPage: React.FC = () => {
         setSuccessMessage(null);
     };
 
+    const validateEmail = (email: string) => {
+        const trimmed = email.trim().toLowerCase();
+        if (trimmed.endsWith('.con') || trimmed.endsWith('.co')) {
+            return "O e-mail parece estar errado (termina em .con ou .co).";
+        }
+        return null;
+    };
+
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        const emailError = validateEmail(email);
+        if (emailError) {
+            setError(emailError);
+            return;
+        }
+
         setIsLoading(true);
         resetStates();
 
@@ -52,6 +67,12 @@ const AdminLoginPage: React.FC = () => {
             return;
         }
 
+        const emailError = validateEmail(email);
+        if (emailError) {
+            setError(emailError);
+            return;
+        }
+
         setIsLoading(true);
         resetStates();
 
@@ -70,6 +91,12 @@ const AdminLoginPage: React.FC = () => {
         e.preventDefault();
         if (!name || !email || !phone) {
             setError("Preencha todos os campos para solicitar acesso.");
+            return;
+        }
+
+        const emailError = validateEmail(email);
+        if (emailError) {
+            setError(emailError);
             return;
         }
 
