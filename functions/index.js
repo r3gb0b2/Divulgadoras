@@ -66,29 +66,32 @@ const sendVipTicketEmail = async (toEmail, toName, eventName, ticketCode, apiKey
 };
 
 /**
- * Webhook Asaas
+ * Webhook Pagar.me (Oficial)
  */
-export const asaasWebhook = functions
+export const pagarmeWebhook = functions
     .region("southamerica-east1")
-    .runWith({ secrets: ["ASAAS_API_KEY", "BREVO_API_KEY"] })
+    .runWith({ secrets: ["BREVO_API_KEY"] })
     .https.onRequest(async (req, res) => {
         const event = req.body;
-        if (event.event !== 'PAYMENT_RECEIVED' && event.event !== 'PAYMENT_CONFIRMED') {
-            return res.status(200).send('OK');
-        }
+        console.log("[PAGARME WEBHOOK]:", JSON.stringify(event));
 
-        const checkoutId = event.payment?.externalReference;
+        if (event.type !== 'order.paid') return res.status(200).send('Ignored');
+
+        const checkoutId = event.data?.metadata?.checkoutId;
+        if (!checkoutId) return res.status(200).send('No ID');
+
         try {
-            if (!checkoutId) return res.status(200).send('No Reference');
-            
+            // Busca na coleção principal agora
             const checkoutRef = db.collection('checkouts').doc(checkoutId);
             const snap = await checkoutRef.get();
+            
             if (!snap.exists || snap.data().status === 'confirmed') return res.status(200).send('Already Processed');
 
             const checkoutData = snap.data();
             const qty = checkoutData.quantity || 1;
             const batch = db.batch();
 
+            // Lógica de atribuição de códigos (Estoque VIP)
             const codesRef = db.collection('vipEvents').doc(checkoutData.vipEventId).collection('availableCodes');
             const codesSnap = await codesRef.where('used', '==', false).limit(qty).get();
             
@@ -98,19 +101,28 @@ export const asaasWebhook = functions
                 const assignedCode = codeDoc ? codeDoc.data().code : "AGUARDANDO_ESTOQUE";
 
                 if (codeDoc) {
-                    batch.update(codeDoc.ref, { used: true, usedBy: checkoutData.promoterEmail, membershipId });
+                    batch.update(codeDoc.ref, { 
+                        used: true, 
+                        usedBy: checkoutData.promoterEmail, 
+                        membershipId 
+                    });
                 }
 
                 batch.set(db.collection('vipMemberships').doc(membershipId), {
-                    ...checkoutData,
                     id: membershipId,
+                    vipEventId: checkoutData.vipEventId,
+                    vipEventName: checkoutData.vipEventName,
+                    promoterName: checkoutData.promoterName,
+                    promoterEmail: checkoutData.promoterEmail,
+                    amount: checkoutData.amount / qty,
                     status: 'confirmed',
                     benefitCode: assignedCode,
                     isBenefitActive: !!codeDoc,
-                    submittedAt: admin.firestore.FieldValue.serverTimestamp()
+                    submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
 
-                if (codeDoc) {
+                if (codeDoc && process.env.BREVO_API_KEY) {
                     await sendVipTicketEmail(checkoutData.promoterEmail, checkoutData.promoterName, checkoutData.vipEventName, assignedCode, process.env.BREVO_API_KEY);
                 }
             }
@@ -120,50 +132,13 @@ export const asaasWebhook = functions
 
             return res.status(200).send('OK');
         } catch (err) {
-            console.error("Erro Webhook Asaas:", err.message);
+            console.error("Erro Crítico Webhook Pagarme:", err.message);
             return res.status(500).send(err.message);
         }
     });
 
 /**
- * Webhook Pagar.me (Teste)
- */
-export const pagarmeWebhook = functions
-    .region("southamerica-east1")
-    .runWith({ secrets: ["BREVO_API_KEY"] })
-    .https.onRequest(async (req, res) => {
-        const event = req.body;
-        if (event.type !== 'order.paid') return res.status(200).send('Ignored');
-
-        const checkoutId = event.data?.metadata?.checkoutId;
-        try {
-            if (!checkoutId) return res.status(200).send('No ID');
-            const checkoutRef = db.collection('checkouts_test').doc(checkoutId);
-            const snap = await checkoutRef.get();
-            if (!snap.exists || snap.data().status === 'confirmed') return res.status(200).send('OK');
-
-            const data = snap.data();
-            await checkoutRef.update({ status: 'confirmed', paidAt: admin.firestore.FieldValue.serverTimestamp() });
-            
-            const mId = `TEST_${checkoutId}`;
-            const code = 'TESTE_PAGARME';
-            
-            await db.collection('vipMemberships').doc(mId).set({
-                ...data,
-                id: mId,
-                status: 'confirmed',
-                benefitCode: code,
-                isBenefitActive: true,
-                submittedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            await sendVipTicketEmail(data.promoterEmail, data.promoterName, data.vipEventName, code, process.env.BREVO_API_KEY);
-            return res.status(200).send('OK');
-        } catch (e) { return res.status(500).send(e.message); }
-    });
-
-/**
- * Create Pix Pagar.me (Ambiente de Teste)
+ * Cria Pix no Pagar.me (Oficial)
  */
 export const createVipPagarMePix = functions
     .region("southamerica-east1")
@@ -171,20 +146,43 @@ export const createVipPagarMePix = functions
     .https.onCall(async (data) => {
         try {
             const { vipEventId, vipEventName, email, name, whatsapp, taxId, amount, quantity } = data;
-            const checkoutRef = db.collection('checkouts_test').doc();
+            
+            // Salva na coleção oficial 'checkouts'
+            const checkoutRef = db.collection('checkouts').doc();
             const checkoutId = checkoutRef.id;
 
-            const auth = `Basic ${Buffer.from(`${process.env.PAGARME_SECRET_KEY}:`).toString('base64')}`;
+            const authHeader = `Basic ${Buffer.from(`${process.env.PAGARME_SECRET_KEY}:`).toString('base64')}`;
+            
             const payload = {
-                items: [{ amount: Math.round(amount * 100), description: vipEventName.substring(0,60), quantity: 1 }],
-                customer: { name, email, type: 'individual', document: taxId.replace(/\D/g, ''), phones: { mobile_phone: { country_code: '55', area_code: whatsapp.substring(0,2), number: whatsapp.substring(2) } } },
-                payments: [{ payment_method: 'pix', pix: { expires_in: 3600 } }],
-                closed: true, metadata: { checkoutId }
+                items: [{ 
+                    amount: Math.round(amount * 100), 
+                    description: `VIP: ${vipEventName.substring(0,40)}`, 
+                    quantity: 1 
+                }],
+                customer: { 
+                    name: name.trim(), 
+                    email: email.toLowerCase().trim(), 
+                    type: 'individual', 
+                    document: taxId.replace(/\D/g, ''), 
+                    phones: { 
+                        mobile_phone: { 
+                            country_code: '55', 
+                            area_code: whatsapp.replace(/\D/g, '').substring(0,2), 
+                            number: whatsapp.replace(/\D/g, '').substring(2) 
+                        } 
+                    } 
+                },
+                payments: [{ 
+                    payment_method: 'pix', 
+                    pix: { expires_in: 3600 } 
+                }],
+                closed: true, 
+                metadata: { checkoutId }
             };
 
             const response = await fetch('https://api.pagar.me/core/v5/orders', {
                 method: 'POST',
-                headers: { 'content-type': 'application/json', 'Authorization': auth },
+                headers: { 'content-type': 'application/json', 'Authorization': authHeader },
                 body: JSON.stringify(payload)
             });
 
@@ -192,71 +190,37 @@ export const createVipPagarMePix = functions
             if (!response.ok) throw new Error(result.message || "Erro API PagarMe");
 
             const pix = result.charges?.[0]?.last_transaction;
+            
             await checkoutRef.set({
-                id: checkoutId, vipEventId, vipEventName, promoterName: name, promoterEmail: email,
-                amount, quantity, gateway: 'pagarme', status: 'pending', createdAt: admin.firestore.FieldValue.serverTimestamp()
+                id: checkoutId,
+                vipEventId,
+                vipEventName,
+                promoterName: name,
+                promoterEmail: email,
+                amount,
+                quantity,
+                gateway: 'pagarme',
+                status: 'pending',
+                orderId: result.id,
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            return { success: true, checkoutId, qrCode: pix.qr_code, qrCodeUrl: pix.qr_code_url };
+            return { 
+                success: true, 
+                checkoutId, 
+                qrCode: pix.qr_code, 
+                qrCodeUrl: pix.qr_code_url 
+            };
         } catch (e) {
+            console.error("[PAGARME ERROR]:", e.message);
             throw new functions.https.HttpsError('internal', e.message);
         }
     });
 
-/**
- * Create Pix Asaas
- */
-export const createVipAsaasPix = functions
-    .region("southamerica-east1")
-    .runWith({ secrets: ["ASAAS_API_KEY"] })
-    .https.onCall(async (data) => {
-        try {
-            const { vipEventId, vipEventName, email, name, whatsapp, taxId, amount, quantity } = data;
-            const checkoutRef = db.collection('checkouts').doc();
-            const checkoutId = checkoutRef.id;
-            const apiKey = process.env.ASAAS_API_KEY;
-
-            // Criar cliente
-            const cRes = await fetch(`${ASAAS_URL}/customers`, {
-                method: 'POST',
-                headers: { 'accept': 'application/json', 'content-type': 'application/json', 'access_token': apiKey },
-                body: JSON.stringify({ name, email, mobilePhone: whatsapp, cpfCnpj: taxId, notificationDisabled: true })
-            });
-            const customer = await cRes.json();
-
-            // Criar cobrança
-            const pRes = await fetch(`${ASAAS_URL}/payments`, {
-                method: 'POST',
-                headers: { 'accept': 'application/json', 'content-type': 'application/json', 'access_token': apiKey },
-                body: JSON.stringify({ customer: customer.id, billingType: 'PIX', value: amount, dueDate: new Date().toISOString().split('T')[0], externalReference: checkoutId })
-            });
-            const payment = await pRes.json();
-
-            // Obter QR Code
-            const qrRes = await fetch(`${ASAAS_URL}/payments/${payment.id}/pixQrCode`, {
-                headers: { 'access_token': apiKey }
-            });
-            const qrData = await qrRes.json();
-
-            await checkoutRef.set({
-                id: checkoutId, vipEventId, vipEventName, promoterName: name, promoterEmail: email,
-                amount, quantity, status: 'pending', paymentId: payment.id, createdAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            return { success: true, checkoutId, payload: qrData.payload, encodedImage: qrData.encodedImage };
-        } catch (e) {
-            throw new functions.https.HttpsError('internal', e.message);
-        }
-    });
-
-// Stubs para manter compatibilidade
-export const checkBackendStatus = functions.region("southamerica-east1").https.onCall(async () => {
-    return { 
-        asaasKeyConfigured: !!process.env.ASAAS_API_KEY, 
-        pagarmeKeyConfigured: !!process.env.PAGARME_SECRET_KEY,
-        brevoKeyConfigured: !!process.env.BREVO_API_KEY 
-    };
-});
+// Stubs mantidos para compatibilidade
+export const createVipAsaasPix = functions.region("southamerica-east1").runWith({ secrets: ["ASAAS_API_KEY"] }).https.onCall(async () => ({ success: true }));
+export const asaasWebhook = functions.region("southamerica-east1").runWith({ secrets: ["ASAAS_API_KEY", "BREVO_API_KEY"] }).https.onRequest(async (req, res) => res.status(200).send('OK'));
+export const checkBackendStatus = functions.region("southamerica-east1").https.onCall(async () => ({ asaasKeyConfigured: !!process.env.ASAAS_API_KEY, pagarmeKeyConfigured: !!process.env.PAGARME_SECRET_KEY, brevoKeyConfigured: !!process.env.BREVO_API_KEY }));
 export const createGreenlifeAsaasPix = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const createAdminRequest = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const createOrganizationAndUser = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));

@@ -46,7 +46,7 @@ const ClubVipHome: React.FC = () => {
         });
     }, []);
 
-    // Monitora o Checkout único gerado
+    // Monitora o Checkout único gerado (agora oficial no Pagar.me)
     useEffect(() => {
         if (step === 'payment' && currentCheckoutId) {
             const unsubscribe = firestore.collection('checkouts').doc(currentCheckoutId)
@@ -114,8 +114,10 @@ const ClubVipHome: React.FC = () => {
             if (!pId) pId = await createVipPromoter({ name, email, whatsapp: sanitizedWhatsapp });
 
             const finalAmount = selectedEvent!.price * quantity;
-            const createAsaasPix = httpsCallable(functions, 'createVipAsaasPix');
-            const res: any = await createAsaasPix({
+            
+            // CHAMADA ALTERADA PARA PAGAR.ME
+            const createPagarMePix = httpsCallable(functions, 'createVipPagarMePix');
+            const res: any = await createPagarMePix({
                 vipEventId: selectedEvent!.id,
                 vipEventName: selectedEvent!.name,
                 promoterId: pId,
@@ -131,15 +133,15 @@ const ClubVipHome: React.FC = () => {
             setCurrentCheckoutId(res.data.checkoutId);
             setStep('payment');
         } catch (err: any) {
-            setError(err.message || "Erro ao gerar cobrança Pix.");
+            setError(err.message || "Erro ao gerar cobrança Pagar.me.");
         } finally {
             setIsLoading(false);
         }
     };
 
     const copyPix = () => {
-        if (!pixData?.payload) return;
-        navigator.clipboard.writeText(pixData.payload);
+        if (!pixData?.qrCode) return;
+        navigator.clipboard.writeText(pixData.qrCode);
         alert("Pix Copiado!");
     };
 
@@ -216,10 +218,10 @@ const ClubVipHome: React.FC = () => {
                     {step === 'payment' && pixData && (
                         <div className="text-center space-y-8 animate-fadeIn">
                             <div className="bg-white p-6 rounded-[2.5rem] inline-block shadow-2xl">
-                                <img src={`data:image/png;base64,${pixData.encodedImage}`} alt="QR Code Pix" className="w-64 h-64" />
+                                <img src={pixData.qrCodeUrl} alt="QR Code Pix" className="w-64 h-64" />
                             </div>
                             <div className="flex gap-2">
-                                <input readOnly value={pixData.payload} className="flex-grow bg-dark border border-white/10 p-4 rounded-2xl text-[10px] text-gray-500 font-mono" />
+                                <input readOnly value={pixData.qrCode} className="flex-grow bg-dark border border-white/10 p-4 rounded-2xl text-[10px] text-gray-500 font-mono" />
                                 <button onClick={copyPix} className="p-4 bg-primary text-white rounded-2xl"><DocumentDuplicateIcon className="w-6 h-6" /></button>
                             </div>
                             <p className="text-blue-400 font-black text-xs uppercase animate-pulse flex items-center justify-center gap-2"><RefreshIcon className="w-4 h-4 animate-spin" /> Aguardando confirmação...</p>
