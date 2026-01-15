@@ -38,18 +38,18 @@ import { clearPushListeners } from './services/pushService';
 const OrganizationSwitcher: React.FC = () => {
     const { organizationsForAdmin, selectedOrgId, setSelectedOrgId, adminData, loading } = useAdminAuth();
 
-    if (loading || !adminData || adminData.role === 'superadmin' || !organizationsForAdmin || organizationsForAdmin.length <= 1 || !selectedOrgId) {
+    if (loading || !adminData || !organizationsForAdmin || organizationsForAdmin.length === 0) {
         return null;
     }
 
     return (
-        <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-gray-300 hidden sm:inline">Organização:</span>
+        <div className="flex items-center gap-2 w-full md:w-auto">
             <select
-                value={selectedOrgId}
+                value={selectedOrgId || ''}
                 onChange={(e) => setSelectedOrgId(e.target.value)}
-                className="w-full md:w-auto px-3 py-1.5 border border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary text-sm bg-gray-700 text-gray-200"
+                className="w-full md:w-auto px-4 py-2.5 bg-gray-800 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white outline-none focus:ring-2 focus:ring-primary transition-all cursor-pointer shadow-lg"
             >
+                {!selectedOrgId && <option value="">Selecionar Produtora</option>}
                 {organizationsForAdmin.map(org => (
                     <option key={org.id} value={org.id}>{org.name}</option>
                 ))}
@@ -115,12 +115,21 @@ const Header: React.FC = () => {
 
           {/* Menu Mobile Retrátil */}
           {isMenuOpen && (
-              <div className="md:hidden bg-secondary border-t border-white/5 py-6 px-8 space-y-6 animate-slideDown shadow-2xl">
-                  <Link to={homePath} className="block text-gray-200 hover:text-primary font-black uppercase text-sm tracking-widest" onClick={() => setIsMenuOpen(false)}>Início</Link>
-                  <Link to={statusPath} className="block text-gray-200 hover:text-primary font-black uppercase text-sm tracking-widest" onClick={() => setIsMenuOpen(false)}>Status</Link>
-                  <Link to="/admin" className="block text-gray-200 hover:text-primary font-black uppercase text-sm tracking-widest" onClick={() => setIsMenuOpen(false)}>Admin</Link>
+              <div className="md:hidden bg-secondary border-t border-white/5 py-8 px-8 space-y-8 animate-slideDown shadow-2xl">
+                  {/* Seletor de Organização no Mobile */}
+                  <div className="space-y-3 pb-6 border-b border-white/5">
+                      <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Gerenciar Produtora:</p>
+                      <OrganizationSwitcher />
+                  </div>
+
+                  <div className="space-y-6">
+                      <Link to={homePath} className="block text-gray-200 hover:text-primary font-black uppercase text-sm tracking-widest" onClick={() => setIsMenuOpen(false)}>Início</Link>
+                      <Link to={statusPath} className="block text-gray-200 hover:text-primary font-black uppercase text-sm tracking-widest" onClick={() => setIsMenuOpen(false)}>Meus Ingressos</Link>
+                      <Link to="/admin" className="block text-gray-200 hover:text-primary font-black uppercase text-sm tracking-widest" onClick={() => setIsMenuOpen(false)}>Painel Administrativo</Link>
+                  </div>
+
                   {adminData && (
-                      <button onClick={handleLogout} className="w-full text-left text-red-500 font-black uppercase text-sm tracking-widest pt-4 border-t border-white/5">Sair da Conta</button>
+                      <button onClick={handleLogout} className="w-full text-left text-red-500 font-black uppercase text-sm tracking-widest pt-6 border-t border-white/5">Sair da Conta</button>
                   )}
               </div>
           )}
