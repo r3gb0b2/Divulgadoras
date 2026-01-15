@@ -12,7 +12,6 @@ import {
     transferVipMembership,
     addVipCodes,
     getVipCodeStats,
-    getVipEventCodes,
     updateVipMembership
 } from '../services/vipService';
 import { updatePromoter } from '../services/promoterService';
@@ -24,7 +23,7 @@ import {
     TicketIcon, RefreshIcon, PlusIcon, TrashIcon, PencilIcon, 
     WhatsAppIcon, DownloadIcon, LinkIcon, ExternalLinkIcon,
     CogIcon, UndoIcon, ChartBarIcon, SparklesIcon, EnvelopeIcon,
-    UserIcon
+    UserIcon, MapPinIcon, ClockIcon
 } from '../components/Icons';
 
 // Modal para Edição de Dados Cadastrais
@@ -211,7 +210,7 @@ const TransferModal: React.FC<{ isOpen: boolean, onClose: () => void, membership
 };
 
 // Modal para gerenciar códigos em lote
-const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: VipEvent, onSaved: () => void, onDownloadStock: (event: VipEvent) => void }> = ({ isOpen, onClose, event, onSaved, onDownloadStock }) => {
+const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: VipEvent, onSaved: () => void }> = ({ isOpen, onClose, event, onSaved }) => {
     const [codesText, setCodesText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [currentStock, setCurrentStock] = useState<number | null>(null);
@@ -258,12 +257,6 @@ const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: 
                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Estoque Disponível:</p>
                         <p className="text-2xl font-black text-primary">{currentStock !== null ? currentStock : '...'}</p>
                     </div>
-                    <button 
-                        onClick={() => onDownloadStock(event)}
-                        className="px-4 py-2 bg-indigo-900/30 text-indigo-400 border border-indigo-800 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-900/50"
-                    >
-                        <DownloadIcon className="w-4 h-4" /> Baixar XLS
-                    </button>
                 </div>
 
                 <div className="space-y-4">
@@ -301,11 +294,6 @@ const AdminClubVip: React.FC = () => {
     const [selectedEventId, setSelectedEventId] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
     
-    // Email states para recuperação
-    const [emailSubject, setEmailSubject] = useState('Gostaria de te ajudar a garantir seu VIP 🎫');
-    const [emailBody, setEmailBody] = useState('<p>Olá {{promoterName}},</p><p>Vimos que você iniciou sua adesão ao <strong>{{campaignName}}</strong> mas não concluiu o Pix.</p><p>Ainda temos algumas vagas disponíveis e gostaríamos que você estivesse conosco! Teve alguma dúvida no processo?</p><p>Acesse seu portal e tente novamente: <a href="https://equipecerta.com.br/#/clubvip/status">Acessar Portal VIP</a></p>');
-    const [isSendingEmail, setIsSendingEmail] = useState(false);
-
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -318,7 +306,6 @@ const AdminClubVip: React.FC = () => {
     const [membershipToTransfer, setMembershipToTransfer] = useState<VipMembership | null>(null);
     const [membershipToEdit, setMembershipToEdit] = useState<VipMembership | null>(null);
 
-    // Gestores VIP e SuperAdmins vêm TUDO
     const isVipManager = adminData?.role === 'superadmin' || adminData?.role === 'vip_admin';
 
     const fetchData = useCallback(async () => {
@@ -330,14 +317,20 @@ const AdminClubVip: React.FC = () => {
                 getAllVipMemberships(selectedEventId)
             ]);
             
+            // Exibe os dados principais imediatamente para não travar a UI
             setVipEvents(eventsData);
             setMemberships(membersData);
 
+            // Busca estatísticas de estoque de forma assíncrona e individual
             const stats: Record<string, { total: number, available: number }> = {};
             for (const ev of eventsData) {
-                const available = await getVipCodeStats(ev.id);
-                const totalSnap = await firestore.collection('vipEvents').doc(ev.id).collection('availableCodes').get();
-                stats[ev.id] = { total: totalSnap.size, available };
+                try {
+                    const available = await getVipCodeStats(ev.id);
+                    const totalSnap = await firestore.collection('vipEvents').doc(ev.id).collection('availableCodes').get();
+                    stats[ev.id] = { total: totalSnap.size, available };
+                } catch (e) {
+                    stats[ev.id] = { total: 0, available: 0 };
+                }
             }
             setEventStats(stats);
 
@@ -365,10 +358,35 @@ const AdminClubVip: React.FC = () => {
         });
     }, [memberships, searchQuery, selectedEventId]);
 
-    const handleCopyTicketLink = (membership: VipMembership) => {
-        const url = `${window.location.origin}/#/clubvip/status?email=${encodeURIComponent(membership.promoterEmail)}`;
-        navigator.clipboard.writeText(url);
-        alert("Link do portal copiado!");
+    const handleSaveEvent = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingEvent?.name || !editingEvent?.price) return;
+        
+        try {
+            const data = {
+                name: editingEvent.name,
+                price: Number(editingEvent.price),
+                description: editingEvent.description || '',
+                benefits: editingEvent.benefits || [],
+                isActive: editingEvent.isActive ?? true,
+                eventTime: editingEvent.eventTime || '',
+                eventLocation: editingEvent.eventLocation || '',
+                attractions: editingEvent.attractions || '',
+                pixKey: editingEvent.pixKey || '',
+                externalSlug: editingEvent.externalSlug || ''
+            };
+
+            if (editingEvent.id) {
+                await updateVipEvent(editingEvent.id, data);
+            } else {
+                await createVipEvent(data as any);
+            }
+            
+            setIsModalOpen(false);
+            fetchData();
+        } catch (e: any) {
+            alert("Erro ao salvar evento: " + e.message);
+        }
     };
 
     const handleManualActivateOrSwap = async (membership: VipMembership, forceNew: boolean = false) => {
@@ -379,6 +397,7 @@ const AdminClubVip: React.FC = () => {
         if(!window.confirm(confirmMsg)) return;
 
         setIsBulkProcessing(true);
+        setIsProcessingId(membership.id);
         try {
             const activateVip = httpsCallable(functions, 'activateVipMembership');
             const res: any = await activateVip({ membershipId: membership.id, forceNew });
@@ -390,6 +409,7 @@ const AdminClubVip: React.FC = () => {
             alert("Erro ao processar: " + (e.message || "Estoque possivelmente vazio.")); 
         } finally { 
             setIsBulkProcessing(false); 
+            setIsProcessingId(null);
         }
     };
 
@@ -398,7 +418,6 @@ const AdminClubVip: React.FC = () => {
         setIsProcessingId(membership.id);
         try {
             await refundVipMembership(membership.id);
-            await updatePromoter(membership.promoterId, { emocoesBenefitActive: false });
             fetchData();
         } catch (e: any) { alert("Erro ao estornar: " + e.message); } finally { setIsProcessingId(null); }
     };
@@ -428,7 +447,7 @@ const AdminClubVip: React.FC = () => {
             <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 w-fit ml-4 md:ml-0">
                 <button onClick={() => setActiveTab('members')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'members' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Membros</button>
                 <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Ofertas</button>
-                <button onClick={() => setActiveTab('recovery')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'recovery' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Recuperação</button>
+                <button onClick={() => navigate('/admin/recovery')} className="px-6 py-3 text-xs font-black uppercase rounded-xl transition-all text-gray-400 hover:text-white">Recuperação</button>
             </div>
 
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
@@ -480,9 +499,6 @@ const AdminClubVip: React.FC = () => {
                                                     <button onClick={() => { setMembershipToEdit(m); setIsEditMembershipOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-xl hover:bg-primary hover:text-white transition-all border border-white/5" title="Editar Dados">
                                                         <PencilIcon className="w-4 h-4" />
                                                     </button>
-                                                    <button onClick={() => handleCopyTicketLink(m)} className="p-2 bg-indigo-900/30 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all border border-indigo-800/30" title="Copiar Link do Portal">
-                                                        <LinkIcon className="w-4 h-4" />
-                                                    </button>
                                                     {m.status === 'confirmed' && isVipManager && (
                                                         <button 
                                                             onClick={() => { setMembershipToTransfer(m); setIsTransferModalOpen(true); }}
@@ -513,8 +529,114 @@ const AdminClubVip: React.FC = () => {
                         </div>
                     </>
                 )}
-                {/* Outras abas permanecem iguais */}
+
+                {activeTab === 'events' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {vipEvents.map(ev => (
+                            <div key={ev.id} className="bg-dark/40 p-6 rounded-[2rem] border border-white/5 group hover:border-primary transition-all flex flex-col">
+                                <div className="flex justify-between mb-4">
+                                    <div className="min-w-0 flex-grow pr-4">
+                                        <h3 className="text-xl font-black text-white uppercase group-hover:text-primary transition-colors truncate">{ev.name}</h3>
+                                        <p className="text-primary font-black">R$ {ev.price.toFixed(2)}</p>
+                                    </div>
+                                    <div className={`w-3 h-3 rounded-full flex-shrink-0 ${ev.isActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
+                                </div>
+                                
+                                <div className="p-3 bg-white/5 rounded-2xl text-center mb-6 border border-white/5">
+                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Códigos em Estoque</p>
+                                    <p className="text-xl font-black text-white">
+                                        {eventStats[ev.id]?.available ?? '...'}<span className="text-[10px] text-gray-600 ml-1">/ {eventStats[ev.id]?.total ?? '...'}</span>
+                                    </p>
+                                </div>
+
+                                <div className="mt-auto flex flex-wrap gap-2">
+                                    <button onClick={() => { setEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-grow py-3 bg-indigo-900/20 text-indigo-400 border border-indigo-800/30 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
+                                        <CogIcon className="w-4 h-4" /> ESTOQUE
+                                    </button>
+                                    <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-primary transition-all"><PencilIcon className="w-4 h-4" /></button>
+                                    {isVipManager && (
+                                        <button onClick={() => { if(confirm("Excluir evento VIP permanentemente?")) deleteVipEvent(ev.id).then(fetchData); }} className="p-3 bg-red-900/30 text-red-400 rounded-xl border border-red-800/30 hover:bg-red-600 transition-all"><TrashIcon className="w-4 h-4"/></button>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                        {vipEvents.length === 0 && !isLoading && <p className="col-span-full text-center text-gray-500 font-bold uppercase text-xs py-20">Nenhuma oferta VIP cadastrada.</p>}
+                    </div>
+                )}
             </div>
+
+            {/* Modal de Criação/Edição de Evento */}
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-6" onClick={() => setIsModalOpen(false)}>
+                    <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Configurar Oferta VIP</h2>
+                            <button onClick={() => setIsModalOpen(false)} className="p-2 text-gray-500 hover:text-white"><XIcon className="w-6 h-6"/></button>
+                        </div>
+                        <form onSubmit={handleSaveEvent} className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Nome do Evento</label>
+                                    <input type="text" placeholder="Nome" value={editingEvent?.name || ''} onChange={e => setEditingEvent({...editingEvent!, name: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" required />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Preço da Adesão (R$)</label>
+                                    <input type="number" step="0.01" placeholder="0,00" value={editingEvent?.price || ''} onChange={e => setEditingEvent({...editingEvent!, price: Number(e.target.value)})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" required />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-1"><ClockIcon className="w-3 h-3"/> Horário de Início</label>
+                                    <input type="text" placeholder="Ex: 22h00" value={editingEvent?.eventTime || ''} onChange={e => setEditingEvent({...editingEvent!, eventTime: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-1"><MapPinIcon className="w-3 h-3"/> Local / Unidade</label>
+                                    <input type="text" placeholder="Nome do Local" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Atrações Principais</label>
+                                <input type="text" placeholder="Ex: DJ X, Cantor Y..." value={editingEvent?.attractions || ''} onChange={e => setEditingEvent({...editingEvent!, attractions: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Descrição curta (Interna)</label>
+                                <textarea placeholder="..." value={editingEvent?.description || ''} onChange={e => setEditingEvent({...editingEvent!, description: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white text-sm" rows={2} />
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Benefícios Inclusos (Um por linha)</label>
+                                <textarea 
+                                    placeholder="Ex: Entrada sem fila&#10;Área exclusiva..." 
+                                    value={editingEvent?.benefits?.join('\n') || ''} 
+                                    onChange={e => setEditingEvent({...editingEvent!, benefits: e.target.value.split('\n')})} 
+                                    className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white text-sm" 
+                                    rows={4} 
+                                />
+                            </div>
+
+                            <div className="flex gap-4 pt-2">
+                                <label className="flex items-center gap-2 text-white text-[10px] font-black uppercase cursor-pointer">
+                                    <input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-primary" /> Ativo (Público)
+                                </label>
+                            </div>
+
+                            <button type="submit" className="w-full py-5 bg-primary text-white font-black rounded-2xl uppercase text-xs tracking-widest mt-4 shadow-lg shadow-primary/20">SALVAR CONFIGURAÇÕES</button>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {isCodesModalOpen && eventForCodes && (
+                <ManageCodesModal 
+                    isOpen={isCodesModalOpen} 
+                    onClose={() => { setIsCodesModalOpen(false); setEventForCodes(null); }} 
+                    event={eventForCodes} 
+                    onSaved={fetchData} 
+                />
+            )}
 
             {isEditMembershipOpen && membershipToEdit && (
                 <EditMembershipModal 
@@ -525,11 +647,10 @@ const AdminClubVip: React.FC = () => {
                 />
             )}
             
-            {/* Outros modais permanecem iguais */}
             {isTransferModalOpen && membershipToTransfer && (
                 <TransferModal 
                     isOpen={isTransferModalOpen} 
-                    onClose={() => setIsTransferModalOpen(false)} 
+                    onClose={() => { setIsTransferModalOpen(false); setMembershipToTransfer(null); }} 
                     membership={membershipToTransfer} 
                     events={vipEvents} 
                     onTransferred={fetchData} 

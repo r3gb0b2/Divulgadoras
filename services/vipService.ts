@@ -16,14 +16,24 @@ const getMs = (ts: any): number => {
 };
 
 export const getActiveVipEvents = async (): Promise<VipEvent[]> => {
-    const snap = await firestore.collection(COLLECTION_EVENTS).where('isActive', '==', true).get();
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+    try {
+        const snap = await firestore.collection(COLLECTION_EVENTS).where('isActive', '==', true).get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+    } catch (e) {
+        console.error("Erro ao buscar eventos VIP ativos:", e);
+        return [];
+    }
 };
 
 export const getAllVipEvents = async (): Promise<VipEvent[]> => {
-    const snap = await firestore.collection(COLLECTION_EVENTS).get();
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent))
-        .sort((a, b) => getMs(b.createdAt) - getMs(a.createdAt));
+    try {
+        const snap = await firestore.collection(COLLECTION_EVENTS).get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent))
+            .sort((a, b) => getMs(b.createdAt) - getMs(a.createdAt));
+    } catch (e) {
+        console.error("Erro ao buscar todos os eventos VIP:", e);
+        return [];
+    }
 };
 
 export const trackVipTicketAction = async (membershipId: string, action: 'view' | 'download') => {
@@ -56,9 +66,13 @@ export const getVipEventCodes = async (eventId: string) => {
 };
 
 export const getVipCodeStats = async (eventId: string) => {
-    const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes')
-        .where('used', '==', false).get();
-    return snap.size;
+    try {
+        const snap = await firestore.collection(COLLECTION_EVENTS).doc(eventId).collection('availableCodes')
+            .where('used', '==', false).get();
+        return snap.size;
+    } catch (e) {
+        return 0;
+    }
 };
 
 export const createVipEvent = async (data: Omit<VipEvent, 'id' | 'createdAt'>): Promise<string> => {
@@ -104,7 +118,7 @@ export const updateVipMembership = async (id: string, data: Partial<VipMembershi
 export const refundVipMembership = async (membershipId: string) => {
     return firestore.collection(COLLECTION_MEMBERSHIPS).doc(membershipId).update({
         status: 'refunded',
-        benefitCode: null, // Remove o código do ingresso
+        benefitCode: null,
         isBenefitActive: false,
         refundedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -115,7 +129,7 @@ export const transferVipMembership = async (membershipId: string, newEvent: VipE
     return firestore.collection(COLLECTION_MEMBERSHIPS).doc(membershipId).update({
         vipEventId: newEvent.id,
         vipEventName: newEvent.name,
-        benefitCode: null, // Limpa para forçar a nova atribuição de código
+        benefitCode: null,
         isBenefitActive: false,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
