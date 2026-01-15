@@ -13,7 +13,7 @@ import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
 import { 
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, TicketIcon, RefreshIcon, 
-    PlusIcon, TrashIcon, PencilIcon, DownloadIcon, LinkIcon, CogIcon, UndoIcon
+    PlusIcon, TrashIcon, PencilIcon, DownloadIcon, LinkIcon, CogIcon, UndoIcon, ChartBarIcon
 } from '../components/Icons';
 
 // Modal de Gerenciamento de Códigos (Estoque)
@@ -224,6 +224,9 @@ const AdminGreenlife: React.FC = () => {
                     <TicketIcon className="w-8 h-8 text-green-500" /> Admin Greenlife
                 </h1>
                 <div className="flex gap-2">
+                    <button onClick={() => navigate('/admin/greenlife-metrics/global')} className="px-4 py-3 bg-green-900/20 text-green-400 border border-green-600/30 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all flex items-center gap-2">
+                        <ChartBarIcon className="w-4 h-4" /> Métricas de Venda
+                    </button>
                     <button onClick={() => { setEditingEvent({ isActive: true, benefits: [] }); setIsModalOpen(true); }} className="px-6 py-3 bg-green-600 text-white font-black rounded-2xl text-[10px] uppercase shadow-xl">Novo Evento</button>
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
                         <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
@@ -301,7 +304,7 @@ const AdminGreenlife: React.FC = () => {
                 {activeTab === 'events' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {events.map(ev => (
-                            <div key={ev.id} className="bg-dark/40 p-6 rounded-3xl border border-white/5 group hover:border-green-500 transition-all">
+                            <div key={ev.id} className="bg-dark/40 p-6 rounded-3xl border border-white/5 group hover:border-green-500 transition-all flex flex-col">
                                 <div className="flex justify-between mb-4">
                                     <div><h3 className="text-xl font-black text-white uppercase">{ev.name}</h3><p className="text-green-500 font-black">R$ {ev.price.toFixed(2)}</p></div>
                                     <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
@@ -312,7 +315,7 @@ const AdminGreenlife: React.FC = () => {
                                     <p className="text-xl font-black text-green-500">{eventStats[ev.id] || 0}</p>
                                 </div>
 
-                                <div className="flex flex-wrap gap-2">
+                                <div className="mt-auto flex flex-wrap gap-2">
                                     <button onClick={() => { setSelectedEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-grow py-3 bg-indigo-900/20 text-indigo-400 border border-indigo-800/30 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
                                         <CogIcon className="w-4 h-4" /> ESTOQUE
                                     </button>
