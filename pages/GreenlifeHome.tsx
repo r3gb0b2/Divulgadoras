@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { findPromotersByEmail, createVipPromoter } from '../services/promoterService';
-import { getActiveGreenlifeEvents, checkGreenlifeMembership } from '../services/greenlifeService';
+import { getActiveGreenlifeEvents, checkGreenlifeMembership, getGreenlifeCodeStats } from '../services/greenlifeService';
 import { Promoter, VipEvent } from '../types';
 import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
@@ -16,6 +16,7 @@ const GreenlifeHome: React.FC = () => {
     const navigate = useNavigate();
     const [step, setStep] = useState<'select_event' | 'identify' | 'confirm_data' | 'payment' | 'success'>('select_event');
     const [events, setEvents] = useState<VipEvent[]>([]);
+    const [stockMap, setStockMap] = useState<Record<string, number>>({});
     const [selectedEvent, setSelectedEvent] = useState<VipEvent | null>(null);
     const [email, setEmail] = useState('');
     const [name, setName] = useState('');
@@ -28,10 +29,22 @@ const GreenlifeHome: React.FC = () => {
     const [currentCheckoutId, setCurrentCheckoutId] = useState<string | null>(null);
 
     useEffect(() => {
-        getActiveGreenlifeEvents().then(data => {
-            setEvents(data);
-            setIsLoading(false);
-        }).catch(() => { setError("Falha ao carregar ofertas Greenlife."); setIsLoading(false); });
+        const loadEvents = async () => {
+            try {
+                const data = await getActiveGreenlifeEvents();
+                setEvents(data);
+                const stocks: Record<string, number> = {};
+                for (const ev of data) {
+                    stocks[ev.id] = await getGreenlifeCodeStats(ev.id);
+                }
+                setStockMap(stocks);
+                setIsLoading(false);
+            } catch (err) {
+                setError("Falha ao carregar ofertas Greenlife.");
+                setIsLoading(false);
+            }
+        };
+        loadEvents();
     }, []);
 
     // Monitora o Checkout centralizado (agora via Pagar.me)
@@ -84,7 +97,6 @@ const GreenlifeHome: React.FC = () => {
             if (!pId) pId = await createVipPromoter({ name, email, whatsapp });
             setPromoter({ id: pId, name, email, whatsapp });
             
-            // CHAMADA ALTERADA PARA PAGAR.ME
             const createGreenlifePagarMePix = httpsCallable(functions, 'createGreenlifePagarMePix');
             const res: any = await createGreenlifePagarMePix({
                 vipEventId: selectedEvent.id,
@@ -138,17 +150,29 @@ const GreenlifeHome: React.FC = () => {
                                 <Link to="/alunosgreenlife/status" className="px-6 py-3 bg-gray-800 text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 hover:bg-gray-700 transition-all">Meus Ingressos</Link>
                             </div>
                             <div className="grid gap-4">
-                                {events.map(ev => (
-                                    <button key={ev.id} onClick={() => { setSelectedEvent(ev); setStep('identify'); }} className="bg-dark/60 p-8 rounded-[2rem] border border-white/5 flex justify-between items-center group hover:border-green-500 transition-all">
-                                        <div className="text-left min-w-0 flex-grow pr-4">
-                                            <p className="font-black text-xl text-white uppercase group-hover:text-green-400 transition-colors truncate">{ev.name}</p>
-                                            <p className="text-[10px] text-green-500/70 font-black uppercase mt-1 truncate">
-                                                {ev.attractions || 'Adesão Online'}
-                                            </p>
-                                        </div>
-                                        <p className="text-green-500 font-black text-2xl flex-shrink-0">R$ {ev.price.toFixed(2)}</p>
-                                    </button>
-                                ))}
+                                {events.map(ev => {
+                                    const isSoldOut = (stockMap[ev.id] === 0) || ev.isSoldOut;
+                                    return (
+                                        <button 
+                                            key={ev.id} 
+                                            onClick={() => { if(!isSoldOut) { setSelectedEvent(ev); setStep('identify'); } }} 
+                                            disabled={isSoldOut}
+                                            className={`p-8 rounded-[2rem] border flex justify-between items-center group transition-all ${isSoldOut ? 'bg-gray-800/20 border-white/5 opacity-50 grayscale cursor-not-allowed' : 'bg-dark/60 border-white/5 hover:border-green-500'}`}
+                                        >
+                                            <div className="text-left min-w-0 flex-grow pr-4">
+                                                <p className={`font-black text-xl uppercase transition-colors ${isSoldOut ? 'text-gray-500' : 'text-white group-hover:text-green-400'}`}>{ev.name}</p>
+                                                <p className="text-[10px] text-gray-500 font-black uppercase mt-1 truncate">
+                                                    {isSoldOut ? 'Vagas Esgotadas' : (ev.attractions || 'Adesão Online')}
+                                                </p>
+                                            </div>
+                                            {isSoldOut ? (
+                                                <span className="px-4 py-2 bg-red-900/20 text-red-500 text-[10px] font-black uppercase rounded-xl border border-red-900/30">ESGOTADO</span>
+                                            ) : (
+                                                <p className="text-green-500 font-black text-2xl flex-shrink-0">R$ {ev.price.toFixed(2)}</p>
+                                            )}
+                                        </button>
+                                    );
+                                })}
                                 {events.length === 0 && !isLoading && <p className="text-center text-gray-500 py-10 font-black uppercase text-xs">Nenhuma oferta ativa.</p>}
                             </div>
                         </div>

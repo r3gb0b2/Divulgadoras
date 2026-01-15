@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { findPromotersByEmail, createVipPromoter } from '../services/promoterService';
-import { getActiveVipEvents } from '../services/vipService';
+import { getActiveVipEvents, getVipCodeStats } from '../services/vipService';
 import { Promoter, VipEvent } from '../types';
 import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
@@ -19,6 +19,7 @@ const ClubVipHome: React.FC = () => {
     const navigate = useNavigate();
     const [step, setStep] = useState<CampaignStep>('select_event');
     const [events, setEvents] = useState<VipEvent[]>([]);
+    const [stockMap, setStockMap] = useState<Record<string, number>>({});
     const [selectedEvent, setSelectedEvent] = useState<VipEvent | null>(null);
     
     const [email, setEmail] = useState('');
@@ -37,13 +38,23 @@ const ClubVipHome: React.FC = () => {
     const [currentCheckoutId, setCurrentCheckoutId] = useState<string | null>(null);
 
     useEffect(() => {
-        getActiveVipEvents().then(data => {
-            setEvents(data);
-            setIsLoading(false);
-        }).catch(() => {
-            setError("Falha ao carregar ofertas VIP.");
-            setIsLoading(false);
-        });
+        const loadEventsAndStock = async () => {
+            try {
+                const data = await getActiveVipEvents();
+                setEvents(data);
+                
+                const stocks: Record<string, number> = {};
+                for (const ev of data) {
+                    stocks[ev.id] = await getVipCodeStats(ev.id);
+                }
+                setStockMap(stocks);
+                setIsLoading(false);
+            } catch (err) {
+                setError("Falha ao carregar ofertas VIP.");
+                setIsLoading(false);
+            }
+        };
+        loadEventsAndStock();
     }, []);
 
     // Monitora o Checkout único gerado (agora oficial no Pagar.me)
@@ -115,7 +126,6 @@ const ClubVipHome: React.FC = () => {
 
             const finalAmount = selectedEvent!.price * quantity;
             
-            // CHAMADA ALTERADA PARA PAGAR.ME
             const createPagarMePix = httpsCallable(functions, 'createVipPagarMePix');
             const res: any = await createPagarMePix({
                 vipEventId: selectedEvent!.id,
@@ -166,15 +176,29 @@ const ClubVipHome: React.FC = () => {
                                 <Link to="/clubvip/status" className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:text-white">Ver meus Ingressos</Link>
                             </div>
                             <div className="grid gap-6">
-                                {events.map(ev => (
-                                    <button key={ev.id} onClick={() => { setSelectedEvent(ev); setStep('benefits'); }} className="bg-dark/60 p-8 rounded-[2rem] border border-white/5 flex justify-between items-center group hover:border-primary transition-all">
-                                        <div className="text-left">
-                                            <p className="font-black text-xl text-white uppercase group-hover:text-primary transition-colors">{ev.name}</p>
-                                            <p className="text-[10px] text-gray-500 font-black uppercase mt-1">Adesão Online</p>
-                                        </div>
-                                        <p className="text-primary font-black text-2xl">R$ {ev.price.toFixed(2)}</p>
-                                    </button>
-                                ))}
+                                {events.map(ev => {
+                                    const isSoldOut = (stockMap[ev.id] === 0) || ev.isSoldOut;
+                                    return (
+                                        <button 
+                                            key={ev.id} 
+                                            onClick={() => { if(!isSoldOut) { setSelectedEvent(ev); setStep('benefits'); } }} 
+                                            disabled={isSoldOut}
+                                            className={`p-8 rounded-[2rem] border flex justify-between items-center group transition-all ${isSoldOut ? 'bg-gray-800/20 border-white/5 opacity-50 grayscale cursor-not-allowed' : 'bg-dark/60 border-white/5 hover:border-primary'}`}
+                                        >
+                                            <div className="text-left">
+                                                <p className={`font-black text-xl uppercase transition-colors ${isSoldOut ? 'text-gray-500' : 'text-white group-hover:text-primary'}`}>{ev.name}</p>
+                                                <p className="text-[10px] text-gray-500 font-black uppercase mt-1">
+                                                    {isSoldOut ? 'Lote Esgotado' : 'Adesão Online'}
+                                                </p>
+                                            </div>
+                                            {isSoldOut ? (
+                                                <span className="px-4 py-2 bg-red-900/20 text-red-500 text-[10px] font-black uppercase rounded-xl border border-red-900/30">ESGOTADO</span>
+                                            ) : (
+                                                <p className="text-primary font-black text-2xl">R$ {ev.price.toFixed(2)}</p>
+                                            )}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
@@ -222,7 +246,7 @@ const ClubVipHome: React.FC = () => {
                             </div>
                             <div className="flex gap-2">
                                 <input readOnly value={pixData.qrCode} className="flex-grow bg-dark border border-white/10 p-4 rounded-2xl text-[10px] text-gray-500 font-mono" />
-                                <button onClick={copyPix} className="p-4 bg-primary text-white rounded-2xl"><DocumentDuplicateIcon className="w-6 h-6" /></button>
+                                <button onClick={copyPix} className="p-4 bg-primary text-white rounded-2xl"><DocumentDuplicateIcon className="w-5 h-5" /></button>
                             </div>
                             <p className="text-blue-400 font-black text-xs uppercase animate-pulse flex items-center justify-center gap-2"><RefreshIcon className="w-4 h-4 animate-spin" /> Aguardando confirmação...</p>
                         </div>
