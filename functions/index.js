@@ -12,7 +12,7 @@ const ASAAS_URL = ASAAS_CONFIG.env === 'production'
     : 'https://sandbox.asaas.com/api/v3';
 
 /**
- * Envio de E-mail via Brevo (Confirmado: Remetente equipecerta.app)
+ * Envio de E-mail via Brevo
  */
 const sendVipTicketEmail = async (toEmail, toName, eventName, ticketCode, apiKey) => {
     if (!apiKey) {
@@ -26,7 +26,6 @@ const sendVipTicketEmail = async (toEmail, toName, eventName, ticketCode, apiKey
 
         const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
         sendSmtpEmail.subject = `Seu Ingresso VIP Confirmado! 🎫 - ${eventName}`;
-        // ALTERADO: Domínio corrigido para .app conforme solicitado
         sendSmtpEmail.sender = { "name": "Equipe Certa VIP", "email": "contato@equipecerta.app" };
         sendSmtpEmail.to = [{ "email": toEmail, "name": toName }];
         
@@ -69,15 +68,128 @@ const sendVipTicketEmail = async (toEmail, toName, eventName, ticketCode, apiKey
 };
 
 /**
- * Webhook Pagar.me (Oficial)
+ * Função para Ativar ou Trocar Código de Membro VIP
+ */
+export const activateVipMembership = functions
+    .region("southamerica-east1")
+    .runWith({ secrets: ["BREVO_API_KEY"] })
+    .https.onCall(async (data, context) => {
+        const { membershipId, forceNew } = data;
+        console.log(`[ACTIVATE VIP]: ID ${membershipId}, ForceNew: ${forceNew}`);
+
+        try {
+            const membershipRef = db.collection('vipMemberships').doc(membershipId);
+            const membSnap = await membershipRef.get();
+            
+            if (!membSnap.exists) throw new functions.https.HttpsError('not-found', 'Adesão não encontrada.');
+            
+            const membData = membSnap.data();
+            const promoterEmail = membData.promoterEmail || 'email_nao_identificado';
+            
+            // Se já tiver código e não for troca forçada, apenas retorna sucesso
+            if (membData.benefitCode && !forceNew && membData.status === 'confirmed') {
+                return { success: true, code: membData.benefitCode };
+            }
+
+            // Busca código no estoque
+            const codesRef = db.collection('vipEvents').doc(membData.vipEventId).collection('availableCodes');
+            const codeSnap = await codesRef.where('used', '==', false).limit(1).get();
+
+            if (codeSnap.empty) throw new functions.https.HttpsError('resource-exhausted', 'Estoque de códigos vazio para este evento.');
+
+            const newCodeDoc = codeSnap.docs[0];
+            const newCode = newCodeDoc.data().code;
+
+            const batch = db.batch();
+
+            // 1. Marca código como usado
+            batch.update(newCodeDoc.ref, {
+                used: true,
+                usedBy: promoterEmail,
+                membershipId: membershipId,
+                usedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            // 2. Atualiza adesão
+            batch.update(membershipRef, {
+                status: 'confirmed',
+                benefitCode: newCode,
+                isBenefitActive: true,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            await batch.commit();
+
+            // 3. Notifica por e-mail
+            if (process.env.BREVO_API_KEY) {
+                await sendVipTicketEmail(
+                    promoterEmail,
+                    membData.promoterName,
+                    membData.vipEventName,
+                    newCode,
+                    process.env.BREVO_API_KEY
+                );
+            }
+
+            return { success: true, code: newCode };
+        } catch (err) {
+            console.error("[ACTIVATE VIP ERROR]:", err.message);
+            throw new functions.https.HttpsError('internal', err.message);
+        }
+    });
+
+/**
+ * Função para Ativar ou Trocar Código Greenlife
+ */
+export const activateGreenlifeMembership = functions
+    .region("southamerica-east1")
+    .https.onCall(async (data, context) => {
+        const { membershipId, forceNew } = data;
+        try {
+            const membershipRef = db.collection('greenlifeMemberships').doc(membershipId);
+            const membSnap = await membershipRef.get();
+            if (!membSnap.exists) throw new Error('Adesão não encontrada.');
+            
+            const membData = membSnap.data();
+            const promoterEmail = membData.promoterEmail || 'aluno_nao_identificado';
+
+            const codesRef = db.collection('greenlifeEvents').doc(membData.vipEventId).collection('availableCodes');
+            const codeSnap = await codesRef.where('used', '==', false).limit(1).get();
+
+            if (codeSnap.empty) throw new Error('Estoque vazio.');
+
+            const newCodeDoc = codeSnap.docs[0];
+            const newCode = newCodeDoc.data().code;
+
+            const batch = db.batch();
+            batch.update(newCodeDoc.ref, {
+                used: true,
+                usedBy: promoterEmail,
+                membershipId: membershipId,
+                usedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            batch.update(membershipRef, {
+                status: 'confirmed',
+                benefitCode: newCode,
+                isBenefitActive: true,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            await batch.commit();
+            return { success: true, code: newCode };
+        } catch (err) {
+            throw new functions.https.HttpsError('internal', err.message);
+        }
+    });
+
+/**
+ * Webhook Pagar.me
  */
 export const pagarmeWebhook = functions
     .region("southamerica-east1")
     .runWith({ secrets: ["BREVO_API_KEY"] })
     .https.onRequest(async (req, res) => {
         const event = req.body;
-        console.log("[PAGARME WEBHOOK]:", JSON.stringify(event));
-
         if (event.type !== 'order.paid') return res.status(200).send('Ignored');
 
         const checkoutId = event.data?.metadata?.checkoutId;
@@ -86,8 +198,7 @@ export const pagarmeWebhook = functions
         try {
             const checkoutRef = db.collection('checkouts').doc(checkoutId);
             const snap = await checkoutRef.get();
-            
-            if (!snap.exists || snap.data().status === 'confirmed') return res.status(200).send('Already Processed');
+            if (!snap.exists || snap.data().status === 'confirmed') return res.status(200).send('Done');
 
             const checkoutData = snap.data();
             const qty = checkoutData.quantity || 1;
@@ -104,7 +215,7 @@ export const pagarmeWebhook = functions
                 if (codeDoc) {
                     batch.update(codeDoc.ref, { 
                         used: true, 
-                        usedBy: checkoutData.promoterEmail, 
+                        usedBy: checkoutData.promoterEmail || 'checkout_webhook', 
                         membershipId 
                     });
                 }
@@ -115,7 +226,6 @@ export const pagarmeWebhook = functions
                     vipEventName: checkoutData.vipEventName,
                     promoterName: checkoutData.promoterName,
                     promoterEmail: checkoutData.promoterEmail,
-                    amount: checkoutData.amount / qty,
                     status: 'confirmed',
                     benefitCode: assignedCode,
                     isBenefitActive: !!codeDoc,
@@ -123,7 +233,6 @@ export const pagarmeWebhook = functions
                     updatedAt: admin.firestore.FieldValue.serverTimestamp()
                 });
 
-                // ENVIO AUTOMÁTICO DE E-MAIL AO FINALIZAR
                 if (codeDoc && process.env.BREVO_API_KEY) {
                     await sendVipTicketEmail(
                         checkoutData.promoterEmail, 
@@ -137,16 +246,14 @@ export const pagarmeWebhook = functions
 
             batch.update(checkoutRef, { status: 'confirmed', paidAt: admin.firestore.FieldValue.serverTimestamp() });
             await batch.commit();
-
             return res.status(200).send('OK');
         } catch (err) {
-            console.error("Erro Crítico Webhook Pagarme:", err.message);
             return res.status(500).send(err.message);
         }
     });
 
 /**
- * Cria Pix no Pagar.me (Oficial)
+ * Cria Pix no Pagar.me
  */
 export const createVipPagarMePix = functions
     .region("southamerica-east1")
@@ -154,37 +261,19 @@ export const createVipPagarMePix = functions
     .https.onCall(async (data) => {
         try {
             const { vipEventId, vipEventName, email, name, whatsapp, taxId, amount, quantity } = data;
-            
             const checkoutRef = db.collection('checkouts').doc();
             const checkoutId = checkoutRef.id;
 
             const authHeader = `Basic ${Buffer.from(`${process.env.PAGARME_SECRET_KEY}:`).toString('base64')}`;
             
             const payload = {
-                items: [{ 
-                    amount: Math.round(amount * 100), 
-                    description: `VIP: ${vipEventName.substring(0,40)}`, 
-                    quantity: 1 
-                }],
+                items: [{ amount: Math.round(amount * 100), description: `VIP: ${vipEventName.substring(0,40)}`, quantity: 1 }],
                 customer: { 
-                    name: name.trim(), 
-                    email: email.toLowerCase().trim(), 
-                    type: 'individual', 
-                    document: taxId.replace(/\D/g, ''), 
-                    phones: { 
-                        mobile_phone: { 
-                            country_code: '55', 
-                            area_code: whatsapp.replace(/\D/g, '').substring(0,2), 
-                            number: whatsapp.replace(/\D/g, '').substring(2) 
-                        } 
-                    } 
+                    name: name.trim(), email: email.toLowerCase().trim(), type: 'individual', document: taxId.replace(/\D/g, ''),
+                    phones: { mobile_phone: { country_code: '55', area_code: whatsapp.replace(/\D/g, '').substring(0,2), number: whatsapp.replace(/\D/g, '').substring(2) } }
                 },
-                payments: [{ 
-                    payment_method: 'pix', 
-                    pix: { expires_in: 3600 } 
-                }],
-                closed: true, 
-                metadata: { checkoutId }
+                payments: [{ payment_method: 'pix', pix: { expires_in: 3600 } }],
+                closed: true, metadata: { checkoutId }
             };
 
             const response = await fetch('https://api.pagar.me/core/v5/orders', {
@@ -197,34 +286,18 @@ export const createVipPagarMePix = functions
             if (!response.ok) throw new Error(result.message || "Erro API PagarMe");
 
             const pix = result.charges?.[0]?.last_transaction;
-            
             await checkoutRef.set({
-                id: checkoutId,
-                vipEventId,
-                vipEventName,
-                promoterName: name,
-                promoterEmail: email,
-                amount,
-                quantity,
-                gateway: 'pagarme',
-                status: 'pending',
-                orderId: result.id,
-                createdAt: admin.firestore.FieldValue.serverTimestamp()
+                id: checkoutId, vipEventId, vipEventName, promoterName: name, promoterEmail: email,
+                amount, quantity, gateway: 'pagarme', status: 'pending', orderId: result.id, createdAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            return { 
-                success: true, 
-                checkoutId, 
-                qrCode: pix.qr_code, 
-                qrCodeUrl: pix.qr_code_url 
-            };
+            return { success: true, checkoutId, qrCode: pix.qr_code, qrCodeUrl: pix.qr_code_url };
         } catch (e) {
-            console.error("[PAGARME ERROR]:", e.message);
             throw new functions.https.HttpsError('internal', e.message);
         }
     });
 
-// Stubs mantidos para compatibilidade...
+// Stubs e auxiliares
 export const createVipAsaasPix = functions.region("southamerica-east1").runWith({ secrets: ["ASAAS_API_KEY"] }).https.onCall(async () => ({ success: true }));
 export const asaasWebhook = functions.region("southamerica-east1").runWith({ secrets: ["ASAAS_API_KEY", "BREVO_API_KEY"] }).https.onRequest(async (req, res) => res.status(200).send('OK'));
 export const checkBackendStatus = functions.region("southamerica-east1").https.onCall(async () => ({ asaasKeyConfigured: !!process.env.ASAAS_API_KEY, pagarmeKeyConfigured: !!process.env.PAGARME_SECRET_KEY, brevoKeyConfigured: !!process.env.BREVO_API_KEY }));
@@ -232,7 +305,6 @@ export const createGreenlifeAsaasPix = functions.region("southamerica-east1").ht
 export const createAdminRequest = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const createOrganizationAndUser = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const savePromoterToken = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
-export const activateGreenlifeMembership = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const askGemini = functions.region("southamerica-east1").https.onCall(async () => ({ text: "IA Pausada" }));
 export const sendWhatsAppCampaign = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
 export const testWhatsAppIntegration = functions.region("southamerica-east1").https.onCall(async () => ({ success: true }));
