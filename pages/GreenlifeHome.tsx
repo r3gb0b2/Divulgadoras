@@ -25,6 +25,7 @@ const GreenlifeHome: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [pixData, setPixData] = useState<any>(null);
     const [promoter, setPromoter] = useState<any>(null);
+    const [currentCheckoutId, setCurrentCheckoutId] = useState<string | null>(null);
 
     useEffect(() => {
         getActiveGreenlifeEvents().then(data => {
@@ -33,20 +34,25 @@ const GreenlifeHome: React.FC = () => {
         }).catch(() => { setError("Falha ao carregar ofertas Greenlife."); setIsLoading(false); });
     }, []);
 
+    // Monitora o Checkout centralizado (agora via Pagar.me)
     useEffect(() => {
-        if (step === 'payment' && promoter && selectedEvent) {
-            const membershipId = `${promoter.id}_${selectedEvent.id}`;
-            const unsubscribe = firestore.collection('greenlifeMemberships').doc(membershipId)
+        if (step === 'payment' && currentCheckoutId) {
+            const unsubscribe = firestore.collection('checkouts').doc(currentCheckoutId)
                 .onSnapshot((doc) => {
-                    if (doc.data()?.status === 'confirmed') setStep('success');
+                    const data = doc.data();
+                    if (data?.status === 'confirmed') {
+                        setStep('success');
+                        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+                    }
                 });
             return () => unsubscribe();
         }
-    }, [step, promoter, selectedEvent]);
+    }, [step, currentCheckoutId]);
 
     const handleCheckEmail = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
+        setError(null);
         try {
             const profiles = await findPromotersByEmail(email.trim().toLowerCase());
             const membership = await checkGreenlifeMembership(email.trim().toLowerCase(), selectedEvent!.id);
@@ -65,33 +71,48 @@ const GreenlifeHome: React.FC = () => {
         e.preventDefault();
         if (!selectedEvent) return;
         
-        setIsLoading(true);
         setError(null);
+        const sanitizedTaxId = taxId.replace(/\D/g, '');
+        if (sanitizedTaxId.length !== 11 && sanitizedTaxId.length !== 14) {
+            setError("CPF ou CNPJ inválido.");
+            return;
+        }
+
+        setIsLoading(true);
         try {
             let pId = promoter?.id;
             if (!pId) pId = await createVipPromoter({ name, email, whatsapp });
             setPromoter({ id: pId, name, email, whatsapp });
             
-            const createAsaasPix = httpsCallable(functions, 'createGreenlifeAsaasPix');
-            const res: any = await createAsaasPix({
+            // CHAMADA ALTERADA PARA PAGAR.ME
+            const createGreenlifePagarMePix = httpsCallable(functions, 'createGreenlifePagarMePix');
+            const res: any = await createGreenlifePagarMePix({
                 vipEventId: selectedEvent.id,
                 vipEventName: selectedEvent.name,
                 promoterId: pId,
                 email: email.toLowerCase().trim(),
                 name: name.trim(), 
                 whatsapp: whatsapp.replace(/\D/g, ''), 
-                taxId: taxId.replace(/\D/g, ''), 
-                amount: selectedEvent.price
+                taxId: sanitizedTaxId, 
+                amount: selectedEvent.price,
+                quantity: 1
             });
             
             setPixData(res.data);
+            setCurrentCheckoutId(res.data.checkoutId);
             setStep('payment');
         } catch (err: any) { 
             console.error(err);
-            setError(err.message || "Erro ao gerar pagamento."); 
+            setError(err.message || "Erro ao gerar cobrança Pagar.me."); 
         } finally { 
             setIsLoading(false); 
         }
+    };
+
+    const copyPix = () => {
+        if (!pixData?.qrCode) return;
+        navigator.clipboard.writeText(pixData.qrCode);
+        alert("Pix Copiado!");
     };
 
     return (
@@ -100,7 +121,7 @@ const GreenlifeHome: React.FC = () => {
                 <div className="bg-green-600 p-12 text-center relative">
                     <SparklesIcon className="w-16 h-16 text-white mx-auto mb-4 opacity-50" />
                     <h1 className="text-5xl font-black text-white uppercase tracking-tighter">ALUNOS <span className="text-gray-200">GREENLIFE</span></h1>
-                    <p className="text-green-100 font-bold uppercase text-[10px] tracking-[0.3em] mt-2">Acesso e Benefícios Exclusivos</p>
+                    <p className="text-green-100 font-bold uppercase text-[10px] tracking-widest mt-2">Pagamento Seguro via Pagar.me</p>
                 </div>
 
                 <div className="p-10">
@@ -146,19 +167,19 @@ const GreenlifeHome: React.FC = () => {
                              <h2 className="text-2xl font-black text-white text-center uppercase mb-6">Seus Dados</h2>
                              <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full p-5 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-bold" placeholder="Nome Completo" />
                              <input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-5 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-bold" placeholder="WhatsApp" />
-                             <input type="tel" required value={taxId} onChange={e => setTaxId(e.target.value)} className="w-full p-5 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-bold" placeholder="CPF/CNPJ (Para emissão do Pix)" />
-                             <button type="submit" disabled={isLoading} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl">GERAR PIX</button>
+                             <input type="tel" required value={taxId} onChange={e => setTaxId(e.target.value)} className="w-full p-5 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-bold" placeholder="CPF ou CNPJ" />
+                             <button type="submit" disabled={isLoading} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl">GERAR QR CODE PIX</button>
                         </form>
                     )}
 
                     {step === 'payment' && pixData && (
                         <div className="text-center space-y-8 animate-fadeIn">
                             <div className="bg-white p-6 rounded-[2.5rem] inline-block shadow-2xl">
-                                <img src={`data:image/png;base64,${pixData.encodedImage}`} alt="QR Code Pix" className="w-64 h-64" />
+                                <img src={pixData.qrCodeUrl} alt="QR Code Pix" className="w-64 h-64" />
                             </div>
                             <div className="flex gap-2">
-                                <input readOnly value={pixData.payload} className="flex-grow bg-dark border border-white/10 p-4 rounded-2xl text-[10px] text-gray-500 font-mono" />
-                                <button onClick={() => { navigator.clipboard.writeText(pixData.payload); alert("Copiado!"); }} className="p-4 bg-green-600 text-white rounded-2xl"><DocumentDuplicateIcon className="w-6 h-6" /></button>
+                                <input readOnly value={pixData.qrCode} className="flex-grow bg-dark border border-white/10 p-4 rounded-2xl text-[10px] text-gray-500 font-mono" />
+                                <button onClick={copyPix} className="p-4 bg-green-600 text-white rounded-2xl"><DocumentDuplicateIcon className="w-6 h-6" /></button>
                             </div>
                             <p className="text-blue-400 font-black text-xs uppercase animate-pulse flex items-center justify-center gap-2"><RefreshIcon className="w-4 h-4 animate-spin" /> Aguardando confirmação do pagamento...</p>
                         </div>
