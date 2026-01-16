@@ -79,13 +79,16 @@ const Header: React.FC = () => {
   
   let homePath = '/';
   let statusPath = '/status';
+  let statusLabel = 'Status';
 
   if (isVipContext) {
       homePath = location.pathname.startsWith('/test') ? '/test/clubvip' : '/clubvip';
       statusPath = '/clubvip/status';
+      statusLabel = 'Meus Ingressos';
   } else if (isGreenlifeContext) {
       homePath = '/alunosgreenlife';
       statusPath = '/alunosgreenlife/status';
+      statusLabel = 'Meus Ingressos';
   }
 
   return (
@@ -102,7 +105,7 @@ const Header: React.FC = () => {
               <div className='hidden md:flex items-center space-x-6'>
                   <OrganizationSwitcher />
                   <Link to={homePath} className="text-gray-300 hover:text-primary font-black uppercase text-[10px] tracking-widest transition-colors">Início</Link>
-                  <Link to={statusPath} className="text-gray-300 hover:text-primary font-black uppercase text-[10px] tracking-widest transition-colors">Meus Ingressos</Link>
+                  <Link to={statusPath} className="text-gray-300 hover:text-primary font-black uppercase text-[10px] tracking-widest transition-colors">{statusLabel}</Link>
                   <Link to="/admin" className="px-4 py-2 bg-white/5 border border-white/10 text-white font-black uppercase text-[10px] tracking-widest rounded-xl hover:bg-white/10 transition-all">Painel Admin</Link>
               </div>
 
@@ -124,7 +127,7 @@ const Header: React.FC = () => {
 
                   <div className="space-y-6">
                       <Link to={homePath} className="block text-gray-200 hover:text-primary font-black uppercase text-sm tracking-widest" onClick={() => setIsMenuOpen(false)}>Início</Link>
-                      <Link to={statusPath} className="block text-gray-200 hover:text-primary font-black uppercase text-sm tracking-widest" onClick={() => setIsMenuOpen(false)}>Meus Ingressos</Link>
+                      <Link to={statusPath} className="block text-gray-200 hover:text-primary font-black uppercase text-sm tracking-widest" onClick={() => setIsMenuOpen(false)}>{statusLabel}</Link>
                       <Link to="/admin" className="block text-gray-200 hover:text-primary font-black uppercase text-sm tracking-widest" onClick={() => setIsMenuOpen(false)}>Painel Administrativo</Link>
                   </div>
 
