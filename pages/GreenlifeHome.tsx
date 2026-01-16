@@ -31,7 +31,6 @@ const GreenlifeHome: React.FC = () => {
     useEffect(() => {
         const loadEvents = async () => {
             try {
-                // O serviço já retorna ordenado por eventDate (em memória)
                 const data = await getActiveGreenlifeEvents();
                 setEvents(data);
                 const stocks: Record<string, number> = {};
@@ -139,7 +138,12 @@ const GreenlifeHome: React.FC = () => {
                                 <Link to="/alunosgreenlife/status" className="px-6 py-3 bg-gray-800 text-gray-300 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/5 hover:bg-gray-700 transition-all">Meus Ingressos</Link>
                             </div>
                             <div className="grid gap-4">
-                                {events.map(ev => {
+                                {isLoading ? (
+                                    <div className="py-20 flex flex-col items-center gap-4">
+                                        <RefreshIcon className="w-10 h-10 text-green-500 animate-spin" />
+                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Carregando Planos...</p>
+                                    </div>
+                                ) : events.map(ev => {
                                     const stock = stockMap[ev.id] ?? 0;
                                     const isSoldOut = (stock === 0) || ev.saleStatus === 'sold_out' || ev.isSoldOut;
                                     const isLowStock = !isSoldOut && ev.saleStatus === 'low_stock';
@@ -157,17 +161,24 @@ const GreenlifeHome: React.FC = () => {
                                                     {isSoldOut ? 'Vagas Esgotadas' : isLowStock ? 'Esgotando rápido!' : (ev.attractions || 'Adesão Online')}
                                                 </p>
                                             </div>
-                                            {isSoldOut ? (
-                                                <div className="flex flex-col items-center gap-1">
-                                                    <span className="text-[18px] text-gray-500 font-black line-through leading-none">R$ {ev.price.toFixed(2).replace('.', ',')}</span>
-                                                    <span className="px-5 py-2.5 bg-red-600 text-white text-[11px] font-black uppercase rounded-2xl border border-red-700 animate-soft-flash shadow-[0_0_20px_rgba(220,38,38,0.4)]">ESGOTADO</span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col items-end">
-                                                    <p className={`text-green-500 font-black text-2xl flex-shrink-0 ${isLowStock ? 'animate-soft-flash' : ''}`}>R$ {ev.price.toFixed(2)}</p>
-                                                    {isLowStock && <span className="text-[9px] font-black text-yellow-500 uppercase tracking-widest mt-1">Esgotando</span>}
-                                                </div>
-                                            )}
+                                            <div className="flex flex-col items-end gap-2">
+                                                {isSoldOut ? (
+                                                    <>
+                                                        <span className="text-[26px] text-gray-500 font-black line-through leading-none">R$ {ev.price.toFixed(2).replace('.', ',')}</span>
+                                                        <span className="px-5 py-2.5 bg-red-600 text-white text-[11px] font-black uppercase rounded-2xl border border-red-700 shadow-[0_0_20px_rgba(220,38,38,0.4)]">ESGOTADO</span>
+                                                    </>
+                                                ) : isLowStock ? (
+                                                    <>
+                                                        <p className="text-green-500 font-black text-2xl leading-none">R$ {ev.price.toFixed(2)}</p>
+                                                        <span className="px-5 py-2.5 bg-yellow-600 text-white text-[11px] font-black uppercase rounded-2xl border border-yellow-700 animate-soft-flash shadow-[0_0_20px_rgba(202,138,4,0.4)]">ESGOTANDO</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <p className="text-green-500 font-black text-2xl leading-none">R$ {ev.price.toFixed(2)}</p>
+                                                        <span className="px-5 py-2.5 bg-green-600 text-white text-[11px] font-black uppercase rounded-2xl border border-green-700">DISPONÍVEL</span>
+                                                    </>
+                                                )}
+                                            </div>
                                         </button>
                                     );
                                 })}
