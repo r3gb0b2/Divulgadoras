@@ -101,6 +101,31 @@ const AdminGreenlife: React.FC = () => {
         return memberships.filter(m => (m.promoterName || '').toLowerCase().includes(query) || (m.promoterEmail || '').toLowerCase().includes(query));
     }, [memberships, searchQuery]);
 
+    const handleCopyTicketLink = (m: VipMembership) => {
+        const url = `${window.location.origin}/#/alunosgreenlife/status?email=${encodeURIComponent(m.promoterEmail)}`;
+        navigator.clipboard.writeText(url);
+        alert("Link do ingresso copiado!");
+    };
+
+    const handleManualActivateOrSwap = async (m: VipMembership, forceNew: boolean = false) => {
+        if(!window.confirm(forceNew ? "Trocar código atual por um novo do estoque?" : "Ativar esta adesão pegando um código do estoque?")) return;
+        setIsProcessingId(m.id);
+        try {
+            const activate = httpsCallable(functions, 'activateGreenlifeMembership');
+            await activate({ membershipId: m.id, forceNew });
+            fetchData();
+        } catch (e: any) { alert(e.message); } finally { setIsProcessingId(null); }
+    };
+
+    const handleRefundAction = async (m: VipMembership) => {
+        if (!confirm(`ESTORNAR ALUNO: Tem certeza? O código será invalidado.`)) return;
+        setIsProcessingId(m.id);
+        try {
+            await refundGreenlifeMembership(m.id);
+            fetchData();
+        } catch (e: any) { alert(e.message); } finally { setIsProcessingId(null); }
+    };
+
     const handleDownloadStock = async (event: VipEvent) => {
         try {
             const codes = await getGreenlifeEventCodes(event.id);
@@ -183,7 +208,7 @@ const AdminGreenlife: React.FC = () => {
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {filteredMembers.map(m => (
-                                        <tr key={m.id} className="hover:bg-white/[0.02] group">
+                                        <tr key={m.id} className="hover:bg-white/[0.02] group transition-colors">
                                             <td className="px-6 py-5">
                                                 <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
                                                 <p className="text-[10px] text-gray-500 font-mono truncate">{m.promoterEmail}</p>
@@ -202,11 +227,25 @@ const AdminGreenlife: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-5 text-center">
-                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>{m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}</span>
+                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : m.status === 'refunded' ? 'bg-red-900/40 text-red-400 border-red-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>
+                                                    {m.status === 'confirmed' ? 'PAGO' : m.status === 'refunded' ? 'ESTORNADO' : 'PENDENTE'}
+                                                </span>
                                             </td>
                                             <td className="px-6 py-5 text-right">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                                    <button onClick={() => { if(confirm("Estornar?")) refundGreenlifeMembership(m.id).then(fetchData); }} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all"><UndoIcon className="w-4 h-4"/></button>
+                                                    <button onClick={() => handleCopyTicketLink(m)} className="p-2 bg-indigo-900/30 text-indigo-400 rounded-xl hover:bg-indigo-600 hover:text-white transition-all border border-indigo-800/30">
+                                                        <LinkIcon className="w-4 h-4" />
+                                                    </button>
+                                                    {m.status !== 'refunded' && (
+                                                        <button onClick={() => handleManualActivateOrSwap(m, true)} disabled={isProcessingId === m.id} className="p-2 bg-blue-900/30 text-blue-400 rounded-xl border border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all">
+                                                            <RefreshIcon className={`w-4 h-4 ${isProcessingId === m.id ? 'animate-spin' : ''}`} />
+                                                        </button>
+                                                    )}
+                                                    {m.status !== 'refunded' && (
+                                                        <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30">
+                                                            <UndoIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -223,7 +262,7 @@ const AdminGreenlife: React.FC = () => {
                             <div key={ev.id} className="bg-dark/40 p-6 rounded-3xl border border-white/5 group hover:border-green-500 transition-all flex flex-col">
                                 <div className="flex justify-between mb-4">
                                     <h3 className="text-xl font-black text-white uppercase truncate">{ev.name}</h3>
-                                    <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                    <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
                                 </div>
                                 <div className="p-3 bg-white/5 rounded-2xl text-center mb-6">
                                     <p className="text-[8px] font-black text-gray-500 uppercase">Códigos Disponíveis</p>

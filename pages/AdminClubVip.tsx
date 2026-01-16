@@ -23,7 +23,7 @@ import {
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, EyeIcon,
     TicketIcon, RefreshIcon, PlusIcon, TrashIcon, PencilIcon, 
     DownloadIcon, LinkIcon, CogIcon, UndoIcon, ChartBarIcon, 
-    CalendarIcon, ClockIcon, MapPinIcon, MailIcon
+    CalendarIcon, ClockIcon, MapPinIcon
 } from '../components/Icons';
 
 // Modal para Edição de Dados Cadastrais
@@ -84,30 +84,14 @@ const EditMembershipModal: React.FC<{
                     <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Editar Cadastro</h2>
                     <button onClick={onClose} className="p-2 text-gray-500 hover:text-white"><XIcon className="w-6 h-6"/></button>
                 </div>
-                
                 <form onSubmit={handleSave} className="space-y-4">
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Nome Completo</label>
-                        <input type="text" value={formData.promoterName} onChange={e => setFormData({...formData, promoterName: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary" required />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-primary uppercase ml-1">E-mail</label>
-                        <input type="email" value={formData.promoterEmail} onChange={e => setFormData({...formData, promoterEmail: e.target.value})} className="w-full bg-dark border border-primary/30 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary" required />
-                    </div>
+                    <input type="text" value={formData.promoterName} onChange={e => setFormData({...formData, promoterName: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none" placeholder="Nome Completo" required />
+                    <input type="email" value={formData.promoterEmail} onChange={e => setFormData({...formData, promoterEmail: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none" placeholder="E-mail" required />
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black text-gray-500 uppercase ml-1">WhatsApp</label>
-                            <input type="tel" value={formData.promoterWhatsapp} onChange={e => setFormData({...formData, promoterWhatsapp: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary" />
-                        </div>
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Instagram</label>
-                            <input type="text" value={formData.promoterInstagram} onChange={e => setFormData({...formData, promoterInstagram: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary" />
-                        </div>
+                        <input type="tel" value={formData.promoterWhatsapp} onChange={e => setFormData({...formData, promoterWhatsapp: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none" placeholder="WhatsApp" />
+                        <input type="text" value={formData.promoterInstagram} onChange={e => setFormData({...formData, promoterInstagram: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none" placeholder="Instagram" />
                     </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black text-gray-500 uppercase ml-1">CPF / CNPJ</label>
-                        <input type="text" value={formData.promoterTaxId} onChange={e => setFormData({...formData, promoterTaxId: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary" />
-                    </div>
+                    <input type="text" value={formData.promoterTaxId} onChange={e => setFormData({...formData, promoterTaxId: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none" placeholder="CPF/CNPJ" />
                     <div className="mt-8 flex gap-3 pt-4">
                         <button type="button" onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-xs">Cancelar</button>
                         <button type="submit" disabled={isSaving} className="flex-2 py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg disabled:opacity-50">SALVAR</button>
@@ -143,15 +127,12 @@ const TransferModal: React.FC<{ isOpen: boolean, onClose: () => void, membership
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[150] flex items-center justify-center p-6" onClick={onClose}>
             <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-6">Transferir Ingresso</h2>
-                <div className="space-y-4">
-                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Selecione o Novo Evento</label>
-                    <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary">
-                        <option value="">Escolha o destino...</option>
-                        {events.filter(e => e.id !== membership.vipEventId && e.isActive).map(e => (
-                            <option key={e.id} value={e.id}>{e.name}</option>
-                        ))}
-                    </select>
-                </div>
+                <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none">
+                    <option value="">Escolha o destino...</option>
+                    {events.filter(e => e.id !== membership.vipEventId && e.isActive).map(e => (
+                        <option key={e.id} value={e.id}>{e.name}</option>
+                    ))}
+                </select>
                 <div className="mt-8 flex gap-3">
                     <button onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-xs">Cancelar</button>
                     <button onClick={handleTransfer} disabled={isSaving || !selectedId} className="flex-2 py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs disabled:opacity-50">TRANSFERIR</button>
@@ -253,23 +234,24 @@ const AdminClubVip: React.FC = () => {
         });
     }, [memberships, searchQuery, selectedEventId]);
 
-    const handleSaveEvent = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editingEvent?.name || !editingEvent?.price || !editingEvent?.eventDate) return;
+    const handleManualActivateOrSwap = async (membership: VipMembership, forceNew: boolean = false) => {
+        if(!window.confirm(forceNew ? "Trocar código atual por um novo?" : "Ativar esta adesão?")) return;
+        setIsBulkProcessing(true);
+        setIsProcessingId(membership.id);
         try {
-            const data = {
-                name: editingEvent.name,
-                price: Number(editingEvent.price),
-                isActive: editingEvent.isActive ?? true,
-                saleStatus: editingEvent.saleStatus || 'available',
-                eventDate: editingEvent.eventDate instanceof firebase.firestore.Timestamp ? editingEvent.eventDate : firebase.firestore.Timestamp.fromDate(new Date((editingEvent.eventDate as any) + "T00:00:00")),
-                benefits: editingEvent.benefits || []
-            };
-            if (editingEvent.id) { await updateVipEvent(editingEvent.id, data); }
-            else { await createVipEvent(data as any); }
-            setIsModalOpen(false);
+            const activateVip = httpsCallable(functions, 'activateVipMembership');
+            await activateVip({ membershipId: membership.id, forceNew });
             fetchData();
-        } catch (e: any) { alert(e.message); }
+        } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); setIsProcessingId(null); }
+    };
+
+    const handleRefundAction = async (membership: VipMembership) => {
+        if (!window.confirm(`ESTORNAR ADESÃO: Tem certeza? O código será invalidado.`)) return;
+        setIsProcessingId(membership.id);
+        try {
+            await refundVipMembership(membership.id);
+            fetchData();
+        } catch (e: any) { alert(e.message); } finally { setIsProcessingId(null); }
     };
 
     const handleDownloadStock = async (event: VipEvent) => {
@@ -293,6 +275,42 @@ const AdminClubVip: React.FC = () => {
         } catch (e: any) { alert(e.message); }
     };
 
+    // FIX: Added handleSaveEvent to handle creation and update of VIP events, resolving a reference error.
+    const handleSaveEvent = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingEvent?.name || !editingEvent?.price || !editingEvent?.eventDate) return;
+
+        try {
+            const eventDate = editingEvent.eventDate instanceof firebase.firestore.Timestamp 
+                ? editingEvent.eventDate 
+                : firebase.firestore.Timestamp.fromDate(new Date((editingEvent.eventDate as any) + "T00:00:00"));
+
+            const dataToSave: Partial<VipEvent> = {
+                name: editingEvent.name,
+                price: Number(editingEvent.price),
+                eventDate: eventDate,
+                isActive: editingEvent.isActive ?? true,
+                saleStatus: editingEvent.saleStatus || 'available',
+                benefits: editingEvent.benefits || [],
+                description: editingEvent.description || '',
+                pixKey: editingEvent.pixKey || '',
+                externalSlug: editingEvent.externalSlug || editingEvent.name.toLowerCase().replace(/\s+/g, '-')
+            };
+
+            if (editingEvent.id) {
+                await updateVipEvent(editingEvent.id, dataToSave);
+                alert("Evento VIP atualizado com sucesso!");
+            } else {
+                await createVipEvent(dataToSave as Omit<VipEvent, 'id' | 'createdAt'>);
+                alert("Evento VIP criado com sucesso!");
+            }
+            setIsModalOpen(false);
+            fetchData();
+        } catch (e: any) {
+            alert("Erro ao salvar evento: " + e.message);
+        }
+    };
+
     const formatDateSafe = (ts: any) => {
         if (!ts) return null;
         const d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -309,7 +327,7 @@ const AdminClubVip: React.FC = () => {
                     {isVipManager && (
                         <button onClick={() => { setEditingEvent({ benefits: [], isActive: true, saleStatus: 'available' }); setIsModalOpen(true); }} className="px-4 py-2 bg-primary text-white font-black rounded-xl text-[10px] uppercase">Novo Evento</button>
                     )}
-                    <button onClick={() => navigate('/admin')} className="p-3 bg-gray-800 text-gray-400 rounded-xl hover:text-white"><ArrowLeftIcon className="w-5 h-5"/></button>
+                    <button onClick={() => navigate('/admin')} className="p-3 bg-gray-800 text-gray-400 rounded-xl hover:text-white transition-all"><ArrowLeftIcon className="w-5 h-5"/></button>
                 </div>
             </div>
 
@@ -339,9 +357,12 @@ const AdminClubVip: React.FC = () => {
                                     {filteredMembers.map(m => (
                                         <tr key={m.id} className="hover:bg-white/[0.02] group">
                                             <td className="px-6 py-5">
-                                                <p className="text-sm font-black text-white uppercase">{m.promoterName}</p>
-                                                <p className="text-[10px] text-gray-500">{m.promoterEmail}</p>
-                                                <p className="text-[11px] text-primary font-mono font-black mt-1">{m.benefitCode || '---'}</p>
+                                                <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <p className="text-[9px] text-primary font-black uppercase">{m.vipEventName}</p>
+                                                    <span className="text-gray-700">|</span>
+                                                    <p className="text-[11px] text-primary font-mono font-black">{m.benefitCode || '---'}</p>
+                                                </div>
                                             </td>
                                             <td className="px-6 py-5">
                                                 <div className="flex flex-col items-center gap-2">
@@ -356,11 +377,26 @@ const AdminClubVip: React.FC = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-5 text-center">
-                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>{m.status === 'confirmed' ? 'PAGO' : 'PENDENTE'}</span>
+                                                <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black ${m.status === 'confirmed' ? 'bg-green-900/40 text-green-400 border-green-800' : m.status === 'refunded' ? 'bg-red-900/40 text-red-400 border-red-800' : 'bg-orange-900/40 text-orange-400 border-orange-800'}`}>
+                                                    {m.status === 'confirmed' ? 'PAGO' : m.status === 'refunded' ? 'ESTORNADO' : 'PENDENTE'}
+                                                </span>
                                             </td>
                                             <td className="px-6 py-5 text-right">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
                                                     <button onClick={() => { setMembershipToEdit(m); setIsEditMembershipOpen(true); }} className="p-2 bg-gray-700 text-gray-300 rounded-xl hover:bg-primary hover:text-white transition-all"><PencilIcon className="w-4 h-4" /></button>
+                                                    {m.status === 'confirmed' && isVipManager && (
+                                                        <button onClick={() => { setMembershipToTransfer(m); setIsTransferModalOpen(true); }} className="p-2 bg-purple-900/30 text-purple-400 rounded-xl border border-purple-800/50 hover:bg-purple-600 hover:text-white transition-all"><RefreshIcon className="w-4 h-4 rotate-90" /></button>
+                                                    )}
+                                                    {m.status !== 'refunded' && isVipManager && (
+                                                        <button onClick={() => handleManualActivateOrSwap(m, true)} disabled={isBulkProcessing && isProcessingId === m.id} className="p-2 bg-blue-900/30 text-blue-400 rounded-xl border border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all">
+                                                            <RefreshIcon className={`w-4 h-4 ${isBulkProcessing && isProcessingId === m.id ? 'animate-spin' : ''}`} />
+                                                        </button>
+                                                    )}
+                                                    {m.status !== 'refunded' && isVipManager && (
+                                                        <button onClick={() => handleRefundAction(m)} disabled={isProcessingId === m.id} className="p-2 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all border border-red-900/30">
+                                                            <UndoIcon className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -376,8 +412,8 @@ const AdminClubVip: React.FC = () => {
                         {vipEvents.map(ev => (
                             <div key={ev.id} className="bg-dark/40 p-6 rounded-[2rem] border border-white/5 group hover:border-primary transition-all flex flex-col">
                                 <div className="flex justify-between mb-4">
-                                    <h3 className="text-xl font-black text-white uppercase">{ev.name}</h3>
-                                    <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                    <h3 className="text-xl font-black text-white uppercase truncate">{ev.name}</h3>
+                                    <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
                                 </div>
                                 <div className="p-3 bg-white/5 rounded-2xl text-center mb-6">
                                     <p className="text-[8px] font-black text-gray-500 uppercase mb-1">Estoque Disponível</p>
@@ -414,6 +450,7 @@ const AdminClubVip: React.FC = () => {
             )}
             {isCodesModalOpen && eventForCodes && <ManageCodesModal isOpen={isCodesModalOpen} onClose={() => setIsCodesModalOpen(false)} event={eventForCodes} onSaved={fetchData} />}
             {isEditMembershipOpen && membershipToEdit && <EditMembershipModal isOpen={isEditMembershipOpen} onClose={() => setIsEditMembershipOpen(false)} membership={membershipToEdit} onSaved={fetchData} />}
+            {isTransferModalOpen && membershipToTransfer && <TransferModal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} membership={membershipToTransfer} events={vipEvents} onTransferred={fetchData} />}
         </div>
     );
 };
