@@ -17,14 +17,14 @@ const getMs = (ts: any): number => {
 
 export const getActiveVipEvents = async (): Promise<VipEvent[]> => {
     try {
-        // Buscamos apenas pelo status ativo. A ordenação é feita em memória para não ignorar docs sem o campo eventDate
+        // Não usamos orderBy no Firestore aqui para evitar que documentos sem o campo 'eventDate' sejam ocultados
         const snap = await firestore.collection(COLLECTION_EVENTS)
             .where('isActive', '==', true)
             .get();
         
         const events = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
         
-        // Ordenação Cronológica: Eventos mais próximos primeiro
+        // Ordenação em Memória: Garante que nada suma
         return events.sort((a, b) => getMs(a.eventDate) - getMs(b.eventDate));
     } catch (e) {
         console.error("Erro ao buscar eventos VIP ativos:", e);

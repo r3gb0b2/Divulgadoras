@@ -31,6 +31,7 @@ const GreenlifeHome: React.FC = () => {
     useEffect(() => {
         const loadEvents = async () => {
             try {
+                // O serviço já retorna ordenado por eventDate (em memória)
                 const data = await getActiveGreenlifeEvents();
                 setEvents(data);
                 const stocks: Record<string, number> = {};
@@ -154,7 +155,10 @@ const GreenlifeHome: React.FC = () => {
                                                 </p>
                                             </div>
                                             {isSoldOut ? (
-                                                <span className="px-5 py-2.5 bg-red-600 text-white text-[11px] font-black uppercase rounded-2xl border border-red-700 animate-soft-flash shadow-[0_0_20px_rgba(220,38,38,0.4)]">ESGOTADO</span>
+                                                <div className="flex flex-col items-center gap-1">
+                                                    <span className="text-[10px] text-gray-500 font-black line-through">R$ {ev.price.toFixed(2).replace('.', ',')}</span>
+                                                    <span className="px-5 py-2.5 bg-red-600 text-white text-[11px] font-black uppercase rounded-2xl border border-red-700 animate-soft-flash shadow-[0_0_20px_rgba(220,38,38,0.4)]">ESGOTADO</span>
+                                                </div>
                                             ) : (
                                                 <p className="text-green-500 font-black text-2xl flex-shrink-0">R$ {ev.price.toFixed(2)}</p>
                                             )}
