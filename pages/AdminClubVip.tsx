@@ -12,6 +12,7 @@ import {
     transferVipMembership,
     addVipCodes,
     getVipCodeStats,
+    getVipEventCodes,
     updateVipMembership
 } from '../services/vipService';
 import { updatePromoter } from '../services/promoterService';
@@ -429,6 +430,31 @@ const AdminClubVip: React.FC = () => {
         } catch (e: any) { alert("Erro ao estornar: " + e.message); } finally { setIsProcessingId(null); }
     };
 
+    const handleDownloadStock = async (event: VipEvent) => {
+        try {
+            const codes = await getVipEventCodes(event.id);
+            if (codes.length === 0) return alert("Estoque vazio.");
+            
+            const exportData = codes.map((c: any) => ({
+                'CÓDIGO': c.code,
+                'STATUS': c.used ? 'USADO' : 'DISPONÍVEL',
+                'MEMBRO': c.usedBy || '-',
+                'DATA USO': c.usedAt ? (c.usedAt.toDate ? c.usedAt.toDate().toLocaleString('pt-BR') : new Date(c.usedAt).toLocaleString('pt-BR')) : '-'
+            }));
+
+            // @ts-ignore
+            const ws = window.XLSX.utils.json_to_sheet(exportData);
+            // @ts-ignore
+            const wb = window.XLSX.utils.book_new();
+            // @ts-ignore
+            window.XLSX.utils.book_append_sheet(wb, ws, "Estoque VIP");
+            // @ts-ignore
+            window.XLSX.writeFile(wb, `estoque_vip_${event.name.replace(/\s+/g, '_')}.xlsx`);
+        } catch (e: any) {
+            alert("Erro ao baixar estoque: " + e.message);
+        }
+    };
+
     return (
         <div className="pb-40">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
@@ -563,6 +589,7 @@ const AdminClubVip: React.FC = () => {
                                     <button onClick={() => { setEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-grow py-3 bg-indigo-900/20 text-indigo-400 border border-indigo-800/30 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
                                         <CogIcon className="w-4 h-4" /> ESTOQUE
                                     </button>
+                                    <button onClick={() => handleDownloadStock(ev)} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all" title="Baixar Estoque"><DownloadIcon className="w-4 h-4" /></button>
                                     <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-primary transition-all"><PencilIcon className="w-4 h-4" /></button>
                                     {isVipManager && (
                                         <button onClick={() => { if(confirm("Excluir evento VIP permanentemente?")) deleteVipEvent(ev.id).then(fetchData); }} className="p-3 bg-red-900/30 text-red-400 rounded-xl border border-red-800/30 hover:bg-red-600 transition-all"><TrashIcon className="w-4 h-4"/></button>

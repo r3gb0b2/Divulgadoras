@@ -213,7 +213,7 @@ const AdminGreenlife: React.FC = () => {
                 'CÓDIGO': c.code,
                 'STATUS': c.used ? 'USADO' : 'DISPONÍVEL',
                 'ALUNO': c.usedBy || '-',
-                'DATA USO': c.usedAt ? c.usedAt.toDate().toLocaleString('pt-BR') : '-'
+                'DATA USO': c.usedAt ? (c.usedAt.toDate ? c.usedAt.toDate().toLocaleString('pt-BR') : new Date(c.usedAt).toLocaleString('pt-BR')) : '-'
             }));
 
             // @ts-ignore
@@ -224,7 +224,9 @@ const AdminGreenlife: React.FC = () => {
             window.XLSX.utils.book_append_sheet(wb, ws, "Estoque Greenlife");
             // @ts-ignore
             window.XLSX.writeFile(wb, `estoque_greenlife_${event.name.replace(/\s+/g, '_')}.xlsx`);
-        } catch (e: any) { alert(e.message); }
+        } catch (e: any) {
+            alert("Erro ao baixar estoque: " + e.message);
+        }
     };
 
     return (
