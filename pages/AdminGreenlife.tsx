@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -127,40 +128,45 @@ const AdminGreenlife: React.FC = () => {
 
     const handleDownloadStock = async (event: VipEvent) => {
         try {
-            const [codes, eventMemberships] = await Promise.all([
-                getGreenlifeEventCodes(event.id),
-                getAllGreenlifeMemberships(event.id)
-            ]);
+            // Buscamos todas as adesões Greenlife deste evento
+            const membershipsSnap = await firestore.collection('greenlifeMemberships').where('vipEventId', '==', event.id).get();
+            const eventMemberships = membershipsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipMembership));
+            
+            // Buscamos estoque de códigos
+            const codes = await getGreenlifeEventCodes(event.id);
+            if (eventMemberships.length === 0 && codes.length === 0) return alert("Não há dados.");
 
-            if (codes.length === 0) return alert("Estoque vazio.");
+            const jsonData = eventMemberships.map(m => {
+                let statusPortaria = 'BLOQUEADO ❌';
+                let statusFinanceiro = 'PENDENTE';
 
-            // FIX: Explicitly type the membMap to Map<string, VipMembership> to resolve unknown type errors when accessing membership properties.
-            const membMap = new Map<string, VipMembership>(eventMemberships.map(m => [m.id, m]));
-
-            const jsonData = codes.map((c: any) => {
-                const membership = c.membershipId ? membMap.get(c.membershipId) : null;
-                
-                let finalStatus = 'DISPONÍVEL';
-                if (c.used) {
-                    if (!membership) {
-                        finalStatus = 'USADO (SEM VÍNCULO)';
-                    } else if (membership.status === 'refunded') {
-                        finalStatus = 'ESTORNADO (INVÁLIDO)';
-                    } else if (membership.vipEventId !== event.id) {
-                        finalStatus = 'TRANSFERIDO (SAÍDA)';
-                    } else {
-                        finalStatus = 'CONFIRMADO (PAGO)';
-                    }
+                if (m.status === 'confirmed') {
+                    statusPortaria = 'VÁLIDO ✅';
+                    statusFinanceiro = 'PAGO';
+                } else if (m.status === 'refunded') {
+                    statusFinanceiro = 'ESTORNADO';
                 }
 
                 return {
-                    'CÓDIGO': c.code,
-                    'STATUS FINANCEIRO': finalStatus,
-                    'VALIDADE PORTARIA': (finalStatus === 'CONFIRMADO (PAGO)') ? 'VÁLIDO ✅' : 'BLOQUEADO ❌',
-                    'ALUNO': membership?.promoterName || c.usedBy || '-',
-                    'E-MAIL': membership?.promoterEmail || '-',
-                    'DATA OPERAÇÃO': c.usedAt ? (c.usedAt.toDate ? c.usedAt.toDate().toLocaleString('pt-BR') : new Date(c.usedAt).toLocaleString('pt-BR')) : '-'
+                    'CÓDIGO': m.benefitCode || '---',
+                    'STATUS PORTARIA': statusPortaria,
+                    'FINANCEIRO': statusFinanceiro,
+                    'ALUNO': m.promoterName || '-',
+                    'E-MAIL': m.promoterEmail || '-',
+                    'DATA OPERAÇÃO': m.submittedAt ? (m.submittedAt.toDate ? m.submittedAt.toDate().toLocaleString('pt-BR') : new Date(m.submittedAt as any).toLocaleString('pt-BR')) : '-'
                 };
+            });
+
+            // Adicionamos códigos virgens no estoque
+            codes.filter(c => !c.used).forEach(c => {
+                jsonData.push({
+                    'CÓDIGO': c.code,
+                    'STATUS PORTARIA': 'DISPONÍVEL ⚪',
+                    'FINANCEIRO': 'ESTOQUE',
+                    'ALUNO': '(Disponível)',
+                    'E-MAIL': '-',
+                    'DATA OPERAÇÃO': '-'
+                });
             });
 
             // @ts-ignore
@@ -168,10 +174,10 @@ const AdminGreenlife: React.FC = () => {
             // @ts-ignore
             const wb = window.XLSX.utils.book_new();
             // @ts-ignore
-            window.XLSX.utils.book_append_sheet(wb, ws, "Estoque Greenlife");
+            window.XLSX.utils.book_append_sheet(wb, ws, "Relatório Greenlife");
             // @ts-ignore
-            window.XLSX.writeFile(wb, `estoque_greenlife_${event.name.replace(/\s+/g, '_')}.xlsx`);
-        } catch (e: any) { alert(e.message); }
+            window.XLSX.writeFile(wb, `vendas_greenlife_${event.name.replace(/\s+/g, '_')}.xlsx`);
+        } catch (e: any) { alert("Erro ao baixar: " + e.message); }
     };
 
     const handleSaveEvent = async (e: React.FormEvent) => {
@@ -300,7 +306,7 @@ const AdminGreenlife: React.FC = () => {
                                     <button onClick={() => { setSelectedEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-grow py-3 bg-indigo-900/20 text-indigo-400 border border-indigo-800/30 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
                                         <CogIcon className="w-4 h-4" /> ESTOQUE
                                     </button>
-                                    <button onClick={() => handleDownloadStock(ev)} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all" title="Baixar Estoque"><DownloadIcon className="w-4 h-4" /></button>
+                                    <button onClick={() => handleDownloadStock(ev)} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all" title="Baixar Relatório Completo"><DownloadIcon className="w-4 h-4" /></button>
                                     <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
                                 </div>
                             </div>

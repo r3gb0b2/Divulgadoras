@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -88,62 +89,29 @@ const EditMembershipModal: React.FC<{
                 <form onSubmit={handleSave} className="space-y-4">
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Nome Completo</label>
-                        <input 
-                            type="text" 
-                            value={formData.promoterName} 
-                            onChange={e => setFormData({...formData, promoterName: e.target.value})}
-                            className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary"
-                            required
-                        />
+                        <input type="text" value={formData.promoterName} onChange={e => setFormData({...formData, promoterName: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary" required />
                     </div>
-
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-primary uppercase ml-1">E-mail de Acesso</label>
-                        <input 
-                            type="email" 
-                            value={formData.promoterEmail} 
-                            onChange={e => setFormData({...formData, promoterEmail: e.target.value})}
-                            className="w-full bg-dark border border-primary/30 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary"
-                            required
-                        />
+                        <input type="email" value={formData.promoterEmail} onChange={e => setFormData({...formData, promoterEmail: e.target.value})} className="w-full bg-dark border border-primary/30 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary" required />
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
                             <label className="text-[10px] font-black text-gray-500 uppercase ml-1">WhatsApp</label>
-                            <input 
-                                type="tel" 
-                                value={formData.promoterWhatsapp} 
-                                onChange={e => setFormData({...formData, promoterWhatsapp: e.target.value})}
-                                className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary"
-                            />
+                            <input type="tel" value={formData.promoterWhatsapp} onChange={e => setFormData({...formData, promoterWhatsapp: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Instagram</label>
-                            <input 
-                                type="text" 
-                                value={formData.promoterInstagram} 
-                                onChange={e => setFormData({...formData, promoterInstagram: e.target.value})}
-                                className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary"
-                            />
+                            <input type="text" value={formData.promoterInstagram} onChange={e => setFormData({...formData, promoterInstagram: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary" />
                         </div>
                     </div>
-
                     <div className="space-y-1">
                         <label className="text-[10px] font-black text-gray-500 uppercase ml-1">CPF / CNPJ</label>
-                        <input 
-                            type="text" 
-                            value={formData.promoterTaxId} 
-                            onChange={e => setFormData({...formData, promoterTaxId: e.target.value})}
-                            className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary"
-                        />
+                        <input type="text" value={formData.promoterTaxId} onChange={e => setFormData({...formData, promoterTaxId: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary" />
                     </div>
-
                     <div className="mt-8 flex gap-3 pt-4">
                         <button type="button" onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-xs">Cancelar</button>
-                        <button type="submit" disabled={isSaving} className="flex-2 py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg shadow-primary/20 disabled:opacity-50">
-                            SALVAR
-                        </button>
+                        <button type="submit" disabled={isSaving} className="flex-2 py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg shadow-primary/20 disabled:opacity-50">SALVAR</button>
                     </div>
                 </form>
             </div>
@@ -183,42 +151,32 @@ const TransferModal: React.FC<{ isOpen: boolean, onClose: () => void, membership
             <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Transferir Ingresso</h2>
                 <p className="text-[10px] text-gray-500 font-bold uppercase mb-6">Membro: {membership.promoterName}</p>
-                
                 <div className="space-y-4">
                     <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Selecione o Novo Evento</label>
-                    <select 
-                        value={selectedId}
-                        onChange={e => setSelectedId(e.target.value)}
-                        className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary"
-                    >
+                    <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary">
                         <option value="">Escolha o destino...</option>
                         {events.filter(e => e.id !== membership.vipEventId && e.isActive).map(e => (
                             <option key={e.id} value={e.id}>{e.name} (R$ {e.price.toFixed(2)})</option>
                         ))}
                     </select>
                 </div>
-
                 <div className="mt-8 flex gap-3">
                     <button onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-xs">Cancelar</button>
-                    <button onClick={handleTransfer} disabled={isSaving || !selectedId} className="flex-2 py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg shadow-primary/20 disabled:opacity-50">
-                        CONFIRMAR TRANSFERÊNCIA
-                    </button>
+                    <button onClick={handleTransfer} disabled={isSaving || !selectedId} className="flex-2 py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg shadow-primary/20 disabled:opacity-50">TRANSFERIR</button>
                 </div>
             </div>
         </div>
     );
 };
 
-// Modal para gerenciar códigos em lote
+// Modal para gerenciar códigos
 const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: VipEvent, onSaved: () => void }> = ({ isOpen, onClose, event, onSaved }) => {
     const [codesText, setCodesText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [currentStock, setCurrentStock] = useState<number | null>(null);
 
     useEffect(() => {
-        if (isOpen && event.id) {
-            getVipCodeStats(event.id).then(setCurrentStock);
-        }
+        if (isOpen && event.id) { getVipCodeStats(event.id).then(setCurrentStock); }
     }, [isOpen, event.id]);
 
     if (!isOpen) return null;
@@ -226,19 +184,14 @@ const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: 
     const handleSave = async () => {
         const codes = codesText.split('\n').map(c => c.trim()).filter(c => c.length > 0);
         if (codes.length === 0) return alert("Insira pelo menos um código.");
-        
         setIsSaving(true);
         try {
             await addVipCodes(event.id, codes);
-            alert(`${codes.length} códigos adicionados ao estoque!`);
+            alert(`${codes.length} códigos adicionados!`);
             setCodesText('');
             onSaved();
             onClose();
-        } catch (e: any) {
-            alert("Erro ao salvar: " + e.message);
-        } finally {
-            setIsSaving(false);
-        }
+        } catch (e: any) { alert(e.message); } finally { setIsSaving(false); }
     };
 
     return (
@@ -251,30 +204,16 @@ const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: 
                     </div>
                     <button onClick={onClose} className="p-2 text-gray-500 hover:text-white"><XIcon className="w-6 h-6"/></button>
                 </div>
-                
                 <div className="mb-6 p-4 bg-dark/50 rounded-2xl border border-white/5 flex justify-between items-center">
                     <div>
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Disponível:</p>
+                        <p className="text-[10px] font-black text-gray-500 uppercase">Disponível:</p>
                         <p className="text-2xl font-black text-primary">{currentStock !== null ? currentStock : '...'}</p>
                     </div>
                 </div>
-
-                <div className="space-y-4">
-                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Colar novos códigos (Um por linha)</label>
-                    <textarea 
-                        rows={8}
-                        value={codesText}
-                        onChange={e => setCodesText(e.target.value)}
-                        placeholder="CÓDIGO1&#10;CÓDIGO2&#10;CÓDIGO3..."
-                        className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:border-primary"
-                    />
-                </div>
-
+                <textarea rows={8} value={codesText} onChange={e => setCodesText(e.target.value)} placeholder="CÓDIGO1&#10;CÓDIGO2..." className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-mono text-sm outline-none focus:border-primary" />
                 <div className="mt-8 flex gap-3">
                     <button onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-xs">Cancelar</button>
-                    <button onClick={handleSave} disabled={isSaving} className="flex-2 py-4 bg-green-600 text-white font-black rounded-2xl uppercase text-xs shadow-lg disabled:opacity-50">
-                        SALVAR ESTOQUE
-                    </button>
+                    <button onClick={handleSave} disabled={isSaving} className="flex-2 py-4 bg-green-600 text-white font-black rounded-2xl uppercase text-xs shadow-lg disabled:opacity-50">SALVAR ESTOQUE</button>
                 </div>
             </div>
         </div>
@@ -284,23 +223,19 @@ const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: 
 const AdminClubVip: React.FC = () => {
     const navigate = useNavigate();
     const { adminData, loading: authLoading } = useAdminAuth();
-    
     const [activeTab, setActiveTab] = useState<'members' | 'events' | 'recovery'>('members');
     const [memberships, setMemberships] = useState<VipMembership[]>([]);
     const [vipEvents, setVipEvents] = useState<VipEvent[]>([]);
     const [eventStats, setEventStats] = useState<Record<string, { total: number, available: number }>>({});
-    
     const [isLoading, setIsLoading] = useState(true);
     const [selectedEventId, setSelectedEventId] = useState('all');
     const [searchQuery, setSearchQuery] = useState('');
-    
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
     const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCodesModalOpen, setIsCodesModalOpen] = useState(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [isEditMembershipOpen, setIsEditMembershipOpen] = useState(false);
-    
     const [editingEvent, setEditingEvent] = useState<Partial<VipEvent> | null>(null);
     const [eventForCodes, setEventForCodes] = useState<VipEvent | null>(null);
     const [membershipToTransfer, setMembershipToTransfer] = useState<VipMembership | null>(null);
@@ -312,45 +247,25 @@ const AdminClubVip: React.FC = () => {
         if (!adminData) return;
         setIsLoading(true);
         try {
-            const [eventsData, membersData] = await Promise.all([
-                getAllVipEvents(),
-                getAllVipMemberships(selectedEventId)
-            ]);
-            
+            const [eventsData, membersData] = await Promise.all([getAllVipEvents(), getAllVipMemberships(selectedEventId)]);
             setVipEvents(eventsData);
             setMemberships(membersData);
-
             const stats: Record<string, { total: number, available: number }> = {};
             for (const ev of eventsData) {
-                try {
-                    const available = await getVipCodeStats(ev.id);
-                    const totalSnap = await firestore.collection('vipEvents').doc(ev.id).collection('availableCodes').get();
-                    stats[ev.id] = { total: totalSnap.size, available };
-                } catch (e) {
-                    stats[ev.id] = { total: 0, available: 0 };
-                }
+                const available = await getVipCodeStats(ev.id);
+                const totalSnap = await firestore.collection('vipEvents').doc(ev.id).collection('availableCodes').get();
+                stats[ev.id] = { total: totalSnap.size, available };
             }
             setEventStats(stats);
-
-        } catch (e) {
-            console.error("Erro ao carregar dados VIP:", e);
-        } finally {
-            setIsLoading(false);
-        }
+        } catch (e) { console.error(e); } finally { setIsLoading(false); }
     }, [selectedEventId, adminData]);
 
-    useEffect(() => {
-        if (!authLoading) fetchData();
-    }, [authLoading, fetchData]);
+    useEffect(() => { if (!authLoading) fetchData(); }, [authLoading, fetchData]);
 
     const filteredMembers = useMemo(() => {
         const query = searchQuery.toLowerCase().trim();
         return memberships.filter(m => {
-            const matchesSearch = 
-                (m.promoterName || '').toLowerCase().includes(query) || 
-                (m.promoterEmail || '').toLowerCase().includes(query) ||
-                (m.promoterWhatsapp || '').includes(query);
-            
+            const matchesSearch = (m.promoterName || '').toLowerCase().includes(query) || (m.promoterEmail || '').toLowerCase().includes(query) || (m.promoterWhatsapp || '').includes(query);
             const matchesEvent = selectedEventId === 'all' || m.vipEventId === selectedEventId;
             return matchesSearch && matchesEvent;
         });
@@ -359,51 +274,30 @@ const AdminClubVip: React.FC = () => {
     const handleSaveEvent = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingEvent?.name || !editingEvent?.price || !editingEvent?.eventDate) return;
-        
         try {
-            const eventDate = editingEvent.eventDate instanceof firebase.firestore.Timestamp 
-                ? editingEvent.eventDate 
-                : firebase.firestore.Timestamp.fromDate(new Date((editingEvent.eventDate as any) + "T00:00:00"));
-
+            const eventDate = editingEvent.eventDate instanceof firebase.firestore.Timestamp ? editingEvent.eventDate : firebase.firestore.Timestamp.fromDate(new Date((editingEvent.eventDate as any) + "T00:00:00"));
             const dataToSave: Partial<VipEvent> = {
-                name: editingEvent.name,
-                price: Number(editingEvent.price),
-                eventDate: eventDate,
-                isActive: editingEvent.isActive ?? true,
-                saleStatus: editingEvent.saleStatus || 'available',
-                benefits: editingEvent.benefits || [],
-                description: editingEvent.description || '',
-                pixKey: editingEvent.pixKey || '',
-                externalSlug: editingEvent.externalSlug || editingEvent.name.toLowerCase().replace(/\s+/g, '-')
+                name: editingEvent.name, price: Number(editingEvent.price), eventDate,
+                isActive: editingEvent.isActive ?? true, saleStatus: editingEvent.saleStatus || 'available',
+                benefits: editingEvent.benefits || [], description: editingEvent.description || '',
+                pixKey: editingEvent.pixKey || '', externalSlug: editingEvent.externalSlug || editingEvent.name.toLowerCase().replace(/\s+/g, '-')
             };
-
-            if (editingEvent.id) {
-                await updateVipEvent(editingEvent.id, dataToSave);
-            } else {
-                await createVipEvent(dataToSave as any);
-            }
+            if (editingEvent.id) await updateVipEvent(editingEvent.id, dataToSave);
+            else await createVipEvent(dataToSave as any);
             setIsModalOpen(false);
             fetchData();
-        } catch (e: any) {
-            alert("Erro ao salvar evento: " + e.message);
-        }
+        } catch (e: any) { alert(e.message); }
     };
 
     const handleManualActivateOrSwap = async (membership: VipMembership, forceNew: boolean = false) => {
-        if(!window.confirm(forceNew ? "Deseja trocar o código atual por um novo?" : "Deseja ativar esta adesão agora?")) return;
-
+        if(!window.confirm(forceNew ? "Trocar código atual por um novo?" : "Ativar esta adesão agora?")) return;
         setIsBulkProcessing(true);
         setIsProcessingId(membership.id);
         try {
             const activateVip = httpsCallable(functions, 'activateVipMembership');
             await activateVip({ membershipId: membership.id, forceNew });
             fetchData();
-        } catch (e: any) { 
-            alert("Erro ao processar: " + (e.message || "Estoque possivelmente vazio.")); 
-        } finally { 
-            setIsBulkProcessing(false); 
-            setIsProcessingId(null);
-        }
+        } catch (e: any) { alert(e.message); } finally { setIsBulkProcessing(false); setIsProcessingId(null); }
     };
 
     const handleRefundAction = async (membership: VipMembership) => {
@@ -412,46 +306,56 @@ const AdminClubVip: React.FC = () => {
         try {
             await refundVipMembership(membership.id);
             fetchData();
-        } catch (e: any) { alert("Erro ao estornar: " + e.message); } finally { setIsProcessingId(null); }
+        } catch (e: any) { alert(e.message); } finally { setIsProcessingId(null); }
     };
 
     const handleDownloadStock = async (event: VipEvent) => {
         try {
-            const [codes, eventMemberships] = await Promise.all([
-                getVipEventCodes(event.id),
-                getAllVipMemberships(event.id)
-            ]);
-
-            if (codes.length === 0) return alert("Estoque vazio.");
+            // Buscamos todas as adesões do evento (incluindo as estornadas)
+            const membershipsSnap = await firestore.collection('vipMemberships').where('vipEventId', '==', event.id).get();
+            const eventMemberships = membershipsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipMembership));
             
-            // FIX: Explicitly type the membMap to Map<string, VipMembership> to resolve unknown type errors when accessing membership properties.
-            const membMap = new Map<string, VipMembership>(eventMemberships.map(m => [m.id, m]));
+            // Buscamos o estoque de códigos atual
+            const codes = await getVipEventCodes(event.id);
+            if (eventMemberships.length === 0 && codes.length === 0) return alert("Não há dados para exportar.");
+            
+            // Mapeamos códigos usados para evitar duplicidade se decidirmos listar códigos virgens depois
+            const usedCodeSet = new Set(eventMemberships.map(m => m.benefitCode).filter(Boolean));
 
-            const exportData = codes.map((c: any) => {
-                const membership = c.membershipId ? membMap.get(c.membershipId) : null;
-                
-                let finalStatus = 'DISPONÍVEL';
-                if (c.used) {
-                    if (!membership) {
-                        finalStatus = 'USADO (SEM VÍNCULO)';
-                    } else if (membership.status === 'refunded') {
-                        finalStatus = 'ESTORNADO (INVÁLIDO)';
-                    } else if (membership.vipEventId !== event.id) {
-                        finalStatus = 'TRANSFERIDO (SAÍDA)';
-                    } else {
-                        finalStatus = 'CONFIRMADO (PAGO)';
-                    }
+            // Geramos as linhas partindo das adesões (Captura os 12 estornos conforme métricas)
+            const exportData = eventMemberships.map(m => {
+                let statusPortaria = 'BLOQUEADO ❌';
+                let statusFinanceiro = 'PENDENTE';
+
+                if (m.status === 'confirmed') {
+                    statusPortaria = 'VÁLIDO ✅';
+                    statusFinanceiro = 'PAGO';
+                } else if (m.status === 'refunded') {
+                    statusFinanceiro = 'ESTORNADO';
                 }
 
                 return {
-                    'CÓDIGO': c.code,
-                    'STATUS FINANCEIRO': finalStatus,
-                    'VALIDADE PORTARIA': (finalStatus === 'CONFIRMADO (PAGO)') ? 'VÁLIDO ✅' : 'BLOQUEADO ❌',
-                    'TITULAR': membership?.promoterName || c.usedBy || '-',
-                    'E-MAIL': membership?.promoterEmail || '-',
-                    'WHATSAPP': membership?.promoterWhatsapp || '-',
-                    'DATA OPERAÇÃO': c.usedAt ? (c.usedAt.toDate ? c.usedAt.toDate().toLocaleString('pt-BR') : new Date(c.usedAt).toLocaleString('pt-BR')) : '-'
+                    'CÓDIGO': m.benefitCode || '---',
+                    'STATUS PORTARIA': statusPortaria,
+                    'FINANCEIRO': statusFinanceiro,
+                    'TITULAR': m.promoterName || '-',
+                    'E-MAIL': m.promoterEmail || '-',
+                    'WHATSAPP': m.promoterWhatsapp || '-',
+                    'DATA COMPRA': m.submittedAt ? (m.submittedAt.toDate ? m.submittedAt.toDate().toLocaleString('pt-BR') : new Date(m.submittedAt as any).toLocaleString('pt-BR')) : '-'
                 };
+            });
+
+            // Adicionamos os códigos do estoque que ainda NÃO foram atribuídos (Disponíveis)
+            codes.filter(c => !c.used).forEach(c => {
+                exportData.push({
+                    'CÓDIGO': c.code,
+                    'STATUS PORTARIA': 'DISPONÍVEL ⚪',
+                    'FINANCEIRO': 'ESTOQUE',
+                    'TITULAR': '(Disponível)',
+                    'E-MAIL': '-',
+                    'WHATSAPP': '-',
+                    'DATA COMPRA': '-'
+                });
             });
 
             // @ts-ignore
@@ -459,12 +363,10 @@ const AdminClubVip: React.FC = () => {
             // @ts-ignore
             const wb = window.XLSX.utils.book_new();
             // @ts-ignore
-            window.XLSX.utils.book_append_sheet(wb, ws, "Estoque VIP");
+            window.XLSX.utils.book_append_sheet(wb, ws, "Relatório Geral");
             // @ts-ignore
-            window.XLSX.writeFile(wb, `estoque_vip_${event.name.replace(/\s+/g, '_')}.xlsx`);
-        } catch (e: any) {
-            alert("Erro ao baixar estoque: " + e.message);
-        }
+            window.XLSX.writeFile(wb, `vendas_vip_${event.name.replace(/\s+/g, '_')}.xlsx`);
+        } catch (e: any) { alert("Erro ao exportar: " + e.message); }
     };
 
     const formatDateSafe = (ts: any) => {
@@ -498,7 +400,7 @@ const AdminClubVip: React.FC = () => {
             <div className="flex bg-gray-800/50 p-1.5 rounded-2xl mb-8 border border-white/5 w-fit ml-4 md:ml-0">
                 <button onClick={() => setActiveTab('members')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'members' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Membros</button>
                 <button onClick={() => setActiveTab('events')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all ${activeTab === 'events' ? 'bg-primary text-white shadow-lg' : 'text-gray-400'}`}>Ofertas</button>
-                <button onClick={() => navigate('/admin/recovery')} className="px-6 py-3 text-xs font-black uppercase rounded-xl transition-all text-gray-400 hover:text-white">Recuperação</button>
+                <button onClick={() => navigate('/admin/recovery')} className={`px-6 py-3 text-xs font-black uppercase rounded-xl transition-all text-gray-400`}>Recuperação</button>
             </div>
 
             <div className="bg-secondary/60 backdrop-blur-xl rounded-[2.5rem] p-6 border border-white/5 shadow-2xl space-y-6">
@@ -563,13 +465,7 @@ const AdminClubVip: React.FC = () => {
                                                         <PencilIcon className="w-4 h-4" />
                                                     </button>
                                                     {m.status === 'confirmed' && isVipManager && (
-                                                        <button 
-                                                            onClick={() => { setMembershipToTransfer(m); setIsTransferModalOpen(true); }}
-                                                            className="p-2 bg-purple-900/30 text-purple-400 rounded-xl border border-purple-800/50 hover:bg-purple-600 hover:text-white transition-all"
-                                                            title="Transferir para outro Evento"
-                                                        >
-                                                            <RefreshIcon className="w-4 h-4 rotate-90" />
-                                                        </button>
+                                                        <button onClick={() => { setMembershipToTransfer(m); setIsTransferModalOpen(true); }} className="p-2 bg-purple-900/30 text-purple-400 rounded-xl border border-purple-800/50 hover:bg-purple-600 hover:text-white transition-all" title="Transferir para outro Evento"><RefreshIcon className="w-4 h-4 rotate-90" /></button>
                                                     )}
                                                     {m.status !== 'refunded' && isVipManager && (
                                                         <button onClick={() => handleManualActivateOrSwap(m, true)} disabled={isBulkProcessing && isProcessingId === m.id} className="p-2 bg-blue-900/30 text-blue-400 rounded-xl border border-blue-800/50 hover:bg-blue-600 hover:text-white transition-all" title="Trocar Código">
@@ -599,38 +495,24 @@ const AdminClubVip: React.FC = () => {
                                     <div className="min-w-0 flex-grow pr-4">
                                         <h3 className="text-xl font-black text-white uppercase group-hover:text-primary transition-colors truncate">{ev.name}</h3>
                                         <p className="text-primary font-black">R$ {ev.price.toFixed(2)}</p>
-                                        <p className="text-[10px] text-gray-500 font-bold uppercase mt-1 flex items-center gap-1.5">
-                                            <CalendarIcon className="w-3 h-3"/> {ev.eventDate ? (ev.eventDate as any).toDate().toLocaleDateString('pt-BR') : 'Sem data'}
-                                        </p>
                                     </div>
                                     <div className={`w-3 h-3 rounded-full flex-shrink-0 ${ev.isActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
                                 </div>
-                                
                                 <div className="p-3 bg-white/5 rounded-2xl text-center mb-6 border border-white/5">
                                     <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Códigos em Estoque</p>
-                                    <p className="text-xl font-black text-white">
-                                        {eventStats[ev.id]?.available ?? '...'}<span className="text-[10px] text-gray-600 ml-1">/ {eventStats[ev.id]?.total ?? '...'}</span>
-                                    </p>
+                                    <p className="text-xl font-black text-white">{eventStats[ev.id]?.available ?? '...'}<span className="text-[10px] text-gray-600 ml-1">/ {eventStats[ev.id]?.total ?? '...'}</span></p>
                                 </div>
-
                                 <div className="mt-auto flex flex-wrap gap-2">
-                                    <button onClick={() => { setEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-grow py-3 bg-indigo-900/20 text-indigo-400 border border-indigo-800/30 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
-                                        <CogIcon className="w-4 h-4" /> ESTOQUE
-                                    </button>
-                                    <button onClick={() => handleDownloadStock(ev)} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all" title="Baixar Estoque"><DownloadIcon className="w-4 h-4" /></button>
+                                    <button onClick={() => { setEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-grow py-3 bg-indigo-900/20 text-indigo-400 border border-indigo-800/30 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all"><CogIcon className="w-4 h-4" /> ESTOQUE</button>
+                                    <button onClick={() => handleDownloadStock(ev)} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all" title="Baixar Relatório Completo"><DownloadIcon className="w-4 h-4" /></button>
                                     <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-primary transition-all"><PencilIcon className="w-4 h-4" /></button>
-                                    {isVipManager && (
-                                        <button onClick={() => { if(confirm("Excluir evento VIP permanentemente?")) deleteVipEvent(ev.id).then(fetchData); }} className="p-3 bg-red-900/30 text-red-400 rounded-xl border border-red-800/30 hover:bg-red-600 transition-all"><TrashIcon className="w-4 h-4"/></button>
-                                    )}
                                 </div>
                             </div>
                         ))}
-                        {vipEvents.length === 0 && !isLoading && <p className="col-span-full text-center text-gray-500 font-bold uppercase text-xs py-20">Nenhuma oferta VIP cadastrada.</p>}
                     </div>
                 )}
             </div>
 
-            {/* Modal de Criação/Edição de Evento */}
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-6" onClick={() => setIsModalOpen(false)}>
                     <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -654,34 +536,9 @@ const AdminClubVip: React.FC = () => {
                     </div>
                 </div>
             )}
-
-            {isCodesModalOpen && eventForCodes && (
-                <ManageCodesModal 
-                    isOpen={isCodesModalOpen} 
-                    onClose={() => { setIsCodesModalOpen(false); setEventForCodes(null); }} 
-                    event={eventForCodes} 
-                    onSaved={fetchData} 
-                />
-            )}
-
-            {isEditMembershipOpen && membershipToEdit && (
-                <EditMembershipModal 
-                    isOpen={isEditMembershipOpen} 
-                    onClose={() => { setIsEditMembershipOpen(false); setMembershipToEdit(null); }} 
-                    membership={membershipToEdit} 
-                    onSaved={fetchData} 
-                />
-            )}
-            
-            {isTransferModalOpen && membershipToTransfer && (
-                <TransferModal 
-                    isOpen={isTransferModalOpen} 
-                    onClose={() => { setIsTransferModalOpen(false); setMembershipToTransfer(null); }} 
-                    membership={membershipToTransfer} 
-                    events={vipEvents} 
-                    onTransferred={fetchData} 
-                />
-            )}
+            {isCodesModalOpen && eventForCodes && <ManageCodesModal isOpen={isCodesModalOpen} onClose={() => setIsCodesModalOpen(false)} event={eventForCodes} onSaved={fetchData} />}
+            {isEditMembershipOpen && membershipToEdit && <EditMembershipModal isOpen={isEditMembershipOpen} onClose={() => setIsEditMembershipOpen(false)} membership={membershipToEdit} onSaved={fetchData} />}
+            {isTransferModalOpen && membershipToTransfer && <TransferModal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} membership={membershipToTransfer} events={vipEvents} onTransferred={fetchData} />}
         </div>
     );
 };
