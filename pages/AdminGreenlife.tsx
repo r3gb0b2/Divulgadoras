@@ -11,9 +11,11 @@ import {
 import { VipMembership, VipEvent } from '../types';
 import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+import firebase from 'firebase/compat/app';
 import { 
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, TicketIcon, RefreshIcon, 
-    PlusIcon, TrashIcon, PencilIcon, DownloadIcon, LinkIcon, CogIcon, UndoIcon, ChartBarIcon
+    PlusIcon, TrashIcon, PencilIcon, DownloadIcon, LinkIcon, CogIcon, UndoIcon, ChartBarIcon,
+    CalendarIcon
 } from '../components/Icons';
 
 // Modal de Gerenciamento de Códigos (Estoque)
@@ -174,16 +176,22 @@ const AdminGreenlife: React.FC = () => {
 
     const handleSaveEvent = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!editingEvent?.name || !editingEvent?.price) return;
+        if (!editingEvent?.name || !editingEvent?.price || !editingEvent?.eventDate) return;
         try {
+            const dateStr = (editingEvent.eventDate as any);
+            const firestoreDate = typeof dateStr === 'string' 
+                ? firebase.firestore.Timestamp.fromDate(new Date(dateStr + "T00:00:00"))
+                : editingEvent.eventDate;
+
             const dataToSave = {
                 name: editingEvent.name,
                 price: Number(editingEvent.price),
+                eventDate: firestoreDate,
                 eventTime: editingEvent.eventTime || '',
                 eventLocation: editingEvent.eventLocation || '',
                 attractions: editingEvent.attractions || '',
                 isActive: editingEvent.isActive ?? true,
-                isSoldOut: editingEvent.isSoldOut ?? false, // Garantindo o campo manual
+                isSoldOut: editingEvent.isSoldOut ?? false,
                 benefits: editingEvent.benefits || []
             };
 
@@ -307,82 +315,15 @@ const AdminGreenlife: React.FC = () => {
                         {events.map(ev => (
                             <div key={ev.id} className="bg-dark/40 p-6 rounded-3xl border border-white/5 group hover:border-green-500 transition-all flex flex-col">
                                 <div className="flex justify-between mb-4">
-                                    <div><h3 className="text-xl font-black text-white uppercase">{ev.name}</h3><p className="text-green-500 font-black">R$ {ev.price.toFixed(2)}</p></div>
+                                    <div>
+                                        <h3 className="text-xl font-black text-white uppercase">{ev.name}</h3>
+                                        <p className="text-green-500 font-black">R$ {ev.price.toFixed(2)}</p>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase mt-1 flex items-center gap-1.5">
+                                            <CalendarIcon className="w-3 h-3"/> {ev.eventDate ? (ev.eventDate as any).toDate().toLocaleDateString('pt-BR') : 'Sem data'}
+                                        </p>
+                                    </div>
                                     <div className={`w-3 h-3 rounded-full ${ev.isActive ? 'bg-green-500' : 'bg-red-500'}`}></div>
                                 </div>
                                 
                                 <div className="p-3 bg-white/5 rounded-2xl text-center mb-6 border border-white/5">
-                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Códigos Disponíveis</p>
-                                    <p className="text-xl font-black text-green-500">{eventStats[ev.id] || 0}</p>
-                                </div>
-
-                                <div className="mt-auto flex flex-wrap gap-2">
-                                    <button onClick={() => { setSelectedEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-grow py-3 bg-indigo-900/20 text-indigo-400 border border-indigo-800/30 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
-                                        <CogIcon className="w-4 h-4" /> ESTOQUE
-                                    </button>
-                                    <button onClick={() => handleDownloadStock(ev)} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all" title="Baixar Estoque"><DownloadIcon className="w-4 h-4" /></button>
-                                    <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
-                                    <button onClick={() => { if(confirm("Excluir?")) deleteGreenlifeEvent(ev.id).then(fetchData); }} className="p-3 bg-red-900/30 text-red-400 rounded-xl"><TrashIcon className="w-4 h-4"/></button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-6" onClick={() => setIsModalOpen(false)}>
-                    <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10" onClick={e => e.stopPropagation()}>
-                        <h2 className="text-2xl font-black text-white uppercase mb-6 tracking-tighter">Oferta Greenlife</h2>
-                        <form onSubmit={handleSaveEvent} className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Nome da Oferta</label>
-                                    <input type="text" placeholder="Nome" value={editingEvent?.name || ''} onChange={e => setEditingEvent({...editingEvent!, name: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Preço (R$)</label>
-                                    <input type="number" step="0.01" placeholder="Preço" value={editingEvent?.price || ''} onChange={e => setEditingEvent({...editingEvent!, price: Number(e.target.value)})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Horário</label>
-                                    <input type="text" placeholder="Ex: 08h às 22h" value={editingEvent?.eventTime || ''} onChange={e => setEditingEvent({...editingEvent!, eventTime: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Unidade / Local</label>
-                                    <input type="text" placeholder="Ex: Greenlife Aldeota" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Atrações do Dia</label>
-                                <input type="text" placeholder="Ex: Cantor X, DJ Y..." value={editingEvent?.attractions || ''} onChange={e => setEditingEvent({...editingEvent!, attractions: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                            </div>
-                            <div className="flex flex-wrap gap-6 pt-2">
-                                <label className="flex items-center gap-2 text-white text-[10px] font-black uppercase cursor-pointer">
-                                    <input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-green-500 focus:ring-0" /> Ativo
-                                </label>
-                                <label className="flex items-center gap-2 text-orange-400 text-[10px] font-black uppercase cursor-pointer">
-                                    <input type="checkbox" checked={editingEvent?.isSoldOut} onChange={e => setEditingEvent({...editingEvent!, isSoldOut: e.target.checked})} className="w-4 h-4 rounded bg-dark text-orange-500 focus:ring-0" /> Esgotado (Manual)
-                                </label>
-                            </div>
-                            <button type="submit" className="w-full py-5 bg-green-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest mt-4">Salvar Alterações</button>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {isCodesModalOpen && selectedEventForCodes && (
-                <ManageCodesModal 
-                    isOpen={isCodesModalOpen} 
-                    onClose={() => setIsCodesModalOpen(false)} 
-                    event={selectedEventForCodes} 
-                    onSaved={fetchData} 
-                />
-            )}
-        </div>
-    );
-};
-
-export default AdminGreenlife;
+                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking

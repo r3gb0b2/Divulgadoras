@@ -17,22 +17,28 @@ const getMs = (ts: any): number => {
 
 export const getActiveVipEvents = async (): Promise<VipEvent[]> => {
     try {
-        const snap = await firestore.collection(COLLECTION_EVENTS).where('isActive', '==', true).get();
+        const snap = await firestore.collection(COLLECTION_EVENTS)
+            .where('isActive', '==', true)
+            .orderBy('eventDate', 'asc')
+            .get();
         return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
     } catch (e) {
         console.error("Erro ao buscar eventos VIP ativos:", e);
-        return [];
+        // Fallback sem ordenação caso o índice ainda não exista
+        const snapFallback = await firestore.collection(COLLECTION_EVENTS).where('isActive', '==', true).get();
+        return snapFallback.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
     }
 };
 
 export const getAllVipEvents = async (): Promise<VipEvent[]> => {
     try {
-        const snap = await firestore.collection(COLLECTION_EVENTS).get();
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent))
-            .sort((a, b) => getMs(b.createdAt) - getMs(a.createdAt));
+        const snap = await firestore.collection(COLLECTION_EVENTS).orderBy('eventDate', 'asc').get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
     } catch (e) {
         console.error("Erro ao buscar todos os eventos VIP:", e);
-        return [];
+        const snapFallback = await firestore.collection(COLLECTION_EVENTS).get();
+        return snapFallback.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent))
+            .sort((a, b) => getMs(a.eventDate) - getMs(b.eventDate));
     }
 };
 

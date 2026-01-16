@@ -24,9 +24,10 @@ export interface VipEvent {
   pixKey: string;
   externalSlug: string; 
   pixelId?: string;
+  eventDate?: Timestamp | FieldValue; // Data real do evento para ordenação
   eventTime?: string;
   eventLocation?: string;
-  attractions?: string; // Novo campo para atrações do dia
+  attractions?: string;
   createdAt: Timestamp | FieldValue;
 }
 

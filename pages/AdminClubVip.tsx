@@ -18,12 +18,13 @@ import { updatePromoter } from '../services/promoterService';
 import { VipMembership, VipEvent } from '../types';
 import { firestore, functions } from '../firebase/config';
 import { httpsCallable } from 'firebase/functions';
+import firebase from 'firebase/compat/app';
 import { 
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, EyeIcon,
     TicketIcon, RefreshIcon, PlusIcon, TrashIcon, PencilIcon, 
     WhatsAppIcon, DownloadIcon, LinkIcon, ExternalLinkIcon,
     CogIcon, UndoIcon, ChartBarIcon, SparklesIcon, EnvelopeIcon,
-    UserIcon, MapPinIcon, ClockIcon
+    UserIcon, MapPinIcon, ClockIcon, CalendarIcon
 } from '../components/Icons';
 
 // Modal para Edição de Dados Cadastrais
@@ -317,11 +318,9 @@ const AdminClubVip: React.FC = () => {
                 getAllVipMemberships(selectedEventId)
             ]);
             
-            // Exibe os dados principais imediatamente para não travar a UI
             setVipEvents(eventsData);
             setMemberships(membersData);
 
-            // Busca estatísticas de estoque de forma assíncrona e individual
             const stats: Record<string, { total: number, available: number }> = {};
             for (const ev of eventsData) {
                 try {
@@ -360,16 +359,22 @@ const AdminClubVip: React.FC = () => {
 
     const handleSaveEvent = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!editingEvent?.name || !editingEvent?.price) return;
+        if (!editingEvent?.name || !editingEvent?.price || !editingEvent?.eventDate) return;
         
         try {
+            const dateStr = (editingEvent.eventDate as any);
+            const firestoreDate = typeof dateStr === 'string' 
+                ? firebase.firestore.Timestamp.fromDate(new Date(dateStr + "T00:00:00"))
+                : editingEvent.eventDate;
+
             const data = {
                 name: editingEvent.name,
                 price: Number(editingEvent.price),
                 description: editingEvent.description || '',
                 benefits: editingEvent.benefits || [],
                 isActive: editingEvent.isActive ?? true,
-                isSoldOut: editingEvent.isSoldOut ?? false, // Garantindo o campo manual
+                isSoldOut: editingEvent.isSoldOut ?? false,
+                eventDate: firestoreDate,
                 eventTime: editingEvent.eventTime || '',
                 eventLocation: editingEvent.eventLocation || '',
                 attractions: editingEvent.attractions || '',
@@ -539,6 +544,9 @@ const AdminClubVip: React.FC = () => {
                                     <div className="min-w-0 flex-grow pr-4">
                                         <h3 className="text-xl font-black text-white uppercase group-hover:text-primary transition-colors truncate">{ev.name}</h3>
                                         <p className="text-primary font-black">R$ {ev.price.toFixed(2)}</p>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase mt-1 flex items-center gap-1.5">
+                                            <CalendarIcon className="w-3 h-3"/> {ev.eventDate ? (ev.eventDate as any).toDate().toLocaleDateString('pt-BR') : 'Sem data'}
+                                        </p>
                                     </div>
                                     <div className={`w-3 h-3 rounded-full flex-shrink-0 ${ev.isActive ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-red-500'}`}></div>
                                 </div>
@@ -588,13 +596,18 @@ const AdminClubVip: React.FC = () => {
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-1"><CalendarIcon className="w-3 h-3"/> Data de Realização</label>
+                                    <input type="date" value={editingEvent?.eventDate ? (typeof editingEvent.eventDate === 'string' ? editingEvent.eventDate : (editingEvent.eventDate as any).toDate().toISOString().split('T')[0]) : ''} onChange={e => setEditingEvent({...editingEvent!, eventDate: e.target.value as any})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" required />
+                                </div>
+                                <div className="space-y-1">
                                     <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-1"><ClockIcon className="w-3 h-3"/> Horário de Início</label>
                                     <input type="text" placeholder="Ex: 22h00" value={editingEvent?.eventTime || ''} onChange={e => setEditingEvent({...editingEvent!, eventTime: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-1"><MapPinIcon className="w-3 h-3"/> Local / Unidade</label>
-                                    <input type="text" placeholder="Nome do Local" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                                </div>
+                            </div>
+
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-1"><MapPinIcon className="w-3 h-3"/> Local / Unidade</label>
+                                <input type="text" placeholder="Nome do Local" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
                             </div>
 
                             <div className="space-y-1">

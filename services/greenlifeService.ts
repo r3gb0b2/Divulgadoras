@@ -16,14 +16,27 @@ const getMs = (ts: any): number => {
 };
 
 export const getActiveGreenlifeEvents = async (): Promise<VipEvent[]> => {
-    const snap = await firestore.collection(COLLECTION_EVENTS).where('isActive', '==', true).get();
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+    try {
+        const snap = await firestore.collection(COLLECTION_EVENTS)
+            .where('isActive', '==', true)
+            .orderBy('eventDate', 'asc')
+            .get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+    } catch (e) {
+        const snapFallback = await firestore.collection(COLLECTION_EVENTS).where('isActive', '==', true).get();
+        return snapFallback.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+    }
 };
 
 export const getAllGreenlifeEvents = async (): Promise<VipEvent[]> => {
-    const snap = await firestore.collection(COLLECTION_EVENTS).get();
-    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent))
-        .sort((a, b) => getMs(b.createdAt) - getMs(a.createdAt));
+    try {
+        const snap = await firestore.collection(COLLECTION_EVENTS).orderBy('eventDate', 'asc').get();
+        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+    } catch (e) {
+        const snapFallback = await firestore.collection(COLLECTION_EVENTS).get();
+        return snapFallback.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent))
+            .sort((a, b) => getMs(a.eventDate) - getMs(b.eventDate));
+    }
 };
 
 export const getGreenlifeMembershipsByEmail = async (email: string): Promise<VipMembership[]> => {
