@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../contexts/AdminAuthContext';
@@ -108,7 +107,7 @@ const AdminGreenlife: React.FC = () => {
     };
 
     const handleManualActivateOrSwap = async (m: VipMembership, forceNew: boolean = false) => {
-        if(!window.confirm(forceNew ? "Trocar código atual por um novo do estoque?" : "Ativar esta adesão pegando um código do estoque?")) return;
+        if(!window.confirm(forceNew ? "Trocar código atual por um novo?" : "Ativar esta adesão pegando um código do estoque?")) return;
         setIsProcessingId(m.id);
         try {
             const activate = httpsCallable(functions, 'activateGreenlifeMembership');
@@ -128,14 +127,42 @@ const AdminGreenlife: React.FC = () => {
 
     const handleDownloadStock = async (event: VipEvent) => {
         try {
-            const codes = await getGreenlifeEventCodes(event.id);
+            const [codes, eventMemberships] = await Promise.all([
+                getGreenlifeEventCodes(event.id),
+                getAllGreenlifeMemberships(event.id)
+            ]);
+
             if (codes.length === 0) return alert("Estoque vazio.");
-            const jsonData = codes.map((c: any) => ({
-                'CÓDIGO': c.code,
-                'STATUS': c.used ? 'USADO' : 'DISPONÍVEL',
-                'ALUNO': c.usedBy || '-',
-                'DATA USO': c.usedAt ? (c.usedAt.toDate ? c.usedAt.toDate().toLocaleString('pt-BR') : new Date(c.usedAt).toLocaleString('pt-BR')) : '-'
-            }));
+
+            // FIX: Explicitly type the membMap to Map<string, VipMembership> to resolve unknown type errors when accessing membership properties.
+            const membMap = new Map<string, VipMembership>(eventMemberships.map(m => [m.id, m]));
+
+            const jsonData = codes.map((c: any) => {
+                const membership = c.membershipId ? membMap.get(c.membershipId) : null;
+                
+                let finalStatus = 'DISPONÍVEL';
+                if (c.used) {
+                    if (!membership) {
+                        finalStatus = 'USADO (SEM VÍNCULO)';
+                    } else if (membership.status === 'refunded') {
+                        finalStatus = 'ESTORNADO (INVÁLIDO)';
+                    } else if (membership.vipEventId !== event.id) {
+                        finalStatus = 'TRANSFERIDO (SAÍDA)';
+                    } else {
+                        finalStatus = 'CONFIRMADO (PAGO)';
+                    }
+                }
+
+                return {
+                    'CÓDIGO': c.code,
+                    'STATUS FINANCEIRO': finalStatus,
+                    'VALIDADE PORTARIA': (finalStatus === 'CONFIRMADO (PAGO)') ? 'VÁLIDO ✅' : 'BLOQUEADO ❌',
+                    'ALUNO': membership?.promoterName || c.usedBy || '-',
+                    'E-MAIL': membership?.promoterEmail || '-',
+                    'DATA OPERAÇÃO': c.usedAt ? (c.usedAt.toDate ? c.usedAt.toDate().toLocaleString('pt-BR') : new Date(c.usedAt).toLocaleString('pt-BR')) : '-'
+                };
+            });
+
             // @ts-ignore
             const ws = window.XLSX.utils.json_to_sheet(jsonData);
             // @ts-ignore
@@ -161,6 +188,7 @@ const AdminGreenlife: React.FC = () => {
             };
             if (editingEvent.id) await updateGreenlifeEvent(editingEvent.id, dataToSave);
             else await createGreenlifeEvent(dataToSave as any);
+            
             setIsModalOpen(false);
             fetchData();
         } catch (e: any) { alert(e.message); }
@@ -269,7 +297,9 @@ const AdminGreenlife: React.FC = () => {
                                     <p className="text-xl font-black text-green-500">{eventStats[ev.id] || 0}</p>
                                 </div>
                                 <div className="mt-auto flex flex-wrap gap-2">
-                                    <button onClick={() => { setSelectedEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-grow py-3 bg-indigo-900/20 text-indigo-400 border border-indigo-800/30 rounded-xl text-[10px] font-black uppercase">ESTOQUE</button>
+                                    <button onClick={() => { setSelectedEventForCodes(ev); setIsCodesModalOpen(true); }} className="flex-grow py-3 bg-indigo-900/20 text-indigo-400 border border-indigo-800/30 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 hover:bg-indigo-600 hover:text-white transition-all">
+                                        <CogIcon className="w-4 h-4" /> ESTOQUE
+                                    </button>
                                     <button onClick={() => handleDownloadStock(ev)} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all" title="Baixar Estoque"><DownloadIcon className="w-4 h-4" /></button>
                                     <button onClick={() => { setEditingEvent(ev); setIsModalOpen(true); }} className="p-3 bg-gray-800 text-white rounded-xl border border-white/5 hover:bg-green-600 transition-all"><PencilIcon className="w-4 h-4" /></button>
                                 </div>
@@ -281,7 +311,7 @@ const AdminGreenlife: React.FC = () => {
 
             {isModalOpen && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[110] flex items-center justify-center p-6" onClick={() => setIsModalOpen(false)}>
-                    <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10" onClick={e => e.stopPropagation()}>
+                    <div className="bg-secondary w-full max-w-2xl p-8 rounded-[2.5rem] border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
                         <h2 className="text-2xl font-black text-white uppercase mb-6 tracking-tighter">Oferta Greenlife</h2>
                         <form onSubmit={handleSaveEvent} className="space-y-4">
                             <input type="text" placeholder="Nome" value={editingEvent?.name || ''} onChange={e => setEditingEvent({...editingEvent!, name: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" required />
@@ -292,7 +322,7 @@ const AdminGreenlife: React.FC = () => {
                                 <option value="low_stock">🟡 ESGOTANDO</option>
                                 <option value="sold_out">🔴 ESGOTADO</option>
                             </select>
-                            <button type="submit" className="w-full py-5 bg-green-600 text-white font-black rounded-2xl uppercase">SALVAR</button>
+                            <button type="submit" className="w-full py-5 bg-green-600 text-white font-black rounded-2xl uppercase shadow-lg">SALVAR</button>
                         </form>
                     </div>
                 </div>
