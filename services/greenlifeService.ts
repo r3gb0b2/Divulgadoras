@@ -115,11 +115,11 @@ export const updateGreenlifeMembership = async (id: string, data: Partial<VipMem
 };
 
 export const refundGreenlifeMembership = async (id: string) => {
+    // IMPORTANTE: NÃO limpamos o benefitCode aqui para ele aparecer no XLS como BLOQUEADO
     return firestore.collection(COLLECTION_MEMBERSHIPS).doc(id).update({
         status: 'refunded',
-        benefitCode: null,
         isBenefitActive: false,
-        refundedAt: firebase.firestore.Timestamp.now(),
-        updatedAt: firebase.firestore.Timestamp.now()
+        refundedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
 };

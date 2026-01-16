@@ -118,7 +118,7 @@ const AdminGreenlife: React.FC = () => {
     };
 
     const handleRefundAction = async (m: VipMembership) => {
-        if (!confirm(`ESTORNAR ALUNO: Tem certeza? O código será invalidado.`)) return;
+        if (!confirm(`ESTORNAR ALUNO: Tem certeza? O código será INVALIDADO permanentemente no registro.`)) return;
         setIsProcessingId(m.id);
         try {
             await refundGreenlifeMembership(m.id);
@@ -144,6 +144,7 @@ const AdminGreenlife: React.FC = () => {
                     statusPortaria = 'VÁLIDO ✅';
                     statusFinanceiro = 'PAGO';
                 } else if (m.status === 'refunded') {
+                    statusPortaria = 'BLOQUEADO (ESTORNADO) ❌';
                     statusFinanceiro = 'ESTORNADO';
                 }
 
@@ -160,7 +161,7 @@ const AdminGreenlife: React.FC = () => {
                     'FINANCEIRO': statusFinanceiro,
                     'ALUNO': m.promoterName || '-',
                     'E-MAIL': m.promoterEmail || '-',
-                    'DATA OPERAÇÃO': getSafeDate(m.submittedAt)
+                    'DATA OPERAÇÃO': getSafeDate(m.updatedAt || m.submittedAt)
                 };
             });
 
@@ -249,11 +250,11 @@ const AdminGreenlife: React.FC = () => {
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {filteredMembers.map(m => (
-                                        <tr key={m.id} className="hover:bg-white/[0.02] group transition-colors">
+                                        <tr key={m.id} className={`hover:bg-white/[0.02] group transition-colors ${m.status === 'refunded' ? 'opacity-60 grayscale' : ''}`}>
                                             <td className="px-6 py-5">
                                                 <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
                                                 <p className="text-[10px] text-gray-500 font-mono truncate">{m.promoterEmail}</p>
-                                                <p className="text-[11px] text-green-500 font-mono font-black mt-1">{m.benefitCode || '---'}</p>
+                                                <p className={`text-[11px] font-mono font-black mt-1 ${m.status === 'refunded' ? 'text-red-500 line-through' : 'text-green-500'}`}>{m.benefitCode || '---'}</p>
                                             </td>
                                             <td className="px-6 py-5">
                                                 <div className="flex flex-col items-center gap-2">

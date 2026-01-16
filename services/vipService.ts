@@ -17,14 +17,11 @@ const getMs = (ts: any): number => {
 
 export const getActiveVipEvents = async (): Promise<VipEvent[]> => {
     try {
-        // Não usamos orderBy no Firestore aqui para evitar que documentos sem o campo 'eventDate' sejam ocultados
         const snap = await firestore.collection(COLLECTION_EVENTS)
             .where('isActive', '==', true)
             .get();
         
         const events = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
-        
-        // Ordenação em Memória: Garante que nada suma
         return events.sort((a, b) => getMs(a.eventDate) - getMs(b.eventDate));
     } catch (e) {
         console.error("Erro ao buscar eventos VIP ativos:", e);
@@ -123,9 +120,9 @@ export const updateVipMembership = async (id: string, data: Partial<VipMembershi
 };
 
 export const refundVipMembership = async (membershipId: string) => {
+    // IMPORTANTE: NÃO limpamos o benefitCode aqui para ele aparecer no XLS como BLOQUEADO
     return firestore.collection(COLLECTION_MEMBERSHIPS).doc(membershipId).update({
         status: 'refunded',
-        benefitCode: null,
         isBenefitActive: false,
         refundedAt: firebase.firestore.FieldValue.serverTimestamp(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -133,11 +130,32 @@ export const refundVipMembership = async (membershipId: string) => {
 };
 
 export const transferVipMembership = async (membershipId: string, newEvent: VipEvent) => {
-    return firestore.collection(COLLECTION_MEMBERSHIPS).doc(membershipId).update({
-        vipEventId: newEvent.id,
-        vipEventName: newEvent.name,
-        benefitCode: null,
+    const batch = firestore.batch();
+    const oldMembRef = firestore.collection(COLLECTION_MEMBERSHIPS).doc(membershipId);
+    const oldSnap = await oldMembRef.get();
+    const oldData = oldSnap.data() as VipMembership;
+
+    // 1. Invalida o ingresso no evento atual (mantendo o código vinculado para o XLS)
+    batch.update(oldMembRef, {
+        status: 'refunded',
         isBenefitActive: false,
+        observation: `Transferido para: ${newEvent.name}`,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+
+    // 2. Cria um novo documento de adesão no evento de destino (será ativado com novo código)
+    const newMembRef = firestore.collection(COLLECTION_MEMBERSHIPS).doc();
+    batch.set(newMembRef, {
+        ...oldData,
+        id: newMembRef.id,
+        vipEventId: newEvent.id,
+        vipEventName: newEvent.name,
+        status: 'pending', // Fica pendente para o backend disparar a ativação (novo código)
+        benefitCode: null,
+        isBenefitActive: false,
+        submittedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+
+    return batch.commit();
 };

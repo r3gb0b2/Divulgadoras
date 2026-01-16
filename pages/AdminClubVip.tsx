@@ -133,10 +133,7 @@ const TransferModal: React.FC<{ isOpen: boolean, onClose: () => void, membership
         setIsSaving(true);
         try {
             await transferVipMembership(membership.id, newEvent);
-            const activateVip = httpsCallable(functions, 'activateVipMembership');
-            await activateVip({ membershipId: membership.id, forceNew: true });
-            
-            alert(`Sucesso! Adesão transferida para: ${newEvent.name}`);
+            alert(`Sucesso! O ingresso original foi cancelado e um novo acesso foi gerado para: ${newEvent.name}`);
             onTransferred();
             onClose();
         } catch (e: any) {
@@ -151,6 +148,9 @@ const TransferModal: React.FC<{ isOpen: boolean, onClose: () => void, membership
             <div className="bg-secondary w-full max-w-lg p-8 rounded-[2.5rem] border border-white/10 shadow-2xl" onClick={e => e.stopPropagation()}>
                 <h2 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">Transferir Ingresso</h2>
                 <p className="text-[10px] text-gray-500 font-bold uppercase mb-6">Membro: {membership.promoterName}</p>
+                <div className="bg-red-900/20 p-4 rounded-xl border border-red-500/30 mb-6">
+                    <p className="text-[10px] text-red-200 font-bold uppercase leading-tight">Atenção: O código atual ({membership.benefitCode}) será INVALIDADO permanentemente e ela receberá um NOVO código para o evento de destino.</p>
+                </div>
                 <div className="space-y-4">
                     <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Selecione o Novo Evento</label>
                     <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className="w-full bg-dark border border-gray-700 rounded-2xl p-4 text-white font-bold outline-none focus:border-primary">
@@ -162,7 +162,7 @@ const TransferModal: React.FC<{ isOpen: boolean, onClose: () => void, membership
                 </div>
                 <div className="mt-8 flex gap-3">
                     <button onClick={onClose} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-2xl uppercase text-xs">Cancelar</button>
-                    <button onClick={handleTransfer} disabled={isSaving || !selectedId} className="flex-2 py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg shadow-primary/20 disabled:opacity-50">TRANSFERIR</button>
+                    <button onClick={handleTransfer} disabled={isSaving || !selectedId} className="flex-2 py-4 bg-primary text-white font-black rounded-2xl uppercase text-xs shadow-lg shadow-primary/20 disabled:opacity-50">CONFIRMAR TRANSFERÊNCIA</button>
                 </div>
             </div>
         </div>
@@ -301,7 +301,7 @@ const AdminClubVip: React.FC = () => {
     };
 
     const handleRefundAction = async (membership: VipMembership) => {
-        if (!window.confirm(`ESTORNAR ADESÃO: Tem certeza? O código será removido e o ingresso invalidado.`)) return;
+        if (!window.confirm(`ESTORNAR ADESÃO: Tem certeza? O código será mantido no registro como bloqueado para segurança e nunca poderá ser reutilizado.`)) return;
         setIsProcessingId(membership.id);
         try {
             await refundVipMembership(membership.id);
@@ -319,10 +319,9 @@ const AdminClubVip: React.FC = () => {
             const codes = await getVipEventCodes(event.id);
             if (eventMemberships.length === 0 && codes.length === 0) return alert("Não há dados para exportar.");
             
-            // Mapeamos códigos usados para evitar duplicidade se decidirmos listar códigos virgens depois
-            const usedCodeSet = new Set(eventMemberships.map(m => m.benefitCode).filter(Boolean));
+            const usedCodeIds = new Set(eventMemberships.map(m => m.benefitCode).filter(Boolean));
 
-            // Geramos as linhas partindo das adesões (Captura os 12 estornos conforme métricas)
+            // Geramos as linhas partindo das adesões
             const exportData = eventMemberships.map(m => {
                 let statusPortaria = 'BLOQUEADO ❌';
                 let statusFinanceiro = 'PENDENTE';
@@ -331,6 +330,7 @@ const AdminClubVip: React.FC = () => {
                     statusPortaria = 'VÁLIDO ✅';
                     statusFinanceiro = 'PAGO';
                 } else if (m.status === 'refunded') {
+                    statusPortaria = `BLOQUEADO (ESTORNADO) ❌`;
                     statusFinanceiro = 'ESTORNADO';
                 }
 
@@ -348,7 +348,7 @@ const AdminClubVip: React.FC = () => {
                     'TITULAR': m.promoterName || '-',
                     'E-MAIL': m.promoterEmail || '-',
                     'WHATSAPP': m.promoterWhatsapp || '-',
-                    'DATA COMPRA': getSafeDate(m.submittedAt)
+                    'DATA OPERAÇÃO': getSafeDate(m.updatedAt || m.submittedAt)
                 };
             });
 
@@ -361,7 +361,7 @@ const AdminClubVip: React.FC = () => {
                     'TITULAR': '(Disponível)',
                     'E-MAIL': '-',
                     'WHATSAPP': '-',
-                    'DATA COMPRA': '-'
+                    'DATA OPERAÇÃO': '-'
                 });
             });
 
@@ -436,13 +436,13 @@ const AdminClubVip: React.FC = () => {
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
                                     {filteredMembers.map(m => (
-                                        <tr key={m.id} className="hover:bg-white/[0.02] transition-colors group">
+                                        <tr key={m.id} className={`hover:bg-white/[0.02] transition-colors group ${m.status === 'refunded' ? 'opacity-60 grayscale' : ''}`}>
                                             <td className="px-6 py-5">
                                                 <p className="text-sm font-black text-white uppercase truncate">{m.promoterName}</p>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <p className="text-[9px] text-primary font-black uppercase">{m.vipEventName}</p>
                                                     <span className="text-gray-700 font-black">|</span>
-                                                    <p className="text-[11px] text-primary font-mono font-black">{m.benefitCode || '---'}</p>
+                                                    <p className={`text-[11px] font-mono font-black ${m.status === 'refunded' ? 'text-red-500 line-through' : 'text-primary'}`}>{m.benefitCode || '---'}</p>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-5">
