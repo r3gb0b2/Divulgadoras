@@ -18,13 +18,14 @@ export interface VipEvent {
   name: string;
   price: number;
   isActive: boolean;
-  isSoldOut?: boolean;
+  isSoldOut?: boolean; // Legado (usar saleStatus)
+  saleStatus?: 'available' | 'low_stock' | 'sold_out'; 
   description: string;
   benefits: string[];
   pixKey: string;
   externalSlug: string; 
   pixelId?: string;
-  eventDate?: Timestamp | FieldValue; // Data real do evento para ordenação
+  eventDate?: Timestamp | FieldValue; 
   eventTime?: string;
   eventLocation?: string;
   attractions?: string;
@@ -50,12 +51,13 @@ export interface VipMembership {
   submittedAt: Timestamp | FieldValue;
   updatedAt: Timestamp | FieldValue;
   refundedAt?: Timestamp | FieldValue;
-  /* Tracking fields */
   viewedAt?: Timestamp | FieldValue;
   downloadedAt?: Timestamp | FieldValue;
-  /* Dados do evento denormalizados para o ingresso */
   eventTime?: string;
   eventLocation?: string;
+  recoveryStatus?: RecoveryStatus;
+  recoveryAdminEmail?: string;
+  recoveryUpdatedAt?: Timestamp | FieldValue;
 }
 
 export interface Promoter {

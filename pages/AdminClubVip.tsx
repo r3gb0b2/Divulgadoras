@@ -373,7 +373,8 @@ const AdminClubVip: React.FC = () => {
                 description: editingEvent.description || '',
                 benefits: editingEvent.benefits || [],
                 isActive: editingEvent.isActive ?? true,
-                isSoldOut: editingEvent.isSoldOut ?? false,
+                isSoldOut: editingEvent.isSoldOut ?? false, // Legado
+                saleStatus: editingEvent.saleStatus || 'available',
                 eventDate: firestoreDate,
                 eventTime: editingEvent.eventTime || '',
                 eventLocation: editingEvent.eventLocation || '',
@@ -439,7 +440,7 @@ const AdminClubVip: React.FC = () => {
                         <ChartBarIcon className="w-4 h-4" /> Métricas de Venda
                     </button>
                     {isVipManager && (
-                        <button onClick={() => { setEditingEvent({ benefits: [], isActive: true, isSoldOut: false }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
+                        <button onClick={() => { setEditingEvent({ benefits: [], isActive: true, saleStatus: 'available' }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
                             <PlusIcon className="w-4 h-4" /> Novo Evento
                         </button>
                     )}
@@ -610,14 +611,31 @@ const AdminClubVip: React.FC = () => {
                                 <input type="text" placeholder="Nome do Local" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
                             </div>
 
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Atrações Principais</label>
-                                <input type="text" placeholder="Ex: DJ X, Cantor Y..." value={editingEvent?.attractions || ''} onChange={e => setEditingEvent({...editingEvent!, attractions: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Status de Venda</label>
+                                    <select 
+                                        value={editingEvent?.saleStatus || 'available'} 
+                                        onChange={e => setEditingEvent({...editingEvent!, saleStatus: e.target.value as any})}
+                                        className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold outline-none focus:border-primary"
+                                    >
+                                        <option value="available">🟢 DISPONÍVEL</option>
+                                        <option value="low_stock">🟡 ESGOTANDO (FLASH)</option>
+                                        <option value="sold_out">🔴 ESGOTADO</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Visibilidade</label>
+                                    <label className="flex items-center gap-3 p-3 bg-dark border border-gray-700 rounded-xl cursor-pointer">
+                                        <input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-primary focus:ring-0" />
+                                        <span className="text-xs font-bold text-white uppercase">Ativo</span>
+                                    </label>
+                                </div>
                             </div>
 
                             <div className="space-y-1">
-                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Descrição curta (Interna)</label>
-                                <textarea placeholder="..." value={editingEvent?.description || ''} onChange={e => setEditingEvent({...editingEvent!, description: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white text-sm" rows={2} />
+                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Atrações Principais</label>
+                                <input type="text" placeholder="Ex: DJ X, Cantor Y..." value={editingEvent?.attractions || ''} onChange={e => setEditingEvent({...editingEvent!, attractions: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
                             </div>
 
                             <div className="space-y-1">
@@ -629,15 +647,6 @@ const AdminClubVip: React.FC = () => {
                                     className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white text-sm" 
                                     rows={4} 
                                 />
-                            </div>
-
-                            <div className="flex flex-wrap gap-6 pt-2">
-                                <label className="flex items-center gap-2 text-white text-[10px] font-black uppercase cursor-pointer">
-                                    <input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-primary focus:ring-0" /> Ativo (Público)
-                                </label>
-                                <label className="flex items-center gap-2 text-orange-400 text-[10px] font-black uppercase cursor-pointer">
-                                    <input type="checkbox" checked={editingEvent?.isSoldOut} onChange={e => setEditingEvent({...editingEvent!, isSoldOut: e.target.checked})} className="w-4 h-4 rounded bg-dark text-orange-500 focus:ring-0" /> Esgotado (Manual)
-                                </label>
                             </div>
 
                             <button type="submit" className="w-full py-5 bg-primary text-white font-black rounded-2xl uppercase text-xs tracking-widest mt-4 shadow-lg shadow-primary/20">SALVAR CONFIGURAÇÕES</button>

@@ -140,7 +140,10 @@ const GreenlifeHome: React.FC = () => {
                             </div>
                             <div className="grid gap-4">
                                 {events.map(ev => {
-                                    const isSoldOut = (stockMap[ev.id] === 0) || ev.isSoldOut;
+                                    const stock = stockMap[ev.id] ?? 0;
+                                    const isSoldOut = (stock === 0) || ev.saleStatus === 'sold_out' || ev.isSoldOut;
+                                    const isLowStock = !isSoldOut && ev.saleStatus === 'low_stock';
+
                                     return (
                                         <button 
                                             key={ev.id} 
@@ -151,16 +154,19 @@ const GreenlifeHome: React.FC = () => {
                                             <div className="text-left min-w-0 flex-grow pr-4">
                                                 <p className={`font-black text-xl uppercase transition-colors ${isSoldOut ? 'text-red-500' : 'text-white group-hover:text-green-400'}`}>{ev.name}</p>
                                                 <p className="text-[10px] text-gray-500 font-black uppercase mt-1 truncate">
-                                                    {isSoldOut ? 'Vagas Esgotadas' : (ev.attractions || 'Adesão Online')}
+                                                    {isSoldOut ? 'Vagas Esgotadas' : isLowStock ? 'Esgotando rápido!' : (ev.attractions || 'Adesão Online')}
                                                 </p>
                                             </div>
                                             {isSoldOut ? (
                                                 <div className="flex flex-col items-center gap-1">
-                                                    <span className="text-[10px] text-gray-500 font-black line-through">R$ {ev.price.toFixed(2).replace('.', ',')}</span>
+                                                    <span className="text-[18px] text-gray-500 font-black line-through leading-none">R$ {ev.price.toFixed(2).replace('.', ',')}</span>
                                                     <span className="px-5 py-2.5 bg-red-600 text-white text-[11px] font-black uppercase rounded-2xl border border-red-700 animate-soft-flash shadow-[0_0_20px_rgba(220,38,38,0.4)]">ESGOTADO</span>
                                                 </div>
                                             ) : (
-                                                <p className="text-green-500 font-black text-2xl flex-shrink-0">R$ {ev.price.toFixed(2)}</p>
+                                                <div className="flex flex-col items-end">
+                                                    <p className={`text-green-500 font-black text-2xl flex-shrink-0 ${isLowStock ? 'animate-soft-flash' : ''}`}>R$ {ev.price.toFixed(2)}</p>
+                                                    {isLowStock && <span className="text-[9px] font-black text-yellow-500 uppercase tracking-widest mt-1">Esgotando</span>}
+                                                </div>
                                             )}
                                         </button>
                                     );
