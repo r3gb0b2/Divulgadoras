@@ -29,7 +29,8 @@ const ClubVipHome: React.FC = () => {
     const [whatsapp, setWhatsapp] = useState('');
     const [taxId, setTaxId] = useState(''); 
     const [promoter, setPromoter] = useState<Promoter | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [pixData, setPixData] = useState<any>(null);
     const [currentCheckoutId, setCurrentCheckoutId] = useState<string | null>(null);
@@ -44,7 +45,7 @@ const ClubVipHome: React.FC = () => {
                     stocks[ev.id] = await getVipCodeStats(ev.id);
                 }
                 setStockMap(stocks);
-            } catch (err) { setError("Falha ao carregar."); } finally { setIsLoading(false); }
+            } catch (err) { setError("Falha ao carregar."); } finally { setIsInitialLoading(false); }
         };
         loadData();
     }, []);
@@ -63,7 +64,7 @@ const ClubVipHome: React.FC = () => {
     const handleConfirmEmailMatch = async () => {
         if (email.trim().toLowerCase() !== confirmEmail.trim().toLowerCase()) { alert("E-mails não coincidem."); return; }
         setIsEmailConfirmModalOpen(false);
-        setIsLoading(true);
+        setIsSubmitting(true);
         try {
             const profiles = await findPromotersByEmail(email.trim().toLowerCase());
             if (profiles.length > 0) {
@@ -73,18 +74,20 @@ const ClubVipHome: React.FC = () => {
                 setWhatsapp(p.whatsapp);
             }
             setStep('confirm_data');
-        } finally { setIsLoading(false); }
+        } finally { setIsSubmitting(false); }
     };
 
     const handleGeneratePix = async (e: React.FormEvent) => {
         e.preventDefault();
-        setIsLoading(true);
+        setIsSubmitting(true);
+        setError(null);
         try {
             let pId = promoter?.id;
             if (!pId) pId = await createVipPromoter({ name, email, whatsapp });
             const createPagarMePix = httpsCallable(functions, 'createVipPagarMePix');
             const res: any = await createPagarMePix({
                 vipEventId: selectedEvent!.id,
+                vipEventName: selectedEvent!.name,
                 promoterId: pId,
                 email: email.toLowerCase().trim(),
                 name, whatsapp, taxId,
@@ -94,7 +97,9 @@ const ClubVipHome: React.FC = () => {
             setPixData(res.data);
             setCurrentCheckoutId(res.data.checkoutId);
             setStep('payment');
-        } catch (err: any) { setError(err.message); } finally { setIsLoading(false); }
+        } catch (err: any) { 
+            setError(err.message || "Erro ao gerar Pix. Verifique os dados."); 
+        } finally { setIsSubmitting(false); }
     };
 
     return (
@@ -110,107 +115,123 @@ const ClubVipHome: React.FC = () => {
                 </div>
 
                 <div className="p-10">
-                    {isLoading ? (
+                    {isInitialLoading ? (
                         <div className="py-20 flex flex-col items-center gap-4">
                             <RefreshIcon className="w-10 h-10 text-primary animate-spin" />
                             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Buscando Ofertas...</p>
                         </div>
-                    ) : step === 'select_event' && (
-                        <div className="space-y-6">
-                            <div className="flex justify-center mb-6">
-                                <Link to="/clubvip/status" className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all">Meus Ingressos</Link>
-                            </div>
-                            <div className="grid gap-4">
-                                {events.map(ev => {
-                                    const stock = stockMap[ev.id] ?? 0;
-                                    const isSoldOut = stock === 0 || ev.saleStatus === 'sold_out';
-                                    const isLowStock = !isSoldOut && ev.saleStatus === 'low_stock';
+                    ) : (
+                        <>
+                            {error && step !== 'payment' && (
+                                <div className="mb-6 p-4 bg-red-900/20 border border-red-500/50 text-red-200 rounded-2xl text-xs font-bold text-center flex items-center gap-3">
+                                    <AlertTriangleIcon className="w-5 h-5 flex-shrink-0" /> {error}
+                                </div>
+                            )}
 
-                                    return (
-                                        <button key={ev.id} onClick={() => { if(!isSoldOut) { setSelectedEvent(ev); setStep('benefits'); } }} disabled={isSoldOut} className={`p-8 rounded-[2rem] border flex justify-between items-center transition-all ${isSoldOut ? 'bg-gray-800/10 border-white/5 cursor-not-allowed opacity-50' : 'bg-dark/60 border-white/5 hover:border-primary shadow-xl'}`}>
-                                            <div className="text-left flex-grow pr-4">
-                                                <p className={`font-black text-xl uppercase ${isSoldOut ? 'text-gray-500' : 'text-white'}`}>{ev.name}</p>
-                                                <p className="text-[10px] text-gray-500 font-black uppercase mt-1">Adesão Digital</p>
-                                            </div>
-                                            <div className="flex flex-col items-end gap-2">
-                                                {isSoldOut ? (
-                                                    <>
-                                                        <span className="text-[26px] text-gray-500 font-black line-through leading-none">R$ {ev.price.toFixed(2).replace('.', ',')}</span>
-                                                        <span className="px-5 py-2 bg-red-600 text-white text-[11px] font-black uppercase rounded-2xl">ESGOTADO</span>
-                                                    </>
-                                                ) : isLowStock ? (
-                                                    <>
-                                                        <p className="text-primary font-black text-2xl leading-none">R$ {ev.price.toFixed(2)}</p>
-                                                        <span className="px-5 py-2 bg-yellow-600 text-white text-[11px] font-black uppercase rounded-2xl animate-soft-flash">ESGOTANDO</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <p className="text-primary font-black text-2xl leading-none">R$ {ev.price.toFixed(2)}</p>
-                                                        <span className="px-5 py-2 bg-green-600 text-white text-[11px] font-black uppercase rounded-2xl">DISPONÍVEL</span>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
+                            {step === 'select_event' && (
+                                <div className="space-y-6">
+                                    <div className="flex justify-center mb-6">
+                                        <Link to="/clubvip/status" className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all">Meus Ingressos</Link>
+                                    </div>
+                                    <div className="grid gap-4">
+                                        {events.map(ev => {
+                                            const stock = stockMap[ev.id] ?? 0;
+                                            const isSoldOut = stock === 0 || ev.saleStatus === 'sold_out';
+                                            const isLowStock = !isSoldOut && ev.saleStatus === 'low_stock';
 
-                    {step === 'benefits' && (
-                        <div className="space-y-8">
-                            <h2 className="text-3xl font-black text-white uppercase text-center">{selectedEvent?.name}</h2>
-                            <div className="grid grid-cols-4 gap-3">
-                                {[1, 2, 3, 4].map(num => (
-                                    <button key={num} onClick={() => setQuantity(num)} className={`aspect-square rounded-2xl font-black text-2xl flex flex-col items-center justify-center transition-all border-2 ${quantity === num ? 'bg-primary border-primary text-white' : 'bg-dark/40 border-white/5 text-gray-500'}`}>
-                                        {num}<span className="text-[8px] uppercase">unid</span>
+                                            return (
+                                                <button key={ev.id} onClick={() => { if(!isSoldOut) { setSelectedEvent(ev); setStep('benefits'); } }} disabled={isSoldOut} className={`p-8 rounded-[2rem] border flex justify-between items-center transition-all ${isSoldOut ? 'bg-gray-800/10 border-white/5 cursor-not-allowed opacity-50' : 'bg-dark/60 border-white/5 hover:border-primary shadow-xl'}`}>
+                                                    <div className="text-left flex-grow pr-4">
+                                                        <p className={`font-black text-xl uppercase ${isSoldOut ? 'text-gray-500' : 'text-white'}`}>{ev.name}</p>
+                                                        <p className="text-[10px] text-gray-500 font-black uppercase mt-1">Adesão Digital</p>
+                                                    </div>
+                                                    <div className="flex flex-col items-end gap-2">
+                                                        {isSoldOut ? (
+                                                            <>
+                                                                <span className="text-[26px] text-gray-500 font-black line-through leading-none">R$ {ev.price.toFixed(2).replace('.', ',')}</span>
+                                                                <span className="px-5 py-2 bg-red-600 text-white text-[11px] font-black uppercase rounded-2xl">ESGOTADO</span>
+                                                            </>
+                                                        ) : isLowStock ? (
+                                                            <>
+                                                                <p className="text-primary font-black text-2xl leading-none">R$ {ev.price.toFixed(2)}</p>
+                                                                <span className="px-5 py-2 bg-yellow-600 text-white text-[11px] font-black uppercase rounded-2xl animate-soft-flash">ESGOTANDO</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <p className="text-primary font-black text-2xl leading-none">R$ {ev.price.toFixed(2)}</p>
+                                                                <span className="px-5 py-2 bg-green-600 text-white text-[11px] font-black uppercase rounded-2xl">DISPONÍVEL</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {step === 'benefits' && (
+                                <div className="space-y-8">
+                                    <h2 className="text-3xl font-black text-white uppercase text-center">{selectedEvent?.name}</h2>
+                                    <div className="grid grid-cols-4 gap-3">
+                                        {[1, 2, 3, 4].map(num => (
+                                            <button key={num} onClick={() => setQuantity(num)} className={`aspect-square rounded-2xl font-black text-2xl flex flex-col items-center justify-center transition-all border-2 ${quantity === num ? 'bg-primary border-primary text-white' : 'bg-dark/40 border-white/5 text-gray-500'}`}>
+                                                {num}<span className="text-[8px] uppercase">unid</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <div className="bg-dark/40 p-8 rounded-[2.5rem] text-center border border-white/5">
+                                        <p className="text-5xl font-black text-primary">R$ {(selectedEvent!.price * quantity).toFixed(2).replace('.', ',')}</p>
+                                    </div>
+                                    <button onClick={() => setStep('identify')} className="w-full py-6 bg-primary text-white font-black rounded-3xl uppercase tracking-widest transition-all">CONTINUAR</button>
+                                </div>
+                            )}
+
+                            {step === 'identify' && (
+                                <form onSubmit={handleIdentifyNext} className="space-y-6 text-center">
+                                    <h2 className="text-2xl font-black text-white uppercase">Identificação</h2>
+                                    <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white text-center text-xl font-black outline-none focus:ring-2 focus:ring-primary" placeholder="seu@email.com" />
+                                    <button type="submit" disabled={isSubmitting} className="w-full py-6 bg-primary text-white font-black rounded-[2rem] uppercase shadow-xl transition-all flex items-center justify-center gap-3">
+                                        {isSubmitting && <RefreshIcon className="w-5 h-5 animate-spin" />}
+                                        {isSubmitting ? 'BUSCANDO...' : 'PRÓXIMO'}
                                     </button>
-                                ))}
-                            </div>
-                            <div className="bg-dark/40 p-8 rounded-[2.5rem] text-center border border-white/5">
-                                <p className="text-5xl font-black text-primary">R$ {(selectedEvent!.price * quantity).toFixed(2).replace('.', ',')}</p>
-                            </div>
-                            <button onClick={() => setStep('identify')} className="w-full py-6 bg-primary text-white font-black rounded-3xl uppercase tracking-widest transition-all">CONTINUAR</button>
-                        </div>
-                    )}
+                                </form>
+                            )}
 
-                    {step === 'identify' && (
-                        <form onSubmit={handleIdentifyNext} className="space-y-6 text-center">
-                            <h2 className="text-2xl font-black text-white uppercase">Identificação</h2>
-                            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white text-center text-xl font-black outline-none focus:ring-2 focus:ring-primary" placeholder="seu@email.com" />
-                            <button type="submit" className="w-full py-6 bg-primary text-white font-black rounded-[2rem] uppercase shadow-xl transition-all">PRÓXIMO</button>
-                        </form>
-                    )}
+                            {step === 'confirm_data' && (
+                                <form onSubmit={handleGeneratePix} className="space-y-5">
+                                    <h2 className="text-2xl font-black text-white text-center uppercase mb-6">Confirme seus Dados</h2>
+                                    <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white font-bold outline-none" placeholder="Nome Completo" />
+                                    <input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white font-bold outline-none" placeholder="WhatsApp" />
+                                    <input type="tel" required value={taxId} onChange={e => setTaxId(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white font-bold outline-none" placeholder="CPF ou CNPJ" />
+                                    <button type="submit" disabled={isSubmitting} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase shadow-xl transition-all flex items-center justify-center gap-3">
+                                        {isSubmitting && <RefreshIcon className="w-5 h-5 animate-spin" />}
+                                        {isSubmitting ? 'GERANDO COBRANÇA...' : 'GERAR PIX'}
+                                    </button>
+                                </form>
+                            )}
 
-                    {step === 'confirm_data' && (
-                        <form onSubmit={handleGeneratePix} className="space-y-5">
-                            <h2 className="text-2xl font-black text-white text-center uppercase mb-6">Confirme seus Dados</h2>
-                            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white font-bold" placeholder="Nome Completo" />
-                            <input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white font-bold" placeholder="WhatsApp" />
-                            <input type="tel" required value={taxId} onChange={e => setTaxId(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white font-bold" placeholder="CPF ou CNPJ" />
-                            <button type="submit" className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase shadow-xl transition-all">GERAR PIX</button>
-                        </form>
-                    )}
+                            {step === 'payment' && pixData && (
+                                <div className="text-center space-y-8 animate-fadeIn">
+                                    <div className="bg-white p-6 rounded-[2.5rem] inline-block shadow-2xl">
+                                        <img src={pixData.qrCodeUrl} alt="QR Code" className="w-64 h-64" />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input readOnly value={pixData.qrCode} className="flex-grow bg-dark border border-white/10 p-4 rounded-2xl text-[10px] text-gray-500 font-mono" />
+                                        <button type="button" onClick={() => { navigator.clipboard.writeText(pixData.qrCode); alert("Copiado!"); }} className="p-4 bg-primary text-white rounded-2xl"><DocumentDuplicateIcon className="w-5 h-5" /></button>
+                                    </div>
+                                    <p className="text-blue-400 font-black text-xs uppercase animate-pulse flex items-center justify-center gap-2"><RefreshIcon className="w-4 h-4 animate-spin" /> Aguardando confirmação...</p>
+                                </div>
+                            )}
 
-                    {step === 'payment' && pixData && (
-                        <div className="text-center space-y-8 animate-fadeIn">
-                            <div className="bg-white p-6 rounded-[2.5rem] inline-block shadow-2xl">
-                                <img src={pixData.qrCodeUrl} alt="QR Code" className="w-64 h-64" />
-                            </div>
-                            <div className="flex gap-2">
-                                <input readOnly value={pixData.qrCode} className="flex-grow bg-dark border border-white/10 p-4 rounded-2xl text-[10px] text-gray-500 font-mono" />
-                                <button type="button" onClick={() => { navigator.clipboard.writeText(pixData.qrCode); alert("Copiado!"); }} className="p-4 bg-primary text-white rounded-2xl"><DocumentDuplicateIcon className="w-5 h-5" /></button>
-                            </div>
-                            <p className="text-blue-400 font-black text-xs uppercase animate-pulse flex items-center justify-center gap-2"><RefreshIcon className="w-4 h-4 animate-spin" /> Aguardando confirmação...</p>
-                        </div>
-                    )}
-
-                    {step === 'success' && (
-                        <div className="text-center py-10 space-y-6">
-                            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto"><CheckCircleIcon className="w-12 h-12 text-green-500" /></div>
-                            <h2 className="text-4xl font-black text-white uppercase tracking-tighter">PAGO COM SUCESSO!</h2>
-                            <button onClick={() => navigate('/clubvip/status')} className="w-full py-6 bg-primary text-white font-black rounded-[2rem] uppercase shadow-xl">VER MEUS CÓDIGOS</button>
-                        </div>
+                            {step === 'success' && (
+                                <div className="text-center py-10 space-y-6">
+                                    <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto"><CheckCircleIcon className="w-12 h-12 text-green-500" /></div>
+                                    <h2 className="text-4xl font-black text-white uppercase tracking-tighter">PAGO COM SUCESSO!</h2>
+                                    <button onClick={() => navigate('/clubvip/status')} className="w-full py-6 bg-primary text-white font-black rounded-[2rem] uppercase shadow-xl">VER MEUS CÓDIGOS</button>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
