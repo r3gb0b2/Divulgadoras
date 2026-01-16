@@ -254,7 +254,7 @@ const ManageCodesModal: React.FC<{ isOpen: boolean, onClose: () => void, event: 
                 
                 <div className="mb-6 p-4 bg-dark/50 rounded-2xl border border-white/5 flex justify-between items-center">
                     <div>
-                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Estoque Disponível:</p>
+                        <p className="text-logotext-[10px] font-black text-gray-500 uppercase tracking-widest">Estoque Disponível:</p>
                         <p className="text-2xl font-black text-primary">{currentStock !== null ? currentStock : '...'}</p>
                     </div>
                 </div>
@@ -369,6 +369,7 @@ const AdminClubVip: React.FC = () => {
                 description: editingEvent.description || '',
                 benefits: editingEvent.benefits || [],
                 isActive: editingEvent.isActive ?? true,
+                isSoldOut: editingEvent.isSoldOut ?? false, // Garantindo o campo manual
                 eventTime: editingEvent.eventTime || '',
                 eventLocation: editingEvent.eventLocation || '',
                 attractions: editingEvent.attractions || '',
@@ -433,7 +434,7 @@ const AdminClubVip: React.FC = () => {
                         <ChartBarIcon className="w-4 h-4" /> Métricas de Venda
                     </button>
                     {isVipManager && (
-                        <button onClick={() => { setEditingEvent({ benefits: [], isActive: true }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
+                        <button onClick={() => { setEditingEvent({ benefits: [], isActive: true, isSoldOut: false }); setIsModalOpen(true); }} className="px-6 py-3 bg-primary text-white font-black rounded-2xl text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-2">
                             <PlusIcon className="w-4 h-4" /> Novo Evento
                         </button>
                     )}
@@ -617,9 +618,12 @@ const AdminClubVip: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="flex gap-4 pt-2">
+                            <div className="flex flex-wrap gap-6 pt-2">
                                 <label className="flex items-center gap-2 text-white text-[10px] font-black uppercase cursor-pointer">
-                                    <input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-primary" /> Ativo (Público)
+                                    <input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-primary focus:ring-0" /> Ativo (Público)
+                                </label>
+                                <label className="flex items-center gap-2 text-orange-400 text-[10px] font-black uppercase cursor-pointer">
+                                    <input type="checkbox" checked={editingEvent?.isSoldOut} onChange={e => setEditingEvent({...editingEvent!, isSoldOut: e.target.checked})} className="w-4 h-4 rounded bg-dark text-orange-500 focus:ring-0" /> Esgotado (Manual)
                                 </label>
                             </div>
 

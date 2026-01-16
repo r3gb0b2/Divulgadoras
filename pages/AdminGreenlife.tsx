@@ -183,6 +183,7 @@ const AdminGreenlife: React.FC = () => {
                 eventLocation: editingEvent.eventLocation || '',
                 attractions: editingEvent.attractions || '',
                 isActive: editingEvent.isActive ?? true,
+                isSoldOut: editingEvent.isSoldOut ?? false, // Garantindo o campo manual
                 benefits: editingEvent.benefits || []
             };
 
@@ -227,7 +228,7 @@ const AdminGreenlife: React.FC = () => {
                     <button onClick={() => navigate('/admin/greenlife-metrics/global')} className="px-4 py-3 bg-green-900/20 text-green-400 border border-green-600/30 font-black rounded-2xl text-[10px] uppercase tracking-widest hover:bg-green-600 hover:text-white transition-all flex items-center gap-2">
                         <ChartBarIcon className="w-4 h-4" /> Métricas de Venda
                     </button>
-                    <button onClick={() => { setEditingEvent({ isActive: true, benefits: [] }); setIsModalOpen(true); }} className="px-6 py-3 bg-green-600 text-white font-black rounded-2xl text-[10px] uppercase shadow-xl">Novo Evento</button>
+                    <button onClick={() => { setEditingEvent({ isActive: true, isSoldOut: false, benefits: [] }); setIsModalOpen(true); }} className="px-6 py-3 bg-green-600 text-white font-black rounded-2xl text-[10px] uppercase shadow-xl">Novo Evento</button>
                     <button onClick={() => fetchData()} className="p-3 bg-gray-800 text-gray-400 rounded-2xl hover:text-white transition-colors">
                         <RefreshIcon className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`}/>
                     </button>
@@ -358,8 +359,13 @@ const AdminGreenlife: React.FC = () => {
                                 <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Atrações do Dia</label>
                                 <input type="text" placeholder="Ex: Cantor X, DJ Y..." value={editingEvent?.attractions || ''} onChange={e => setEditingEvent({...editingEvent!, attractions: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
                             </div>
-                            <div className="flex gap-4 pt-2">
-                                <label className="flex items-center gap-2 text-white text-[10px] font-black uppercase cursor-pointer"><input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-green-500" /> Ativo</label>
+                            <div className="flex flex-wrap gap-6 pt-2">
+                                <label className="flex items-center gap-2 text-white text-[10px] font-black uppercase cursor-pointer">
+                                    <input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-green-500 focus:ring-0" /> Ativo
+                                </label>
+                                <label className="flex items-center gap-2 text-orange-400 text-[10px] font-black uppercase cursor-pointer">
+                                    <input type="checkbox" checked={editingEvent?.isSoldOut} onChange={e => setEditingEvent({...editingEvent!, isSoldOut: e.target.checked})} className="w-4 h-4 rounded bg-dark text-orange-500 focus:ring-0" /> Esgotado (Manual)
+                                </label>
                             </div>
                             <button type="submit" className="w-full py-5 bg-green-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest mt-4">Salvar Alterações</button>
                         </form>
