@@ -15,7 +15,7 @@ import firebase from 'firebase/compat/app';
 import { 
     ArrowLeftIcon, SearchIcon, CheckCircleIcon, XIcon, TicketIcon, RefreshIcon, 
     PlusIcon, TrashIcon, PencilIcon, DownloadIcon, LinkIcon, CogIcon, UndoIcon, ChartBarIcon,
-    CalendarIcon, ClockIcon, MapPinIcon
+    CalendarIcon, ClockIcon, MapPinIcon, EyeIcon
 } from '../components/Icons';
 
 // Modal de Gerenciamento de Códigos (Estoque)
@@ -229,6 +229,12 @@ const AdminGreenlife: React.FC = () => {
         }
     };
 
+    const formatDateSafe = (ts: any) => {
+        if (!ts) return null;
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    };
+
     return (
         <div className="pb-40">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
@@ -264,6 +270,7 @@ const AdminGreenlife: React.FC = () => {
                                 <thead className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
                                     <tr>
                                         <th className="px-6 py-5">Aluno / Evento</th>
+                                        <th className="px-6 py-5 text-center">Rastreio</th>
                                         <th className="px-6 py-5 text-center">Status</th>
                                         <th className="px-6 py-4 text-right">Ações</th>
                                     </tr>
@@ -276,6 +283,19 @@ const AdminGreenlife: React.FC = () => {
                                                 <p className="text-[10px] text-gray-500 font-mono truncate">{m.promoterEmail}</p>
                                                 <p className="text-[9px] text-green-500 font-black mt-1 uppercase">{m.vipEventName}</p>
                                                 <p className="text-[11px] text-green-500 font-mono font-black mt-1">{m.benefitCode || '---'}</p>
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <div className="flex gap-3">
+                                                        <div className={`p-1.5 rounded-lg border transition-all ${m.viewedAt ? 'bg-green-600/20 border-green-500 text-green-500' : 'bg-dark border-white/5 text-gray-700'}`} title={m.viewedAt ? `Visto em: ${formatDateSafe(m.viewedAt)}` : 'Ainda não viu'}>
+                                                            <EyeIcon className="w-4 h-4" />
+                                                        </div>
+                                                        <div className={`p-1.5 rounded-lg border transition-all ${m.downloadedAt ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-dark border-white/5 text-gray-700'}`} title={m.downloadedAt ? `Baixado em: ${formatDateSafe(m.downloadedAt)}` : 'Ainda não baixou'}>
+                                                            <DownloadIcon className="w-4 h-4" />
+                                                        </div>
+                                                    </div>
+                                                    {m.viewedAt && <span className="text-[7px] font-black text-gray-600 uppercase tracking-tighter">Visto {formatDateSafe(m.viewedAt)}</span>}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-5 text-center">
                                                 <span className={`px-2 py-0.5 rounded-full border text-[8px] font-black uppercase ${
@@ -364,61 +384,4 @@ const AdminGreenlife: React.FC = () => {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex items-center gap-1"><CalendarIcon className="w-3 h-3"/> Data de Realização</label>
-                                    <input type="date" value={editingEvent?.eventDate ? (typeof editingEvent.eventDate === 'string' ? editingEvent.eventDate : (editingEvent.eventDate as any).toDate().toISOString().split('T')[0]) : ''} onChange={e => setEditingEvent({...editingEvent!, eventDate: e.target.value as any})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" required />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Horário</label>
-                                    <input type="text" placeholder="Ex: 08h às 22h" value={editingEvent?.eventTime || ''} onChange={e => setEditingEvent({...editingEvent!, eventTime: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                                </div>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Status de Venda</label>
-                                    <select 
-                                        value={editingEvent?.saleStatus || 'available'} 
-                                        onChange={e => setEditingEvent({...editingEvent!, saleStatus: e.target.value as any})}
-                                        className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold outline-none focus:border-green-500"
-                                    >
-                                        <option value="available">🟢 DISPONÍVEL</option>
-                                        <option value="low_stock">🟡 ESGOTANDO (FLASH)</option>
-                                        <option value="sold_out">🔴 ESGOTADO</option>
-                                    </select>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Visibilidade</label>
-                                    <label className="flex items-center gap-3 p-3 bg-dark border border-gray-700 rounded-xl cursor-pointer">
-                                        <input type="checkbox" checked={editingEvent?.isActive} onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})} className="w-4 h-4 rounded bg-dark text-green-500 focus:ring-0" />
-                                        <span className="text-xs font-bold text-white uppercase">Ativo</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Unidade / Local</label>
-                                <input type="text" placeholder="Ex: Greenlife Aldeota" value={editingEvent?.eventLocation || ''} onChange={e => setEditingEvent({...editingEvent!, eventLocation: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] font-black text-gray-500 uppercase ml-1">Atrações do Dia</label>
-                                <input type="text" placeholder="Ex: Cantor X, DJ Y..." value={editingEvent?.attractions || ''} onChange={e => setEditingEvent({...editingEvent!, attractions: e.target.value})} className="w-full bg-dark border border-gray-700 rounded-xl p-3 text-white font-bold" />
-                            </div>
-                            <button type="submit" className="w-full py-5 bg-green-600 text-white font-black rounded-2xl uppercase text-xs tracking-widest mt-4">Salvar Alterações</button>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {isCodesModalOpen && selectedEventForCodes && (
-                <ManageCodesModal 
-                    isOpen={isCodesModalOpen} 
-                    onClose={() => setIsCodesModalOpen(false)} 
-                    event={selectedEventForCodes} 
-                    onSaved={fetchData} 
-                />
-            )}
-        </div>
-    );
-};
-
-export default AdminGreenlife;
+                                    <label className="text-[10px] font-black text-gray-500 uppercase ml-1 flex

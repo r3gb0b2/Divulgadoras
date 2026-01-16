@@ -455,6 +455,12 @@ const AdminClubVip: React.FC = () => {
         }
     };
 
+    const formatDateSafe = (ts: any) => {
+        if (!ts) return null;
+        const d = ts.toDate ? ts.toDate() : new Date(ts);
+        return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    };
+
     return (
         <div className="pb-40">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 px-4 md:px-0">
@@ -502,6 +508,7 @@ const AdminClubVip: React.FC = () => {
                                 <thead>
                                     <tr className="bg-dark/50 text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
                                         <th className="px-6 py-5">Membro / Evento</th>
+                                        <th className="px-6 py-5 text-center">Rastreio</th>
                                         <th className="px-6 py-5 text-center">Status Pgto</th>
                                         <th className="px-6 py-4 text-right">Ações</th>
                                     </tr>
@@ -516,6 +523,19 @@ const AdminClubVip: React.FC = () => {
                                                     <p className="text-[9px] text-primary font-black uppercase">{m.vipEventName}</p>
                                                     <span className="text-gray-700 font-black">|</span>
                                                     <p className="text-[11px] text-primary font-mono font-black">{m.benefitCode || '---'}</p>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-5">
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <div className="flex gap-3">
+                                                        <div className={`p-1.5 rounded-lg border transition-all ${m.viewedAt ? 'bg-primary/20 border-primary text-primary' : 'bg-dark border-white/5 text-gray-700'}`} title={m.viewedAt ? `Visualizado em: ${formatDateSafe(m.viewedAt)}` : 'Ainda não visualizou'}>
+                                                            <EyeIcon className="w-4 h-4" />
+                                                        </div>
+                                                        <div className={`p-1.5 rounded-lg border transition-all ${m.downloadedAt ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-dark border-white/5 text-gray-700'}`} title={m.downloadedAt ? `Baixado em: ${formatDateSafe(m.downloadedAt)}` : 'Ainda não baixou'}>
+                                                            <DownloadIcon className="w-4 h-4" />
+                                                        </div>
+                                                    </div>
+                                                    {m.viewedAt && <span className="text-[7px] font-black text-gray-600 uppercase tracking-tighter">Visto {formatDateSafe(m.viewedAt)}</span>}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-5 text-center">
