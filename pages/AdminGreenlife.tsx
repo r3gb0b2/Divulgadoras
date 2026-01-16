@@ -147,13 +147,20 @@ const AdminGreenlife: React.FC = () => {
                     statusFinanceiro = 'ESTORNADO';
                 }
 
+                // Helper para formatar data de forma segura para o Excel (TypeScript fix)
+                const getSafeDate = (ts: any) => {
+                    if (!ts) return '-';
+                    const d = ts.toDate ? ts.toDate() : new Date(ts);
+                    return isNaN(d.getTime()) ? '-' : d.toLocaleString('pt-BR');
+                };
+
                 return {
                     'CÓDIGO': m.benefitCode || '---',
                     'STATUS PORTARIA': statusPortaria,
                     'FINANCEIRO': statusFinanceiro,
                     'ALUNO': m.promoterName || '-',
                     'E-MAIL': m.promoterEmail || '-',
-                    'DATA OPERAÇÃO': m.submittedAt ? (m.submittedAt.toDate ? m.submittedAt.toDate().toLocaleString('pt-BR') : new Date(m.submittedAt as any).toLocaleString('pt-BR')) : '-'
+                    'DATA OPERAÇÃO': getSafeDate(m.submittedAt)
                 };
             });
 

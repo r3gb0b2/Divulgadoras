@@ -84,8 +84,8 @@ const ClubVipHome: React.FC = () => {
         try {
             let pId = promoter?.id;
             if (!pId) pId = await createVipPromoter({ name, email, whatsapp });
-            const createPagarMePix = httpsCallable(functions, 'createVipPagarMePix');
-            const res: any = await createPagarMePix({
+            const createVipPagarMePix = httpsCallable(functions, 'createVipPagarMePix');
+            const res: any = await createVipPagarMePix({
                 vipEventId: selectedEvent!.id,
                 vipEventName: selectedEvent!.name,
                 promoterId: pId,

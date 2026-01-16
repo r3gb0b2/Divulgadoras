@@ -334,6 +334,13 @@ const AdminClubVip: React.FC = () => {
                     statusFinanceiro = 'ESTORNADO';
                 }
 
+                // Helper para formatar data de forma segura para o Excel
+                const getSafeDate = (ts: any) => {
+                    if (!ts) return '-';
+                    const d = ts.toDate ? ts.toDate() : new Date(ts);
+                    return isNaN(d.getTime()) ? '-' : d.toLocaleString('pt-BR');
+                };
+
                 return {
                     'CÓDIGO': m.benefitCode || '---',
                     'STATUS PORTARIA': statusPortaria,
@@ -341,7 +348,7 @@ const AdminClubVip: React.FC = () => {
                     'TITULAR': m.promoterName || '-',
                     'E-MAIL': m.promoterEmail || '-',
                     'WHATSAPP': m.promoterWhatsapp || '-',
-                    'DATA COMPRA': m.submittedAt ? (m.submittedAt.toDate ? m.submittedAt.toDate().toLocaleString('pt-BR') : new Date(m.submittedAt as any).toLocaleString('pt-BR')) : '-'
+                    'DATA COMPRA': getSafeDate(m.submittedAt)
                 };
             });
 
