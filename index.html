@@ -47,11 +47,20 @@
         theme: {
           extend: {
             colors: {
-              primary: '#7e39d5',
-              'primary-dark': '#5d1eab',
-              secondary: '#1a1a2e',
-              dark: '#0f0f1a',
+              primary: '#8B3DFF',
+              'primary-dark': '#6A1B9A',
+              secondary: '#12121e',
+              dark: '#0a0a0f',
               accent: '#fbbd08'
+            },
+            animation: {
+              'soft-flash': 'soft-flash 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            },
+            keyframes: {
+              'soft-flash': {
+                '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+                '50%': { opacity: '0.7', transform: 'scale(0.98)' },
+              }
             }
           }
         }
@@ -63,6 +72,7 @@
         user-select: none;
         -webkit-tap-highlight-color: transparent;
         overscroll-behavior-y: none;
+        background-color: #0a0a0f;
       }
       
       img, video {
@@ -81,11 +91,22 @@
         --sal: env(safe-area-inset-left);
         --sar: env(safe-area-inset-right);
       }
+
+      /* Custom scrollbar for better aesthetics */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #8B3DFF;
+        border-radius: 10px;
+      }
     </style>
     <script src="https://js.stripe.com/v3/"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
-    <!-- html2pdf para geração de ingressos em PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 </head>
 <body>

@@ -164,7 +164,7 @@ const ClubVipHome: React.FC = () => {
             <div className="bg-secondary/40 backdrop-blur-2xl rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
                 <div className="bg-gradient-to-br from-indigo-900/60 to-purple-900/40 p-12 text-center relative">
                     <SparklesIcon className="w-16 h-16 text-primary mx-auto mb-4 relative z-10 animate-pulse" />
-                    <h1 className="text-5xl font-black text-white uppercase tracking-tighter relative z-10">CLUBE <span className="text-primary">VIP</span></h1>
+                    <h1 className="text-5xl font-black text-white uppercase tracking-tighter relative z-10 text-white">CLUBE <span className="text-primary">VIP</span></h1>
                 </div>
 
                 <div className="p-10">
@@ -173,7 +173,7 @@ const ClubVipHome: React.FC = () => {
                     {step === 'select_event' && (
                         <div className="space-y-8">
                              <div className="flex justify-center mb-6">
-                                <Link to="/clubvip/status" className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:text-white">Ver meus Ingressos</Link>
+                                <Link to="/clubvip/status" className="px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black uppercase text-gray-400 hover:text-white transition-all">Ver meus Ingressos</Link>
                             </div>
                             <div className="grid gap-6">
                                 {events.map(ev => {
@@ -183,16 +183,16 @@ const ClubVipHome: React.FC = () => {
                                             key={ev.id} 
                                             onClick={() => { if(!isSoldOut) { setSelectedEvent(ev); setStep('benefits'); } }} 
                                             disabled={isSoldOut}
-                                            className={`p-8 rounded-[2rem] border flex justify-between items-center group transition-all ${isSoldOut ? 'bg-gray-800/20 border-white/5 opacity-50 grayscale cursor-not-allowed' : 'bg-dark/60 border-white/5 hover:border-primary'}`}
+                                            className={`p-8 rounded-[2rem] border flex justify-between items-center group transition-all ${isSoldOut ? 'bg-gray-800/10 border-white/5 cursor-not-allowed' : 'bg-dark/60 border-white/5 hover:border-primary shadow-xl'}`}
                                         >
                                             <div className="text-left">
-                                                <p className={`font-black text-xl uppercase transition-colors ${isSoldOut ? 'text-gray-500' : 'text-white group-hover:text-primary'}`}>{ev.name}</p>
+                                                <p className={`font-black text-xl uppercase transition-colors ${isSoldOut ? 'text-red-500' : 'text-white group-hover:text-primary'}`}>{ev.name}</p>
                                                 <p className="text-[10px] text-gray-500 font-black uppercase mt-1">
                                                     {isSoldOut ? 'Lote Esgotado' : 'Adesão Online'}
                                                 </p>
                                             </div>
                                             {isSoldOut ? (
-                                                <span className="px-4 py-2 bg-red-900/20 text-red-500 text-[10px] font-black uppercase rounded-xl border border-red-900/30">ESGOTADO</span>
+                                                <span className="px-5 py-2.5 bg-red-600 text-white text-[11px] font-black uppercase rounded-2xl border border-red-700 animate-soft-flash shadow-[0_0_20px_rgba(220,38,38,0.4)]">ESGOTADO</span>
                                             ) : (
                                                 <p className="text-primary font-black text-2xl">R$ {ev.price.toFixed(2)}</p>
                                             )}
@@ -214,28 +214,28 @@ const ClubVipHome: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
-                            <div className="bg-dark/40 p-8 rounded-[2.5rem] border border-white/5 text-center">
+                            <div className="bg-dark/40 p-8 rounded-[2.5rem] border border-white/5 text-center shadow-inner">
                                 <p className="text-5xl font-black text-primary leading-none">R$ {(selectedEvent!.price * quantity).toFixed(2).replace('.', ',')}</p>
                             </div>
-                            <button onClick={() => setStep('identify')} className="w-full py-6 bg-primary text-white font-black rounded-3xl uppercase text-sm tracking-widest shadow-xl">CONTINUAR</button>
+                            <button onClick={() => setStep('identify')} className="w-full py-6 bg-primary text-white font-black rounded-3xl uppercase text-sm tracking-widest shadow-xl hover:bg-primary-dark transition-all transform active:scale-95">CONTINUAR</button>
                         </div>
                     )}
 
                     {step === 'identify' && (
                         <form onSubmit={handleIdentifyNext} className="space-y-6 text-center">
                             <h2 className="text-2xl font-black text-white uppercase">Identificação</h2>
-                            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-black text-center text-xl" placeholder="seu@email.com" />
-                            <button type="submit" disabled={isLoading} className="w-full py-6 bg-primary text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl">{isLoading ? 'VERIFICANDO...' : 'PRÓXIMO PASSO'}</button>
+                            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-black text-center text-xl shadow-inner" placeholder="seu@email.com" />
+                            <button type="submit" disabled={isLoading} className="w-full py-6 bg-primary text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl hover:bg-primary-dark transition-all transform active:scale-95">{isLoading ? 'VERIFICANDO...' : 'PRÓXIMO PASSO'}</button>
                         </form>
                     )}
 
                     {step === 'confirm_data' && (
                         <form onSubmit={handleGeneratePix} className="space-y-5 animate-fadeIn">
                             <h2 className="text-2xl font-black text-white text-center uppercase mb-6">Confirme seus Dados</h2>
-                            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="Nome Completo" />
-                            <input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="WhatsApp" />
-                            <input type="tel" required value={taxId} onChange={e => setTaxId(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold" placeholder="CPF ou CNPJ" />
-                            <button type="submit" disabled={isLoading} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] shadow-2xl uppercase text-sm tracking-widest">GERAR QR CODE PIX</button>
+                            <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold shadow-inner" placeholder="Nome Completo" />
+                            <input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold shadow-inner" placeholder="WhatsApp" />
+                            <input type="tel" required value={taxId} onChange={e => setTaxId(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-primary font-bold shadow-inner" placeholder="CPF ou CNPJ" />
+                            <button type="submit" disabled={isLoading} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] shadow-2xl uppercase text-sm tracking-widest hover:bg-green-500 transition-all transform active:scale-95">GERAR QR CODE PIX</button>
                         </form>
                     )}
 
@@ -255,8 +255,8 @@ const ClubVipHome: React.FC = () => {
                     {step === 'success' && (
                         <div className="text-center py-10 space-y-6">
                             <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto"><CheckCircleIcon className="w-12 h-12 text-green-500" /></div>
-                            <h2 className="text-4xl font-black text-white uppercase">PAGO COM SUCESSO!</h2>
-                            <button onClick={() => navigate('/clubvip/status')} className="w-full py-6 bg-primary text-white font-black rounded-[2rem] uppercase text-sm tracking-widest">VER MEUS CÓDIGOS</button>
+                            <h2 className="text-4xl font-black text-white uppercase tracking-tighter">PAGO COM SUCESSO!</h2>
+                            <button onClick={() => navigate('/clubvip/status')} className="w-full py-6 bg-primary text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl">VER MEUS CÓDIGOS</button>
                         </div>
                     )}
                 </div>
@@ -264,13 +264,13 @@ const ClubVipHome: React.FC = () => {
 
             {isEmailConfirmModalOpen && (
                 <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-[200] flex items-center justify-center p-6">
-                    <div className="bg-secondary w-full max-w-md p-8 rounded-[2.5rem] border border-white/10 text-center space-y-6">
-                        <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto text-primary"><MailIcon className="w-8 h-8" /></div>
-                        <h2 className="text-2xl font-black text-white uppercase">Confirmar E-mail</h2>
-                        <input type="email" value={confirmEmail} onChange={e => setConfirmEmail(e.target.value)} className="w-full p-5 bg-dark border border-primary/30 rounded-2xl text-white outline-none text-center" placeholder="Redigite seu e-mail" />
+                    <div className="bg-secondary w-full max-w-md p-8 rounded-[2.5rem] border border-white/10 text-center space-y-6 shadow-2xl">
+                        <div className="w-16 h-16 bg-primary/20 rounded-2xl flex items-center justify-center mx-auto text-primary shadow-lg"><MailIcon className="w-8 h-8" /></div>
+                        <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Confirmar E-mail</h2>
+                        <input type="email" value={confirmEmail} onChange={e => setConfirmEmail(e.target.value)} className="w-full p-5 bg-dark border border-primary/30 rounded-2xl text-white outline-none text-center font-bold" placeholder="Redigite seu e-mail" />
                         <div className="flex gap-3">
                             <button onClick={() => setIsEmailConfirmModalOpen(false)} className="flex-1 py-4 bg-gray-800 text-gray-400 font-black rounded-xl uppercase text-xs">Voltar</button>
-                            <button onClick={handleConfirmEmailMatch} className="flex-[2] py-4 bg-primary text-white font-black rounded-xl uppercase text-xs">Confirmar</button>
+                            <button onClick={handleConfirmEmailMatch} className="flex-[2] py-4 bg-primary text-white font-black rounded-xl uppercase text-xs shadow-lg shadow-primary/20">Confirmar</button>
                         </div>
                     </div>
                 </div>

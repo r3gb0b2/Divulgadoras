@@ -130,7 +130,7 @@ const GreenlifeHome: React.FC = () => {
     return (
         <div className="max-w-2xl mx-auto py-10 px-4">
             <div className="bg-secondary/40 backdrop-blur-2xl rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
-                <div className="bg-green-600 p-12 text-center relative">
+                <div className="bg-green-600 p-12 text-center relative border-b border-green-500/20">
                     <SparklesIcon className="w-16 h-16 text-white mx-auto mb-4 opacity-50" />
                     <h1 className="text-5xl font-black text-white uppercase tracking-tighter">ALUNOS <span className="text-gray-200">GREENLIFE</span></h1>
                     <p className="text-green-100 font-bold uppercase text-[10px] tracking-widest mt-2">Pagamento Seguro via Pagar.me</p>
@@ -157,16 +157,16 @@ const GreenlifeHome: React.FC = () => {
                                             key={ev.id} 
                                             onClick={() => { if(!isSoldOut) { setSelectedEvent(ev); setStep('identify'); } }} 
                                             disabled={isSoldOut}
-                                            className={`p-8 rounded-[2rem] border flex justify-between items-center group transition-all ${isSoldOut ? 'bg-gray-800/20 border-white/5 opacity-50 grayscale cursor-not-allowed' : 'bg-dark/60 border-white/5 hover:border-green-500'}`}
+                                            className={`p-8 rounded-[2rem] border flex justify-between items-center group transition-all ${isSoldOut ? 'bg-gray-800/10 border-white/5 cursor-not-allowed' : 'bg-dark/60 border-white/5 hover:border-green-500 shadow-xl'}`}
                                         >
                                             <div className="text-left min-w-0 flex-grow pr-4">
-                                                <p className={`font-black text-xl uppercase transition-colors ${isSoldOut ? 'text-gray-500' : 'text-white group-hover:text-green-400'}`}>{ev.name}</p>
+                                                <p className={`font-black text-xl uppercase transition-colors ${isSoldOut ? 'text-red-500' : 'text-white group-hover:text-green-400'}`}>{ev.name}</p>
                                                 <p className="text-[10px] text-gray-500 font-black uppercase mt-1 truncate">
                                                     {isSoldOut ? 'Vagas Esgotadas' : (ev.attractions || 'Adesão Online')}
                                                 </p>
                                             </div>
                                             {isSoldOut ? (
-                                                <span className="px-4 py-2 bg-red-900/20 text-red-500 text-[10px] font-black uppercase rounded-xl border border-red-900/30">ESGOTADO</span>
+                                                <span className="px-5 py-2.5 bg-red-600 text-white text-[11px] font-black uppercase rounded-2xl border border-red-700 animate-soft-flash shadow-[0_0_20px_rgba(220,38,38,0.4)]">ESGOTADO</span>
                                             ) : (
                                                 <p className="text-green-500 font-black text-2xl flex-shrink-0">R$ {ev.price.toFixed(2)}</p>
                                             )}
@@ -181,18 +181,18 @@ const GreenlifeHome: React.FC = () => {
                     {step === 'identify' && (
                         <form onSubmit={handleCheckEmail} className="space-y-6 text-center">
                             <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Identificação do Aluno</h2>
-                            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-black text-center text-xl" placeholder="seu@email.com" />
-                            <button type="submit" disabled={isLoading} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl">{isLoading ? 'VERIFICANDO...' : 'CONTINUAR'}</button>
+                            <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full p-6 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-black text-center text-xl shadow-inner" placeholder="seu@email.com" />
+                            <button type="submit" disabled={isLoading} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl hover:bg-green-500 transition-all transform active:scale-95">{isLoading ? 'VERIFICANDO...' : 'CONTINUAR'}</button>
                         </form>
                     )}
 
                     {step === 'confirm_data' && (
-                        <form onSubmit={handleProceedToPayment} className="space-y-4">
+                        <form onSubmit={handleProceedToPayment} className="space-y-4 animate-fadeIn">
                              <h2 className="text-2xl font-black text-white text-center uppercase mb-6">Seus Dados</h2>
-                             <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full p-5 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-bold" placeholder="Nome Completo" />
-                             <input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-5 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-bold" placeholder="WhatsApp" />
-                             <input type="tel" required value={taxId} onChange={e => setTaxId(e.target.value)} className="w-full p-5 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-bold" placeholder="CPF ou CNPJ" />
-                             <button type="submit" disabled={isLoading} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl">GERAR QR CODE PIX</button>
+                             <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full p-5 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-bold shadow-inner" placeholder="Nome Completo" />
+                             <input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} className="w-full p-5 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-bold shadow-inner" placeholder="WhatsApp" />
+                             <input type="tel" required value={taxId} onChange={e => setTaxId(e.target.value)} className="w-full p-5 bg-dark border border-white/10 rounded-[2rem] text-white outline-none focus:ring-2 focus:ring-green-500 font-bold shadow-inner" placeholder="CPF ou CNPJ" />
+                             <button type="submit" disabled={isLoading} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl hover:bg-green-500 transition-all transform active:scale-95">GERAR QR CODE PIX</button>
                         </form>
                     )}
 
@@ -214,9 +214,9 @@ const GreenlifeHome: React.FC = () => {
                             <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto">
                                 <CheckCircleIcon className="w-12 h-12 text-green-500" />
                             </div>
-                            <h2 className="text-4xl font-black text-white uppercase tracking-tighter">ADESÃO CONFIRMADA!</h2>
+                            <h2 className="text-4xl font-black text-white uppercase tracking-tighter text-white">ADESÃO CONFIRMADA!</h2>
                             <p className="text-gray-400">Seu acesso Greenlife já está liberado. Consulte seu ingresso digital.</p>
-                            <button onClick={() => navigate('/alunosgreenlife/status')} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase text-sm tracking-widest">VER MEUS BENEFÍCIOS</button>
+                            <button onClick={() => navigate('/alunosgreenlife/status')} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl hover:bg-green-500 transition-all transform active:scale-95">VER MEUS BENEFÍCIOS</button>
                         </div>
                     )}
                 </div>
