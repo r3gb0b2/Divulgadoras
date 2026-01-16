@@ -6,7 +6,6 @@ import { VipEvent, VipMembership } from '../types';
 const COLLECTION_EVENTS = 'greenlifeEvents';
 const COLLECTION_MEMBERSHIPS = 'greenlifeMemberships';
 
-// Helper para obter milissegundos de forma segura para ordenação
 const getMs = (ts: any): number => {
     if (!ts) return 0;
     if (typeof ts.toMillis === 'function') return ts.toMillis();
@@ -19,23 +18,23 @@ export const getActiveGreenlifeEvents = async (): Promise<VipEvent[]> => {
     try {
         const snap = await firestore.collection(COLLECTION_EVENTS)
             .where('isActive', '==', true)
-            .orderBy('eventDate', 'asc')
             .get();
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+        
+        const events = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+        return events.sort((a, b) => getMs(a.eventDate) - getMs(b.eventDate));
     } catch (e) {
-        const snapFallback = await firestore.collection(COLLECTION_EVENTS).where('isActive', '==', true).get();
-        return snapFallback.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+        console.error("Erro Greenlife:", e);
+        return [];
     }
 };
 
 export const getAllGreenlifeEvents = async (): Promise<VipEvent[]> => {
     try {
-        const snap = await firestore.collection(COLLECTION_EVENTS).orderBy('eventDate', 'asc').get();
-        return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+        const snap = await firestore.collection(COLLECTION_EVENTS).get();
+        const events = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent));
+        return events.sort((a, b) => getMs(a.eventDate) - getMs(b.eventDate));
     } catch (e) {
-        const snapFallback = await firestore.collection(COLLECTION_EVENTS).get();
-        return snapFallback.docs.map(doc => ({ id: doc.id, ...doc.data() } as VipEvent))
-            .sort((a, b) => getMs(a.eventDate) - getMs(b.eventDate));
+        return [];
     }
 };
 
@@ -120,7 +119,7 @@ export const refundGreenlifeMembership = async (id: string) => {
         status: 'refunded',
         benefitCode: null,
         isBenefitActive: false,
-        refundedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        refundedAt: firebase.firestore.Timestamp.now(),
+        updatedAt: firebase.firestore.Timestamp.now()
     });
 };

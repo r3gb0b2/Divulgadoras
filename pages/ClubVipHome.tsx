@@ -40,6 +40,7 @@ const ClubVipHome: React.FC = () => {
     useEffect(() => {
         const loadEventsAndStock = async () => {
             try {
+                // O serviço já retorna ordenado por eventDate (em memória)
                 const data = await getActiveVipEvents();
                 setEvents(data);
                 
@@ -57,7 +58,6 @@ const ClubVipHome: React.FC = () => {
         loadEventsAndStock();
     }, []);
 
-    // Monitora o Checkout único gerado (agora oficial no Pagar.me)
     useEffect(() => {
         if (step === 'payment' && currentCheckoutId) {
             const unsubscribe = firestore.collection('checkouts').doc(currentCheckoutId)
@@ -110,7 +110,6 @@ const ClubVipHome: React.FC = () => {
     const handleGeneratePix = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
-
         const sanitizedWhatsapp = whatsapp.replace(/\D/g, '');
         const sanitizedTaxId = taxId.replace(/\D/g, '');
 
@@ -123,9 +122,7 @@ const ClubVipHome: React.FC = () => {
         try {
             let pId = promoter?.id;
             if (!pId) pId = await createVipPromoter({ name, email, whatsapp: sanitizedWhatsapp });
-
             const finalAmount = selectedEvent!.price * quantity;
-            
             const createPagarMePix = httpsCallable(functions, 'createVipPagarMePix');
             const res: any = await createPagarMePix({
                 vipEventId: selectedEvent!.id,
@@ -138,7 +135,6 @@ const ClubVipHome: React.FC = () => {
                 amount: finalAmount,
                 quantity: quantity
             });
-            
             setPixData(res.data);
             setCurrentCheckoutId(res.data.checkoutId);
             setStep('payment');
@@ -161,10 +157,10 @@ const ClubVipHome: React.FC = () => {
                 <ArrowLeftIcon className="w-4 h-4" /> Voltar
             </button>
 
-            <div className="bg-secondary/40 backdrop-blur-2xl rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
-                <div className="bg-gradient-to-br from-indigo-900/60 to-purple-900/40 p-12 text-center relative">
+            <div className="bg-secondary rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
+                <div className="bg-dark/40 p-12 text-center relative border-b border-white/5">
                     <SparklesIcon className="w-16 h-16 text-primary mx-auto mb-4 relative z-10 animate-pulse" />
-                    <h1 className="text-5xl font-black text-white uppercase tracking-tighter relative z-10 text-white">CLUBE <span className="text-primary">VIP</span></h1>
+                    <h1 className="text-5xl font-black text-white uppercase tracking-tighter relative z-10">CLUBE <span className="text-primary">VIP</span></h1>
                 </div>
 
                 <div className="p-10">

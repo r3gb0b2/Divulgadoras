@@ -47,7 +47,6 @@ const GreenlifeHome: React.FC = () => {
         loadEvents();
     }, []);
 
-    // Monitora o Checkout centralizado (agora via Pagar.me)
     useEffect(() => {
         if (step === 'payment' && currentCheckoutId) {
             const unsubscribe = firestore.collection('checkouts').doc(currentCheckoutId)
@@ -83,7 +82,6 @@ const GreenlifeHome: React.FC = () => {
     const handleProceedToPayment = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!selectedEvent) return;
-        
         setError(null);
         const sanitizedTaxId = taxId.replace(/\D/g, '');
         if (sanitizedTaxId.length !== 11 && sanitizedTaxId.length !== 14) {
@@ -96,7 +94,6 @@ const GreenlifeHome: React.FC = () => {
             let pId = promoter?.id;
             if (!pId) pId = await createVipPromoter({ name, email, whatsapp });
             setPromoter({ id: pId, name, email, whatsapp });
-            
             const createGreenlifePagarMePix = httpsCallable(functions, 'createGreenlifePagarMePix');
             const res: any = await createGreenlifePagarMePix({
                 vipEventId: selectedEvent.id,
@@ -109,16 +106,12 @@ const GreenlifeHome: React.FC = () => {
                 amount: selectedEvent.price,
                 quantity: 1
             });
-            
             setPixData(res.data);
             setCurrentCheckoutId(res.data.checkoutId);
             setStep('payment');
         } catch (err: any) { 
-            console.error(err);
             setError(err.message || "Erro ao gerar cobrança Pagar.me."); 
-        } finally { 
-            setIsLoading(false); 
-        }
+        } finally { setIsLoading(false); }
     };
 
     const copyPix = () => {
@@ -129,7 +122,7 @@ const GreenlifeHome: React.FC = () => {
 
     return (
         <div className="max-w-2xl mx-auto py-10 px-4">
-            <div className="bg-secondary/40 backdrop-blur-2xl rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
+            <div className="bg-secondary rounded-[3rem] border border-white/5 overflow-hidden shadow-2xl">
                 <div className="bg-green-600 p-12 text-center relative border-b border-green-500/20">
                     <SparklesIcon className="w-16 h-16 text-white mx-auto mb-4 opacity-50" />
                     <h1 className="text-5xl font-black text-white uppercase tracking-tighter">ALUNOS <span className="text-gray-200">GREENLIFE</span></h1>
@@ -137,12 +130,7 @@ const GreenlifeHome: React.FC = () => {
                 </div>
 
                 <div className="p-10">
-                    {error && (
-                        <div className="mb-6 p-4 bg-red-900/20 border border-red-500/50 text-red-200 rounded-2xl text-xs font-bold text-center flex items-center gap-3">
-                            <AlertTriangleIcon className="w-5 h-5 flex-shrink-0" />
-                            {error}
-                        </div>
-                    )}
+                    {error && <div className="mb-6 p-4 bg-red-900/20 border border-red-500/50 text-red-200 rounded-2xl text-xs font-bold text-center flex items-center gap-3"><AlertTriangleIcon className="w-5 h-5 flex-shrink-0" />{error}</div>}
 
                     {step === 'select_event' && (
                         <div className="space-y-6">
@@ -211,11 +199,8 @@ const GreenlifeHome: React.FC = () => {
 
                     {step === 'success' && (
                         <div className="text-center py-10 space-y-6">
-                            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto">
-                                <CheckCircleIcon className="w-12 h-12 text-green-500" />
-                            </div>
+                            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto"><CheckCircleIcon className="w-12 h-12 text-green-500" /></div>
                             <h2 className="text-4xl font-black text-white uppercase tracking-tighter text-white">ADESÃO CONFIRMADA!</h2>
-                            <p className="text-gray-400">Seu acesso Greenlife já está liberado. Consulte seu ingresso digital.</p>
                             <button onClick={() => navigate('/alunosgreenlife/status')} className="w-full py-6 bg-green-600 text-white font-black rounded-[2rem] uppercase text-sm tracking-widest shadow-xl hover:bg-green-500 transition-all transform active:scale-95">VER MEUS BENEFÍCIOS</button>
                         </div>
                     )}
