@@ -416,7 +416,11 @@ const AdminClubVip: React.FC = () => {
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             <select value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)} className="bg-dark border border-gray-700 text-white px-4 py-3 rounded-xl text-[10px] font-black uppercase outline-none focus:border-primary">
                                 <option value="all">TODOS EVENTOS</option>
-                                {vipEvents.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                {vipEvents.map(e => (
+                                    <option key={e.id} value={e.id}>
+                                        {e.name} - R$ {e.price.toFixed(2).replace('.', ',')}
+                                    </option>
+                                ))}
                             </select>
                             <div className="relative">
                                 <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />

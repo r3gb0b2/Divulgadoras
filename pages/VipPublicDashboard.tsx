@@ -134,7 +134,9 @@ const VipPublicDashboard: React.FC = () => {
                             >
                                 <option value="all">TODOS OS EVENTOS</option>
                                 {events.map(ev => (
-                                    <option key={ev.id} value={ev.id}>{ev.name}</option>
+                                    <option key={ev.id} value={ev.id}>
+                                        {ev.name} - R$ {ev.price.toFixed(2).replace('.', ',')}
+                                    </option>
                                 ))}
                             </select>
                         </div>
@@ -189,7 +191,7 @@ const VipPublicDashboard: React.FC = () => {
                         <p className="text-2xl font-black text-orange-400">{stats.totalPending}</p>
                     </div>
                     <div className="bg-dark/40 p-6 rounded-3xl border border-white/5">
-                        <p className="text-gray-500 font-black uppercase text-[8px] tracking-widest mb-1">Estornados</p>
+                        <p className="text-gray-500 font-black uppercase text-[8px] tracking-widest mb-1">Estornos</p>
                         <p className="text-2xl font-black text-red-500">{stats.totalRefunded}</p>
                     </div>
                 </div>
