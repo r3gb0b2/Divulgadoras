@@ -336,6 +336,22 @@ const AdminGreenlife: React.FC = () => {
                                 <option value="low_stock">🟡 ESGOTANDO</option>
                                 <option value="sold_out">🔴 ESGOTADO</option>
                             </select>
+
+                            <div className="pt-2">
+                                <label className="flex items-center gap-3 cursor-pointer group">
+                                    <input
+                                        type="checkbox"
+                                        checked={editingEvent?.isActive ?? true}
+                                        onChange={e => setEditingEvent({...editingEvent!, isActive: e.target.checked})}
+                                        className="w-6 h-6 rounded-lg bg-dark border-gray-700 text-primary focus:ring-0"
+                                    />
+                                    <div className="flex flex-col">
+                                        <span className="text-xs font-black text-white uppercase tracking-tight group-hover:text-primary transition-colors">Visível no Site</span>
+                                        <span className="text-[10px] text-gray-500 uppercase font-bold">Habilita ou desabilita a oferta para o público</span>
+                                    </div>
+                                </label>
+                            </div>
+
                             <button type="submit" className="w-full py-5 bg-green-600 text-white font-black rounded-2xl uppercase shadow-lg">SALVAR</button>
                         </form>
                     </div>
